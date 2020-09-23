@@ -315,11 +315,22 @@ def DownScale(imgin): #use 2x downscaling for scrol speed
 
 
 
+    
+
+
+
 class segmentation:
     """
     class for all segmentation functions
     All functions accept an img and any arguments they need and return a labeled matrix.
     """
+    def segtype_to_segfun(segment_type):
+        if segment_type=='watershed':
+            seg_fun=segmentation._segment_nuclei_watershed
+        elif segment_type=='cellpose_nuclei':
+            seg_fun=segmentation._segment_nuclei_cellpose
+        return seg_fun
+            
     def _segment_nuclei_watershed(img, voronoi=None,cellsize=5, hThresh=0.001):
         from skimage import filters, measure
         from skimage.util import invert
@@ -361,9 +372,9 @@ class segmentation:
         props = measure.regionprops(L)
         Areas = np.array([r.area for r in props])
         
-        #remove BG region
-        Areas>100000;
-        BG = [i for i, val in enumerate(Areas>100000) if val] 
+        #remove BG region and non-cells
+        Areas>10000;
+        BG = [i for i, val in enumerate(Areas>10000) if val] 
 
         if any(BG):
             for i in np.arange(len(BG)):
@@ -423,8 +434,71 @@ class segmentation:
         
         #Lcyto_new = Lcyto_new-Lnuc;
         return Lnuc, Lcyto_new
-
     
+    
+    def test_segmentation_params(img,segfun=None, segment_type='watershed'):
+        import numpy as np
+        import matplotlib.pyplot as plt
+        import ipywidgets as widgets
+        from matplotlib.colors import ListedColormap
+
+        if segfun==None:
+            segfun = segmentation.segtype_to_segfun(segment_type)
+            print('\nusing ' + segfun.__name__ )
+        
+        if img.ndim==3:
+            img = np.squeeze(img[0,:,:])
+
+        nargs = segfun.__code__.co_argcount
+        args = [segfun.__code__.co_varnames[i] for i in range(1, nargs)]
+        defaults = list(segfun.__defaults__)
+        input_dict = {args[i]: defaults[i] for i in range(0, nargs-1)} 
+
+        L = segfun(img)
+
+        fig, ax = plt.subplots()
+        fig.subplots_adjust(bottom=0.1)
+
+        ax.imshow(img, cmap='gray',vmin=np.percentile(img, 10), vmax=np.percentile(img, 99))
+        cmap = ListedColormap( np.random.rand (256,3))
+        cmap.colors[0,:]=[0,0,0]
+        l=ax.imshow(L, alpha=0.5, cmap=cmap)
+
+        def clean_dict(d):
+            result = {}
+            for key, value in d.items():
+                if value=='None':
+                    value = None
+                else:
+                    value = float(value)
+                result[key] = value
+            return result
+
+        def update_mask(b):
+            print('calculating with new parameters')
+            #new_input_dict = {args[i]: eval('text_box_' + str(i)+ '.value') for i in range(0, nargs-1)} 
+            new_input_dict = {args[i]: tblist[i].value for i in range(0, nargs-1)} 
+            new_input_dict = clean_dict(new_input_dict)
+            L = segfun(img,**new_input_dict)
+            l.set_data(L)
+            l.set_alpha=0.5
+            plt.draw()
+            plt.show()
+            print('Done!')
+
+        num=0
+        tblist = []
+        for arg, de in input_dict.items():  
+            exec('text_box_' + str(num) + '=widgets.Text(value=str(de), description=str(arg))')
+            tblist.append(eval('text_box_' + str(num)))
+            num+=1
+        exButton = widgets.Button(description='Segment cells!')
+        exButton.on_click(update_mask)
+        
+        box = widgets.HBox([widgets.VBox(tblist), exButton])
+        return box
+
+
 ##Filters
 
 def _prepare_frequency_map(pix):

@@ -1,5 +1,5 @@
-# WellLbl module for microscopy data. 
-# Aggregates all Well labels for a specific experiment
+# Results module for microscopy data. 
+# Aggregates all Pos labels for a specific experiment
 
 # AOY
 from oyLabCode import Metadata
@@ -47,11 +47,11 @@ class results(object):
         print('Results object for path to experiment in path: \n ' + self.pth)
         print('\nAvailable channels are : ' + ', '.join(list(self.channels))+ '.')
         print('\nPositions already segmented are : ' + ', '.join(sorted(self.PosLbls.keys())))
-        print('\nAvailable positions are : ' + ', '.join(list(self.PosNames))+ '.')
-        print('\nAvailable frames are : ' + ', '.join(list(self.frames.astype('str')))+ '.')
+        print('\nAvailable positions : ' + ', '.join(list(self.PosNames))+ '.')
+        print('\nAvailable frames : ' + str(len(self.frames)) + '.')
         
         
-    def setPosLbls(self, MD=None, groups=None, Pos=None, **kwargs):
+    def setPosLbls(self, MD=None, groups=None, Position=None, **kwargs):
         '''
         function to make Poslabels. Accepts group/position list. By default it will generate pos labels for all positions. override by specifying groups or Pos. groups override pos       
         '''
@@ -59,13 +59,17 @@ class results(object):
             MD = Metadata(self.pth)         
         if groups is not None:
             assert(np.all(np.isin(groups,self.groups))), "some provided groups don't exist, try %s"  % ', '.join(list(self.groups))
-            Pos = MD.unique('Position', group=groups)
-        if Pos is None:
-            Pos = self.PosNames
-        for p in Pos:
+            Position = MD.unique('Position', group=groups)
+        if Position is None:
+            Position = self.PosNames
+            
+        elif type(Position) is str:
+            Position = [Position]
+            
+        for p in Position:
             print('\nProcessing position ' + str(p))
             self.PosLbls.update({p : PosLbl(MD=MD, Pos=p, pth=MD.base_pth, **kwargs)})
-
+        self.save()
 
     def save(self):
         with open(join(self.pth,'results.pickle'), 'wb') as dbfile:

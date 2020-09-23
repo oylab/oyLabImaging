@@ -12,6 +12,9 @@ from oyLabCode import Metadata
 class FrameLbl(object):
     def __init__(self, frame=None, MD=None ,pth=None, Pos=None, acq = None, register=False ,periring=False, periringsize=5, NucChannel='DeepBlue',cytoplasm=False,CytoChannel='Yellow', segment_type='watershed', **kwargs):
 
+        if pth is None and MD is not None:
+            pth = MD.base_pth
+            
         if any([Pos is None, pth is None, frame is None]):
             raise ValueError('Please input path, position, and frame')
         
@@ -32,11 +35,11 @@ class FrameLbl(object):
         self.frame = frame
         
         
-        if segment_type=='watershed':
-            self._seg_fun=segmentation._segment_nuclei_watershed
-        elif segment_type=='cellpose_nuclei':
-            self._seg_fun=segmentation._segment_nuclei_cellpose
-
+        #if segment_type=='watershed':
+        #    self._seg_fun=segmentation._segment_nuclei_watershed
+        #elif segment_type=='cellpose_nuclei':
+        #    self._seg_fun=segmentation._segment_nuclei_cellpose
+        self._seg_fun = segmentation.segtype_to_segfun(segment_type)
         
         self.channels = MD.unique('Channel',Position=Pos, frame=frame) 
         self.acq = MD.unique('acq',Position=Pos, frame=frame)
@@ -104,7 +107,7 @@ class FrameLbl(object):
                 for i in np.arange(props_df.index.size):
                     props_df.at[i,'centroid'] = tuple(np.add(props_df.at[i,'centroid'],Tforms[6:8]))
                     props_df.at[i,'weighted_centroid'] = tuple(np.add(props_df.at[i,'weighted_centroid'],Tforms[6:8]))
-                print('Registered centroids')
+                print('\nRegistered centroids')
             else:
                 print('No drift correction found')
     
@@ -115,7 +118,9 @@ class FrameLbl(object):
     def __call__(self):
         print('FrameLbl object for position ' + self.posname + ' at frame '+ str(self.frame) + '.')
         print('\nThe path to the experiment is: \n ' + self.pth)
+        print('\n '+ str(self.num) + ' cells segmented using '+ self._seg_fun.__name__)        
         print('\nAvailable channels are : ' + ', '.join(list(self.channels))+ '.')
+        
     
     
     @property
@@ -188,3 +193,23 @@ class FrameLbl(object):
         nbrs = NearestNeighbors(n_neighbors=11, algorithm='ball_tree').fit(self.weighted_centroid)
         distances,_   = nbrs.kneighbors(self.weighted_centroid)
         return 1./np.mean(distances[:,1:],axis=1)
+    
+    
+    
+    #presentation stuff
+    
+    def img(self,Channel='DeepBlue'):
+        pth = self.pth
+        MD = Metadata(pth)
+        return MD.stkread(Channel=Channel,frame=self.frame, Position=self.posname, register=True)
+    
+    def scattershow(self,Channel='DeepBlue'):
+        import matplotlib.pyplot as plt
+        img = self.img(Channel=Channel)
+        fig = plt.figure(figsize=(12,15))
+        fig.add_axes([0.1,0.6,0.8,0.5])
+        plt.gca().set_title('original')
+        plt.gca().axis('off')
+        plt.imshow(img, interpolation='nearest', cmap='gray')
+        plt.gca().patch.set_alpha(0.5)
+        plt.scatter(self.centroid[:,1],self.centroid[:,0], s=5,c=self.mean(Channel), alpha=1)

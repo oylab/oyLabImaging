@@ -115,7 +115,7 @@ class Metadata(object):
             return image_subset_table.size
         elif Attr in image_subset_table.columns:  
             return image_subset_table[Attr].unique()
-        elif Attr is 'index':
+        elif Attr=='index':
             return image_subset_table.index
         else:
             return None 
@@ -149,14 +149,7 @@ class Metadata(object):
         self.image_table = self.image_table.append(framedata, sort=False,ignore_index=True)
         
         #framedata can be another MD dataframe 
-        #framedata can also be a dict of column names and values: This will be handeled in scope
-        #    str = "{"
-        #    for attr in column_names:
-        #        str = str + "'" + attr  + "':[" + '**value**' +"]  ,"
-        #    str = str[:-1]+"}"
-        #    framedata = eval(str)
-        
-        #OR:
+        #framedata can also be a dict of column names and values: This will be handeled in scopex
         # framedata = {}
         # for attr in column_names:
         #     framedata.update(attr=v)
@@ -298,9 +291,9 @@ class Metadata(object):
                 
                 
                 if ffield:
-                    img = self.doFlatFieldCorrection(img, fname)
+                    img = self._doFlatFieldCorrection(img, fname)
                 if register:
-                    img = self.register(img, fname)
+                    img = self._register(img, fname)
                 #if it's a z-stack
                 if img.ndim==3: 
                     img = img.transpose((1,2,0))
@@ -317,7 +310,7 @@ class Metadata(object):
 
 
         
-    def doFlatfieldCorrection(self, img, flt, **kwargs):
+    def _doFlatfieldCorrection(self, img, flt, **kwargs):
         """
         Perform flatfield correction.
         
@@ -346,7 +339,7 @@ class Metadata(object):
     
     
     
-    def register(self,img,fname):
+    def _register(self,img,fname):
         #from skimage import transform
         import cv2
        
@@ -367,145 +360,60 @@ class Metadata(object):
             return img
             
 
-    def CalculateDriftCorrection(self, pos, ZsToLoad=[1]):
+    def CalculateDriftCorrection(self, Position=None, ZsToLoad=[1]):
         #from scipy.signal import fftconvolve
-        from pyfftw.interfaces.numpy_fft import rfft2, irfft2
-    
-        frames = self.frames
-
-        DataPre = self.stkread(Position=pos, Channel='DeepBlue')
-        print('\ncalculating drift correction for position ' + pos)
-        DataPre = DataPre-np.mean(DataPre,axis=(1,2),keepdims=True)
-                                  
-        DataPost = DataPre[1:,:,:].transpose((1,2,0))
-        DataPre = DataPre[:-1,:,:].transpose((1,2,0))
-
-        #this is in prep for # Zs>1
-        DataPre = np.reshape(DataPre,(DataPre.shape[0],DataPre.shape[1],len(ZsToLoad), len(frames)-1));
-        DataPost = np.reshape(DataPost,(DataPost.shape[0],DataPost.shape[1],len(ZsToLoad), len(frames)-1));
-
-        #calculate cross correlation
+        if Position is None:
+            Position = self.posnames
+        elif type(Position) is str:
+            Position = [Position]
         
-        #imXcorr = fftconvolve((DataPre-np.mean(DataPre,axis=(0,1),keepdims=True)), np.rot90(DataPost-np.mean(DataPost,axis=(0,1),keepdims=True),k=2), mode='same', axes=[0,1])
+        for pos in Position:
+            from pyfftw.interfaces.numpy_fft import rfft2, irfft2
 
-        DataPost = np.rot90(DataPost,axes=(0, 1),k=2)
-        
-        # So because of dumb licensing issues, fftconvolve can't use fftw but the slower fftpack. Python is wonderful. So we'll do it all by hand like neanderthals 
-        imXcorr = np.zeros_like(DataPre)
-        for i in np.arange(DataPre.shape[-1]):
-            img_fft_1 = rfft2(DataPre[:,:,:,i],axes=(0,1),threads=8)
-            img_fft_2 = rfft2(DataPost[:,:,:,i],axes=(0,1),threads=8)
-            imXcorr[:,:,:,i] = np.abs(np.fft.ifftshift(irfft2(img_fft_1*img_fft_2,axes=(0,1),threads=8)))
-        
-        
-        
-        #if more than 1 slice is calculated, look for mean shift
-        imXcorrMeanZ = np.mean(imXcorr,axis=2)
-        c = []
-        for i in range(imXcorrMeanZ.shape[-1]):
-            c.append(np.squeeze(imXcorrMeanZ[:,:,i]).argmax())
+            frames = self.frames
 
-        d = np.transpose(np.unravel_index(c, np.squeeze(imXcorrMeanZ[:,:,0]).shape))-np.array(np.squeeze(imXcorrMeanZ[:,:,0]).shape)/2
-        D = np.insert(np.cumsum(d, axis=0), 0, [0,0], axis=0)
+            DataPre = self.stkread(Position=pos, Channel='DeepBlue')
+            print('\ncalculating drift correction for position ' + pos)
+            DataPre = DataPre-np.mean(DataPre,axis=(1,2),keepdims=True)
 
-        if 'driftTform' not in self.image_table.columns:
-            self.image_table['driftTform']=None
+            DataPost = DataPre[1:,:,:].transpose((1,2,0))
+            DataPre = DataPre[:-1,:,:].transpose((1,2,0))
 
-        for frame in self.frames:
-            inds = self.unique(Attr='index',Position=pos, frame=frame)
-            for ind in inds:
-                self.image_table.at[ind, 'driftTform']=[1, 0, 0 , 0, 1, 0 , D[frame-1,0], D[frame-1,1], 1]
-        print('\ncalculated drift correction for position ' + pos)
+            #this is in prep for # Zs>1
+            DataPre = np.reshape(DataPre,(DataPre.shape[0],DataPre.shape[1],len(ZsToLoad), len(frames)-1));
+            DataPost = np.reshape(DataPost,(DataPost.shape[0],DataPost.shape[1],len(ZsToLoad), len(frames)-1));
+
+            #calculate cross correlation
+
+            #imXcorr = fftconvolve((DataPre-np.mean(DataPre,axis=(0,1),keepdims=True)), np.rot90(DataPost-np.mean(DataPost,axis=(0,1),keepdims=True),k=2), mode='same', axes=[0,1])
+
+            DataPost = np.rot90(DataPost,axes=(0, 1),k=2)
+
+            # So because of dumb licensing issues, fftconvolve can't use fftw but the slower fftpack. Python is wonderful. So we'll do it all by hand like neanderthals 
+            imXcorr = np.zeros_like(DataPre)
+            for i in np.arange(DataPre.shape[-1]):
+                img_fft_1 = rfft2(DataPre[:,:,:,i],axes=(0,1),threads=8)
+                img_fft_2 = rfft2(DataPost[:,:,:,i],axes=(0,1),threads=8)
+                imXcorr[:,:,:,i] = np.abs(np.fft.ifftshift(irfft2(img_fft_1*img_fft_2,axes=(0,1),threads=8)))
+
+
+
+            #if more than 1 slice is calculated, look for mean shift
+            imXcorrMeanZ = np.mean(imXcorr,axis=2)
+            c = []
+            for i in range(imXcorrMeanZ.shape[-1]):
+                c.append(np.squeeze(imXcorrMeanZ[:,:,i]).argmax())
+
+            d = np.transpose(np.unravel_index(c, np.squeeze(imXcorrMeanZ[:,:,0]).shape))-np.array(np.squeeze(imXcorrMeanZ[:,:,0]).shape)/2
+            D = np.insert(np.cumsum(d, axis=0), 0, [0,0], axis=0)
+
+            if 'driftTform' not in self.image_table.columns:
+                self.image_table['driftTform']=None
+
+            for frame in self.frames:
+                inds = self.unique(Attr='index',Position=pos, frame=frame)
+                for ind in inds:
+                    self.image_table.at[ind, 'driftTform']=[1, 0, 0 , 0, 1, 0 , D[frame-1,0], D[frame-1,1], 1]
+            print('calculated drift correction for position ' + pos)
         self.pickle()
     
-
-
-from numba import jit
-@jit(nopython = True)
-def DownScale(imgin): #use 2x downscaling for scrol speed   
-        #imgout = trans.downscale_local_mean(imgin,(Sc, Sc))
-    imgout = (imgin[0::2,0::2]+imgin[1::2,0::2]+imgin[0::2,1::2]+imgin[1::2,1::2])/4
-    return imgout
-
-def stkshow(data):
-    from pyqtgraph.Qt import QtCore, QtGui
-    import pyqtgraph as pg
-    import sys
-    import skimage.transform as trans
-
-    
-    # determine if you need to start a Qt app. 
-    # If running from Spyder, the answer is a no.
-    # From cmd, yes. From nb, not sure actually.
-    if not QtGui.QApplication.instance():
-        app = QtGui.QApplication([])
-    else:
-        app = QtGui.QApplication.instance()
-        
-    ## Create window with ImageView widget
-    win = QtGui.QMainWindow()
-    win.resize(680,680)
-    imv = pg.ImageView()
-    win.setCentralWidget(imv)
-    win.show()
-    win.setWindowTitle('Fetching image stack...')
-    
-    
-    
-    
-    resizeflg = 0;
-    maxxysize = 800;
-    maxdataxySc = np.floor(max(data.shape[0],data.shape[1])/maxxysize).astype('int')
-    if maxdataxySc>1:
-        resizeflg = 1;
-
-    if len(data.shape)==4:#RGB assume xytc
-        if data.shape[3]==3 or data.shape[3]==4:
-            if resizeflg:
-                dataRs = np.zeros((np.ceil(data.shape/np.array([maxdataxySc,maxdataxySc,1,1]))).astype('int'),dtype = 'uint16')    
-                for i in range(0,data.shape[2]):
-                    for j in range(0,data.shape[3]):
-                        dataRs[:,:,i,j] = DownScale(data[:,:,i,j])
-                dataRs = dataRs.transpose((2,0,1,3))
-            else:
-                dataRs = data;
-                dataRs = dataRs.transpose((2,0,1,3))
-        else:
-            sys.exit('color channel needs to be RGB or RGBA')
-    elif len(data.shape)==3:
-        if resizeflg:
-            dataRs = np.zeros((np.ceil(data.shape/np.array([maxdataxySc,maxdataxySc,1]))).astype('int'),dtype = 'uint16')    
-            for i in range(0,data.shape[2]):
-                dataRs[:,:,i] = DownScale(data[:,:,i])
-            dataRs = dataRs.transpose([2,0,1])
-        else:
-            dataRs = data;
-            dataRs = dataRs.transpose([2,0,1])
-                
-    elif len(data.shape)==2:
-        if resizeflg:
-            dataRs = np.zeros((np.ceil(data.shape/np.array([maxdataxySc,maxdataxySc]))).astype('int'),dtype = 'uint16')
-            dataRs = DownScale(data)
-        else:
-            dataRs = data;
-    else:
-        print('Data must be 2D image or 3D image stack')
-    
-
-    
-    # Interpret image data as row-major instead of col-major
-    pg.setConfigOptions(imageAxisOrder='row-major')
-    
-
-    win.setWindowTitle('Stack')
-    
-    ## Display the data and assign each frame a 
-    imv.setImage(dataRs)#, xvals=np.linspace(1., dataRs.shape[0], dataRs.shape[0]))
-
-    ##must return the window to keep it open
-    return win
-    ## Start Qt event loop unless running in interactive mode.
-    if __name__ == '__main__':
-        import sys
-        if (sys.flags.interactive != 1) or not hasattr(QtCore, 'PYQT_VERSION'):
-            QtGui.QApplication.instance().exec_()

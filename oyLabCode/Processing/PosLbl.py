@@ -62,6 +62,8 @@ class PosLbl(object):
     def __call__(self):
         print('PosLbl object for position ' + self.posname + '.')
         print('\nThe path to the experiment is: \n ' + self.pth)
+        print('\n '+ str(len(self.frames)) + ' frames processed.')        
+
         print('\nAvailable channels are : ' + ', '.join(list(self.channels))+ '.')
     
     
@@ -187,7 +189,7 @@ class PosLbl(object):
         self._closegaps(**kwargs)
         
     
-    def _link(self, ch=None,search_radius=100,**kwargs):
+    def _link(self, ch=None,search_radius=75,**kwargs):
         #todo: extend for a general cost function. make class of cost functions that returns shape, cc, ii, jj
         if ch is None:
             ch = self.channels[0]
