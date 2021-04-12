@@ -5,9 +5,9 @@
 import pandas as pd
 import numpy as np
 from skimage import measure
-from oyLabCode.Processing.generalutils import regionprops_to_df
-from oyLabCode.Processing.improcutils import segmentation
-from oyLabCode import Metadata
+from oyLabImaging.Processing.generalutils import regionprops_to_df
+from oyLabImaging.Processing.improcutils import segmentation
+from oyLabImaging import Metadata
 
 class FrameLbl(object):
     def __init__(self, frame=None, MD=None ,pth=None, Pos=None, acq = None, register=False ,periring=False, periringsize=5, NucChannel='DeepBlue',cytoplasm=False,CytoChannel='Yellow', segment_type='watershed', **kwargs):

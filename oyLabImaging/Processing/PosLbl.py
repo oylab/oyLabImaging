@@ -8,10 +8,10 @@ import os
 import pandas as pd
 import numpy as np
 from skimage import measure
-from oyLabCode import Metadata
+from oyLabImaging import Metadata
 from multiprocessing import Pool
 from functools import partial
-from oyLabCode.Processing import FrameLbl
+from oyLabImaging.Processing import FrameLbl
 from scipy.spatial import KDTree
 import lap
 from tqdm import tqdm

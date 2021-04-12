@@ -6,7 +6,7 @@ setup(
     description='data processing code for the Oyler-Yaniv lab @HMS',
     author='Alon Oyler-Yaniv',
     url='https://github.com/alonyan/oyLabCode',
-    packages=find_packages(include=['oyLabCode', 'oyLabCode.*']),
+    packages=find_packages(include=['oyLabImaging', 'oyLabImaging.*']),
     install_requires=[
         'PyYAML'
     ]

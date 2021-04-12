@@ -2,9 +2,9 @@
 # Aggregates all Pos labels for a specific experiment
 
 # AOY
-from oyLabCode import Metadata
+from oyLabImaging import Metadata
 import numpy as np
-from oyLabCode.Processing import PosLbl
+from oyLabImaging.Processing import PosLbl
 from os import walk, listdir, path
 from os.path import join, isdir
 import dill
