@@ -17,9 +17,8 @@ dependencies:
   - numba
   - dill
   - cmake
+  - nd2reader
   - pip:
-    - qtpy
-    - pyqt5
     - cellpose
     - lap
     - napari
