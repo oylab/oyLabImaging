@@ -1,4 +1,4 @@
-name: oyproc
+name: oyimg
 channels:
   - anaconda
   - conda-forge
@@ -23,4 +23,4 @@ dependencies:
     - cellpose
     - lap
     - napari
-prefix: /home/alon/.conda/envs/oyproc
+
