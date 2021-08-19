@@ -26,42 +26,61 @@ class Metadata(object):
     #constractor: first, look for Metadata.pickle. If can't find, look for it in dirs. Then try .txt (back compatible). 
     def __init__(self, pth='', load_type='local'):       
         self.base_pth = pth
-        
-        #start with an empty MD
+        self.type = self._determine_metadata_type(pth)
         self.image_table = pd.DataFrame(columns=usecolslist)
+
+        if self.type==None:
+            return
+        #start with an empty MD
         # short circuit recursive search for metadatas if present in the top directory of 
         # the supplied pth.
+        
+        
+        
         if self.base_pth:
-            if 'Metadata.pickle' in listdir(pth):   
-                self.append(self.unpickle(pth=join(self.base_pth) ,fname='Metadata.pickle'))
-                print('loaded Metadata from pickle file')
-            else:
-                #if there is no MD in the folder, look at subfolders and append all 
-                for subdir, curdir, filez in walk(self.base_pth):
-                    for f in filez:
-                        if f=='Metadata.pickle':
-                            self.append(self.unpickle(pth=join(subdir),fname=f))
-                            print('loaded '+join(subdir,f)+' from pickle file')
-            #if there's a basepath but no pickle, it might have a txt file
-            if self.image_table.empty:
+            if self.type=='PICKLE':
+                if 'Metadata.pickle' in listdir(pth):   
+                    self.append(self.unpickle(pth=join(self.base_pth) ,fname='Metadata.pickle'))
+                    print('loaded Metadata from pickle file')
+                else:
+                    #if there is no MD in the folder, look at subfolders and append all 
+                    for subdir, curdir, filez in walk(self.base_pth):
+                        for f in filez:
+                            if f=='Metadata.pickle':
+                                self.append(self.unpickle(pth=join(subdir),fname=f))
+                                print('loaded '+join(subdir,f)+' from pickle file')
+
+            if self.type=='TXT':
                 if 'Metadata.txt' in listdir(pth):
                     self.append(self.load_metadata_txt(join(pth), fname='Metadata.txt'))
-                    print('loaded Metadata from txt file')
+                    print('loaded matlab Metadata from txt file')
 
-                #if there is no MD.txt in the folder, look at subfolders and append all 
+                #if there is no Metadata.txt in the folder, look at subfolders and append all 
                 else:
                     for subdir, curdir, filez in walk(pth):
                         for f in filez:
                             if f=='Metadata.txt':
                                 self.append(self.load_metadata_txt(join(pth, subdir), fname=f))
                                 print('loaded '+join(subdir,f)+' from txt file')
+            if self.type=='MM':
+                if 'metadata.txt' in listdir(pth):
+                    self.append(self.load_metadata_MM(join(pth), fname='Metadata.txt'))
+                    print('loaded micromanager Metadata from txt file')
+
+                #if there is no Metadata.txt in the folder, look at subfolders and append all 
+                else:
+                    for subdir, curdir, filez in walk(pth):
+                        for f in filez:
+                            if f=='metadata.txt':
+                                self.append(self.load_metadata_MM(join(pth, subdir), fname=f))
+                                print('loaded micromanager '+join(subdir,f)+' from txt file')
                 
                 # Handle columns that don't import from text well
                 try:
                     self.convert_data('XY', float)
                 except Exception as e:
                     self.image_table['XY'] = [literal_eval(i) for i in self.image_table['XY']]
-                    
+             
                     
         # Future compability for different load types (e.g. remote vs local)
         if load_type=='local':
@@ -135,7 +154,79 @@ class Metadata(object):
                 converted.append(i)
         self.image_table[column] = converted
 
-    #backwards compatability
+
+        
+        
+        
+        
+        
+    def _determine_metadata_type(self, pth):
+        from os import path, walk
+        fname, fext = path.splitext(pth)
+        if path.isdir(pth):
+            for subdir, curdir, filez in walk(pth):
+                for f in filez:
+                    fname, fext = path.splitext(f)
+                    if fext=='.nd2':
+                        return 'ND2'
+                    if fext=='.pickle':
+                        return 'PICKLE'
+                    if fext=='.txt':
+                        if fname=='metadata':
+                            return 'MM'
+                        if fname=='Metadata':
+                            return 'TXT'
+        else:
+            fname, fext = path.splitext(pth)
+            if fext=='.nd2':
+                return 'ND2'
+            if fext=='.pickle':
+                return 'PICKLE'
+            if fext=='.txt':
+                if fname=='metadata':
+                    return 'MM'
+                if fname=='Metadata':
+                    return 'TXT'     
+        return None
+
+    
+    
+    
+    
+    
+        
+    
+    def load_metadata_nb(self,pth): #TODO
+        return
+    
+
+    
+    def load_metadata_MM(self, pth, fname='metadata.txt', delimiter='\t'):
+        """
+        Helper function to load a micromanager txt metadata file.
+        """
+        import json
+        with open(join(pth,fname)) as f:
+            mddata = json.load(f)
+        usecolslist = ['acq',  'Position', 'frame','Channel', 'Marker', 'Fluorophore', 'group', 
+       'XY', 'Z', 'Zindex','Exposure','PixelSize', 'PlateType', 'TimestampFrame','TimestampImage', 'filename']
+        image_table = pd.DataFrame(columns=usecolslist)
+        mdsum = mddata['Summary']
+
+        mdkeys = [key for key in mddata.keys() if key.startswith("Metadata")]
+
+        for key in mdkeys:
+            mdsing = mddata[key]
+            framedata={'acq':mdsum['Prefix'],'Position':mdsing['PositionName'],'frame':mdsing['Frame'],'Channel':mdsum['ChNames'][mdsing['ChannelIndex']],'Marker':mdsum['ChNames'][mdsing['ChannelIndex']],'Fluorophore':mdsing['XLIGHT Emission Wheel-Label'],'group':mdsing['PositionName'],'XY':[mdsing['XPositionUm'],mdsing['YPositionUm']], 'Z':mdsing['ZPositionUm'], 'Zindex':mdsing['SliceIndex'],'Exposure':mdsing['Exposure-ms'] ,'PixelSize':mdsing['PixelSizeUm'], 'PlateType':'NA','TimestampFrame':mdsing['ReceivedTime'],'TimestampImage':mdsing['ReceivedTime'],'filename':mdsing['FileName']}
+            image_table = image_table.append(framedata, sort=False,ignore_index=True)
+    
+        image_table['root_pth'] = image_table.filename
+        
+        
+        image_table.filename = [join(pth, f.split('/')[-1]) for f in image_table.filename]
+        return image_table
+    
+    
     def load_metadata_txt(self, pth, fname='Metadata.txt', delimiter='\t'):
         """
         Helper function to load a text metadata file.
@@ -156,7 +247,7 @@ class Metadata(object):
         # for attr in column_names:
         #     framedata.update(attr=v)
         
-        
+
 
     
     def pickle(self):
