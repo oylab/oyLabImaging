@@ -1,7 +1,7 @@
 name: oyimg
 channels:
-  - anaconda
   - conda-forge
+  - anaconda
   - defaults
 dependencies:
   - pip
@@ -18,8 +18,8 @@ dependencies:
   - dill
   - cmake
   - nd2reader
+  - napari
   - pip:
     - cellpose
     - lap
-    - napari
 

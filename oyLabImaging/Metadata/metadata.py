@@ -61,6 +61,8 @@ class Metadata(object):
                     self.convert_data('XY', float)
                 except Exception as e:
                     self.image_table['XY'] = [literal_eval(i) for i in self.image_table['XY']]
+                    
+                    
         # Future compability for different load types (e.g. remote vs local)
         if load_type=='local':
             self._open_file=self._read_local
