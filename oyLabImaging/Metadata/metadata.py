@@ -50,7 +50,7 @@ class Metadata(object):
                                 self.append(self.unpickle(pth=join(subdir),fname=f))
                                 print('loaded '+join(subdir,f)+' from pickle file')
 
-            if self.type=='TXT':
+            elif self.type=='TXT':
                 if 'Metadata.txt' in listdir(pth):
                     self.append(self.load_metadata_txt(join(pth), fname='Metadata.txt'))
                     print('loaded matlab Metadata from txt file')
@@ -62,7 +62,11 @@ class Metadata(object):
                             if f=='Metadata.txt':
                                 self.append(self.load_metadata_txt(join(pth, subdir), fname=f))
                                 print('loaded '+join(subdir,f)+' from txt file')
-            if self.type=='MM':
+            elif self.type=='ND2':
+                self.append(self.load_metadata_nd(pth))
+                print('loaded metadata from nikon nd2 file')
+                    
+            elif self.type=='MM':
                 if 'metadata.txt' in listdir(pth):
                     self.append(self.load_metadata_MM(join(pth), fname='Metadata.txt'))
                     print('loaded micromanager Metadata from txt file')
@@ -196,8 +200,44 @@ class Metadata(object):
     
         
     
-    def load_metadata_nb(self,pth): #TODO
-        return
+    def load_metadata_nd(self, pth, fname='*.nd', delimiter='\t'):
+        """
+        Helper function to load a micromanager txt metadata file.
+        """
+        import nd2reader as nd2
+        import pandas as pd
+        from os.path import sep
+
+        
+        usecolslist = ['acq',  'Position', 'frame','Channel', 'XY', 'Z', 
+                       'Zindex','Exposure','PixelSize', 'TimestampFrame','TimestampImage', 'filename']
+        image_table = pd.DataFrame(columns=usecolslist)
+
+        acq = pth.split(sep)[-1]
+        with nd2.ND2Reader(pth) as imgs:
+            Ninds = imgs.metadata['total_images_per_channel']*len(imgs.metadata['channels'])
+            frames = imgs.metadata['frames']
+            imgsPerFrame = Ninds/len(frames)
+
+            XY = np.column_stack((np.array(imgs.parser._raw_metadata.x_data),np.array(imgs.parser._raw_metadata.y_data)))
+            Zpos = imgs.metadata['z_coordinates']
+            Zind = imgs.metadata['z_levels']
+            pixsize = imgs.metadata['pixel_microns']
+            acq = pth.split(sep)[-1]
+            for i in np.arange(Ninds):
+                frame = int(i/imgsPerFrame)
+                xy = XY[frame,]
+                z = Zpos[frame]
+                zind = imgs.parser.calculate_image_properties(i)[2]
+                chan = imgs.parser.calculate_image_properties(i)[1]
+                pos = imgs.parser.calculate_image_properties(i)[0]
+                exptime = imgs.parser._raw_metadata.camera_exposure_time[frame]
+                framedata={'acq':acq,'Position':pos,'frame':frame,'Channel':chan,'XY':list(xy), 'Z':z, 'Zindex':zind,'Exposure':exptime ,'PixelSize':pixsize,'TimestampFrame':imgs.timesteps[frame],'TimestampImage':imgs.timesteps[frame],'filename':acq}
+                image_table = image_table.append(framedata, sort=False,ignore_index=True)
+
+            image_table['root_pth'] = image_table.filename
+            image_table.filename = [join(pth, f.split('/')[-1]) for f in image_table.filename]
+            return image_table
     
 
     
@@ -268,7 +308,23 @@ class Metadata(object):
             return MD.image_table
             
         
-      
+
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
     def stkread(self, groupby='Position', sortby='TimestampFrame',
                 fnames_only=False, metadata=False, **kwargs):
         """
@@ -343,6 +399,22 @@ class Metadata(object):
                     return np.squeeze(stk[posname])
                 else:
                     return stk
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
                 
 #    def save_images(self, images, fname = '/Users/robertf/Downloads/tmp_stk.tif'):
 #        with TiffWriter(fname, bigtiff=False, imagej=True) as t:
