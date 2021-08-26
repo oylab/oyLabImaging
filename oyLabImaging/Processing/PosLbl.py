@@ -50,8 +50,6 @@ class PosLbl(object):
             sys.stdout = open(os.devnull, 'w')    
 
         with Pool(threads, initializer=mute) as ppool:
-            #self.framelabels = np.array(ppool.map(partial(FrameLbl, MD = MD, pth = pth, Pos=Pos, **kwargs), self.frames))
-            #ppool.close()
             frames = list(tqdm(ppool.imap(partial(FrameLbl, MD = MD, pth = pth, Pos=Pos, **kwargs), self.frames), total=len(self.frames)))
             ppool.close()
             ppool.join()
@@ -119,12 +117,12 @@ class PosLbl(object):
     
     
     
-    def track(self, i=0):
+    def get_track(self, i=0):
         assert(i<=len(self.trackinds)), "track index must be < %i" % len(self.trackinds)
-        return self.onetrack(self, i=i)
+        return self._onetrack(self, i=i)
     
     #class for a single track. return everything we care about
-    class onetrack(object):
+    class _onetrack(object):
         def __init__(self,outer, i=0):
             self.trackinds = outer.trackinds[i]
             self._outer = outer

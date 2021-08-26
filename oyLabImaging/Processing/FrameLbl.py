@@ -59,7 +59,7 @@ class FrameLbl(object):
         
 
             
-        props = measure.regionprops(L,intensity_image=Data['DeepBlue'])     
+        props = measure.regionprops(L,intensity_image=Data[NucChannel])     
         props_df = regionprops_to_df(props)
         props_df.drop(['mean_intensity', 'max_intensity', 'min_intensity'], axis=1,inplace=True)
         
@@ -199,6 +199,7 @@ class FrameLbl(object):
     #presentation stuff
     
     def img(self,Channel='DeepBlue'):
+        from oyLabImaging import Metadata
         pth = self.pth
         MD = Metadata(pth)
         return MD.stkread(Channel=Channel,frame=self.frame, Position=self.posname, register=True)
@@ -206,10 +207,14 @@ class FrameLbl(object):
     def scattershow(self,Channel='DeepBlue'):
         import matplotlib.pyplot as plt
         img = self.img(Channel=Channel)
-        fig = plt.figure(figsize=(12,15))
-        fig.add_axes([0.1,0.6,0.8,0.5])
+        fig, ax = plt.subplots()
+        fig.subplots_adjust(bottom=0.1)
+        
+        #fig = plt.figure(figsize=(12,15))
+        #fig.add_axes([0.1,0.6,0.8,0.5])
         plt.gca().set_title('original')
         plt.gca().axis('off')
-        plt.imshow(img, interpolation='nearest', cmap='gray')
+        #np.percentile(img.flatten(),1)
+        plt.imshow(img, interpolation='nearest', cmap='gray',vmin=np.percentile(img.flatten(),1),vmax=np.percentile(img.flatten(),99))
         plt.gca().patch.set_alpha(0.5)
         plt.scatter(self.centroid[:,1],self.centroid[:,0], s=5,c=self.mean(Channel), alpha=1)

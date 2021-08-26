@@ -19,6 +19,7 @@ dependencies:
   - cmake
   - nd2reader
   - napari
+  - pyfftw
   - pip:
     - cellpose
     - lap

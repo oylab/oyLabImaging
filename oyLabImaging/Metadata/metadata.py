@@ -1,4 +1,5 @@
 # Metadata module for microscopy data
+# Currently supports Wollman Lab Scopes data, Micromanager MDA, and nikon ND2 files
 # AOY
 
 from os import walk, listdir, path
@@ -16,6 +17,7 @@ from PIL import Image
 usecolslist = ['acq',  'Position', 'frame','Channel', 'Marker', 'Fluorophore', 'group', 
        'XY', 'Z', 'Zindex','Exposure','PixelSize', 'PlateType', 'TimestampFrame','TimestampImage', 'filename']
 
+#usecolslist=[]
 
 from skimage import img_as_float, img_as_uint, io
 
@@ -23,81 +25,65 @@ from skimage import img_as_float, img_as_uint, io
 
 class Metadata(object):
     
-    #constractor: first, look for Metadata.pickle. If can't find, look for it in dirs. Then try .txt (back compatible). 
-    def __init__(self, pth='', load_type='local'):       
-        self.base_pth = pth
-        self.type = self._determine_metadata_type(pth)
+    
+    def __init__(self, pth='', load_type='local'):
+        
+        # get the base path (directory where it it) to the metadata file. 
+        #If full path to file is given, separate out the directory
+        self._md_name=''
+        
+        if path.isdir(pth):
+            self.base_pth = pth
+        else:
+            self.base_pth, self._md_name = path.split(pth)
+            
+        # Init an empty md table
         self.image_table = pd.DataFrame(columns=usecolslist)
-
+        
+        # Determine which type of metadata we're working with
+        self.type = self._determine_metadata_type(pth)
+       
+        # If it can't find a supported MD, it exits w/o doing anything
         if self.type==None:
             return
-        #start with an empty MD
+
         # short circuit recursive search for metadatas if present in the top directory of 
         # the supplied pth.
         
+        # How should metadata be read?
+        if self.type=='PICKLE':
+            self._load_method=self.unpickle
+        elif self.type=='TXT':
+            self._load_method=self._load_metadata_txt
+            self._md_name='Metadata.txt' 
+        elif self.type=='MM':
+            self._load_method=self._load_metadata_MM
+            self._md_name='metadata.txt' 
+        elif self.type=='ND2':
+            self._load_method=self._load_metadata_nd
         
-        
-        if self.base_pth:
-            if self.type=='PICKLE':
-                if 'Metadata.pickle' in listdir(pth):   
-                    self.append(self.unpickle(pth=join(self.base_pth) ,fname='Metadata.pickle'))
-                    print('loaded Metadata from pickle file')
-                else:
-                    #if there is no MD in the folder, look at subfolders and append all 
-                    for subdir, curdir, filez in walk(self.base_pth):
-                        for f in filez:
-                            if f=='Metadata.pickle':
-                                self.append(self.unpickle(pth=join(subdir),fname=f))
-                                print('loaded '+join(subdir,f)+' from pickle file')
 
-            elif self.type=='TXT':
-                if 'Metadata.txt' in listdir(pth):
-                    self.append(self.load_metadata_txt(join(pth), fname='Metadata.txt'))
-                    print('loaded matlab Metadata from txt file')
+                  
+        # With all we've learned, we can now load the metadata
+        self._load_metadata()
 
-                #if there is no Metadata.txt in the folder, look at subfolders and append all 
-                else:
-                    for subdir, curdir, filez in walk(pth):
-                        for f in filez:
-                            if f=='Metadata.txt':
-                                self.append(self.load_metadata_txt(join(pth, subdir), fname=f))
-                                print('loaded '+join(subdir,f)+' from txt file')
-            elif self.type=='ND2':
-                self.append(self.load_metadata_nd(pth))
-                print('loaded metadata from nikon nd2 file')
-                    
-            elif self.type=='MM':
-                if 'metadata.txt' in listdir(pth):
-                    self.append(self.load_metadata_MM(join(pth), fname='Metadata.txt'))
-                    print('loaded micromanager Metadata from txt file')
-
-                #if there is no Metadata.txt in the folder, look at subfolders and append all 
-                else:
-                    for subdir, curdir, filez in walk(pth):
-                        for f in filez:
-                            if f=='metadata.txt':
-                                self.append(self.load_metadata_MM(join(pth, subdir), fname=f))
-                                print('loaded micromanager '+join(subdir,f)+' from txt file')
-                
-                # Handle columns that don't import from text well
-                try:
-                    self.convert_data('XY', float)
-                except Exception as e:
-                    self.image_table['XY'] = [literal_eval(i) for i in self.image_table['XY']]
-             
-                    
-        # Future compability for different load types (e.g. remote vs local)
-        if load_type=='local':
-            self._open_file=self._read_local
-        elif load_type=='google_cloud':
-            raise NotImplementedError("google_cloud loading is not implemented.")
-
-
-                
-               
-
+        # Handle columns that don't import from text well
+        try:
+            self.convert_data('XY', float)
+        except Exception as e:
+            self.image_table['XY'] = [literal_eval(i) for i in self.image_table['XY']]
 
             
+        # How should files be read? 
+        if self.type=="ND2":
+            self._open_file=self._read_nd2
+        else: #Tiffs
+            if load_type=='local':
+                self._open_file=self._read_local
+            elif load_type=='google_cloud':
+                raise NotImplementedError("google_cloud loading is not implemented.")
+
+
 
     def __call__(self):
         return self.image_table
@@ -144,8 +130,10 @@ class Metadata(object):
             return image_subset_table.index
         else:
             return None 
+                     
+
         
-    
+        
     
     def convert_data(self, column, dtype, isnan=np.nan):
         converted = []
@@ -173,15 +161,15 @@ class Metadata(object):
                     fname, fext = path.splitext(f)
                     if fext=='.nd2':
                         return 'ND2'
-                    if fext=='.pickle':
-                        return 'PICKLE'
+                    #if fext=='.pickle':
+                    #    return 'PICKLE'
                     if fext=='.txt':
                         if fname=='metadata':
                             return 'MM'
                         if fname=='Metadata':
                             return 'TXT'
         else:
-            fname, fext = path.splitext(pth)
+            fname, fext = path.splitext(str.split(pth,'/')[-1])
             if fext=='.nd2':
                 return 'ND2'
             if fext=='.pickle':
@@ -194,13 +182,21 @@ class Metadata(object):
         return None
 
     
-    
-    
-    
-    
+    def _load_metadata(self):
+        if self._md_name in listdir(self.base_pth):   
+            self.append(self._load_method(pth=self.base_pth ,fname=self._md_name))
+            print('loaded ' + self.type + ' metadata from' + join(self.base_pth, self._md_name))
+        else:
+            #if there is no MD in the folder, look at subfolders and append all 
+            for subdir, curdir, filez in walk(self.base_pth):
+                for f in filez:
+                    if f==self._md_name:
+                        self.append(self._load_method(pth=join(subdir),fname=f))
+                        print('loaded ' + self.type + ' metadata from' +join(subdir,f))  
+
         
     
-    def load_metadata_nd(self, pth, fname='*.nd', delimiter='\t'):
+    def _load_metadata_nd(self, pth, fname='', delimiter='\t'):
         """
         Helper function to load a micromanager txt metadata file.
         """
@@ -213,8 +209,8 @@ class Metadata(object):
                        'Zindex','Exposure','PixelSize', 'TimestampFrame','TimestampImage', 'filename']
         image_table = pd.DataFrame(columns=usecolslist)
 
-        acq = pth.split(sep)[-1]
-        with nd2.ND2Reader(pth) as imgs:
+        acq = fname#pth.split(sep)[-1]
+        with nd2.ND2Reader(join(self.base_pth,fname)) as imgs:
             Ninds = imgs.metadata['total_images_per_channel']*len(imgs.metadata['channels'])
             frames = imgs.metadata['frames']
             imgsPerFrame = Ninds/len(frames)
@@ -223,7 +219,7 @@ class Metadata(object):
             Zpos = imgs.metadata['z_coordinates']
             Zind = imgs.metadata['z_levels']
             pixsize = imgs.metadata['pixel_microns']
-            acq = pth.split(sep)[-1]
+            acq = fname#pth.split(sep)[-1]
             for i in np.arange(Ninds):
                 frame = int(i/imgsPerFrame)
                 xy = XY[frame,]
@@ -241,7 +237,7 @@ class Metadata(object):
     
 
     
-    def load_metadata_MM(self, pth, fname='metadata.txt', delimiter='\t'):
+    def _load_metadata_MM(self, pth, fname='metadata.txt', delimiter='\t'):
         """
         Helper function to load a micromanager txt metadata file.
         """
@@ -267,16 +263,24 @@ class Metadata(object):
         return image_table
     
     
-    def load_metadata_txt(self, pth, fname='Metadata.txt', delimiter='\t'):
+    def _load_metadata_txt(self, pth, fname='Metadata.txt', delimiter='\t'):
         """
         Helper function to load a text metadata file.
         """
         image_table = pd.read_csv(join(pth, fname), delimiter=delimiter)
         image_table['root_pth'] = image_table.filename
-        image_table.filename = [join(pth, f) for f in image_table.filename]
+        image_table.filename = [join(pth, f.split('/')[-1]) for f in image_table.filename]
         return image_table
     
-    
+ 
+
+
+
+
+
+
+
+
     #This is how everything gets added to a MD
     def append(self,framedata):
         self.image_table = self.image_table.append(framedata, sort=False,ignore_index=True)
@@ -290,8 +294,11 @@ class Metadata(object):
 
 
     
+    
+    
+    # Save metadata in pickle format
     def pickle(self):
-        with open(join(self.base_pth,'Metadata.pickle'), 'wb') as dbfile:
+        with open(join(self.base_pth,self._md_name.split('.')[0]+ '.pickle'), 'wb') as dbfile:
             tempfn = self.image_table['filename'].copy()
             self.image_table['filename'] = self.image_table['root_pth']
             del self.image_table['root_pth']
@@ -300,31 +307,18 @@ class Metadata(object):
             self.image_table['filename'] = tempfn
             print('saved metadata')
         
-    def unpickle(self,pth,fname='Metadata.pickle'):
+    def unpickle(self,pth,fname='*.pickle', delimiter='\t'):
         with open(join(pth,fname), 'rb') as dbfile:
             MD = pickle.load(dbfile)
             MD.image_table['root_pth'] = MD.image_table.filename
             MD.image_table.filename = [join(pth, f) for f in MD.image_table.filename]
+            self._md_name = MD._md_name
+            self.type = MD.type
             return MD.image_table
             
+         
         
-
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
+    
     def stkread(self, groupby='Position', sortby='TimestampFrame',
                 fnames_only=False, metadata=False, **kwargs):
         """
@@ -352,29 +346,29 @@ class Metadata(object):
         Position : str, list(str)
         Channel : str, list(str)
         Zindex : int, list(int)
+        frames : int, list(int)
         acq : str, list(str)
         """
         
-        
-        #for key, value in kwargs.items():
-        #    if not isinstance(value, list):
-        #        kwargs[key] = [value]
         image_subset_table = self.image_table
-        # Filter images according to some criteria
+        # Filter images according to given criteria
         for attr in image_subset_table.columns:
             if attr in kwargs:
                 if not isinstance(kwargs[attr], list):
                     kwargs[attr] = [kwargs[attr]]
                 image_subset_table = image_subset_table[image_subset_table[attr].isin(kwargs[attr])]
            
-        # Group images and sort them then extract filenames of sorted images
+        # Group images and sort them then extract filenames/indices of sorted images
         image_subset_table.sort_values(sortby, inplace=True)
         image_groups = image_subset_table.groupby(groupby)
         
         fnames_output = {}
         mdata = {}
         for posname in image_groups.groups.keys():
-            fnames_output[posname] = image_subset_table.loc[image_groups.groups[posname]].filename.values
+            if self.type=='ND2':
+                fnames_output[posname] = image_subset_table.loc[image_groups.groups[posname]].index.values
+            else:
+                fnames_output[posname] = image_subset_table.loc[image_groups.groups[posname]].filename.values
             mdata[posname] = image_subset_table.loc[image_groups.groups[posname]]
 
         # Clunky block of code below allows getting filenames only, and handles returning 
@@ -386,7 +380,7 @@ class Metadata(object):
                 return fnames_output, mdata
             else:
                 return fnames_output
-        else:
+        else: #Load and organize images
             if metadata:
                 if len(mdata)==1:
                     mdata = mdata[posname]
@@ -401,20 +395,7 @@ class Metadata(object):
                     return stk
                 
                 
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
-                
+
                 
 #    def save_images(self, images, fname = '/Users/robertf/Downloads/tmp_stk.tif'):
 #        with TiffWriter(fname, bigtiff=False, imagej=True) as t:
@@ -424,19 +405,18 @@ class Metadata(object):
 #            else:
 #                t.save(img_as_uint(images))
 #        return fname
-        
+
+    #Helper function to read list of files given an TIFF type metadata and an filename list    
     def _read_local(self, filename_dict, ffield=False,register=False, verbose=False,**kwargs):
         """
         Load images into dictionary of stks.
         """
-
-            
+   
         images_dict = {}
         for key, value in filename_dict.items():
             # key is groupby property value
             # value is list of filenames of images to be loaded as a stk
-
-            
+       
             imgs = []
             
             for img_idx, fname in enumerate(value):
@@ -452,8 +432,7 @@ class Metadata(object):
                 except:
                     img = np.array(im)
                 im.close()
-                
-                
+
                 
                 if ffield:
                     img = self._doFlatFieldCorrection(img, fname)
@@ -472,9 +451,50 @@ class Metadata(object):
             
         return images_dict
 
+    
+    #Helper function to read list of files given an ND type metadata and an index list
+    def _read_nd2(self, ind_dict, ffield=False,register=False, verbose=False,**kwargs):
+        """
+        Load images into dictionary of stks.
+        """
+        import nd2reader as nd2
+        with nd2.ND2Reader(join(self.base_pth,self._md_name)) as nd2imgs:
+          
+            images_dict = {}
+            for key, value in ind_dict.items():
+                imgs = []
+                for img_idx, fname in enumerate(value):
+                    # Weird print style to print on same line
+                    sys.stdout.write("\r"+'opening '+ str(fname))
+                    sys.stdout.flush()                
+
+                    img = np.array(nd2imgs.parser.get_image(fname))
+
+                    if ffield:
+                        img = self._doFlatFieldCorrection(img, fname)
+                    if register:
+                        img = self._register(img, fname)
+                    #if it's a z-stack
+                    if img.ndim==3: 
+                        img = img.transpose((1,2,0))
+
+                    imgs.append(img)
+
+                # Best performance has most frequently indexed dimension first 
+                images_dict[key] = np.array(imgs) / 2**16  
+                if verbose:
+                    print('Loaded {0} group of images.'.format(key))
+
+            return images_dict
 
 
         
+        
+        
+        
+        
+        
+    # Function to apply flat field correction    
     def _doFlatfieldCorrection(self, img, flt, **kwargs):
         """
         Perform flatfield correction.
@@ -525,6 +545,7 @@ class Metadata(object):
             return img
             
 
+    # Calculate jitter/drift corrections        
     def CalculateDriftCorrection(self, Position=None, ZsToLoad=[1]):
         #from scipy.signal import fftconvolve
         if Position is None:

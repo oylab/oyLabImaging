@@ -324,6 +324,18 @@ class segmentation:
     class for all segmentation functions
     All functions accept an img and any arguments they need and return a labeled matrix.
     """
+    import contextlib
+    import io
+    import sys
+
+    @contextlib.contextmanager
+    def nostdout():
+        save_stdout = sys.stdout
+        sys.stdout = io.BytesIO()
+        yield
+        sys.stdout = save_stdout
+            
+            
     def segtype_to_segfun(segment_type):
         if segment_type=='watershed':
             seg_fun=segmentation._segment_nuclei_watershed
@@ -334,8 +346,9 @@ class segmentation:
     def _segment_nuclei_watershed(img, voronoi=None,cellsize=5, hThresh=0.001):
         from skimage import filters, measure
         from skimage.util import invert
-        from skimage.morphology import watershed  
-        from oyLabCode.Processing.improcutils import trithresh, awt, imimposemin
+        #from skimage.morphology import watershed  
+        from skimage.segmentation import watershed  
+        from oyLabImaging.Processing.improcutils import trithresh, awt, imimposemin
         from skimage.feature import peak_local_max
         from scipy.ndimage.morphology import distance_transform_edt 
         from skimage.morphology import erosion, dilation, opening, closing, h_maxima, disk
@@ -349,7 +362,10 @@ class segmentation:
             voronoi = {}
             imgSmooth = filters.gaussian(img,sigma=cellsize)
             img_hmax = h_maxima(imgSmooth,hThresh) #threshold
-            RegionMax = peak_local_max(img_hmax,footprint=np.ones((30, 30)), indices=False).astype('int')
+            coordinates = peak_local_max(img_hmax,footprint=np.ones((30, 30)))
+            RegionMax = np.zeros_like(img, dtype=np.bool) 
+            RegionMax[tuple(coordinates.T)] = True
+            RegionMax = RegionMax.astype('int')
             se = disk(cellsize)
             RegionMax = closing(RegionMax,se)
             imgBW = dilation(RegionMax,se);
@@ -388,7 +404,7 @@ class segmentation:
         from cv2 import resize, INTER_NEAREST, INTER_AREA
         from numpy import squeeze
         from skimage.transform import rescale
-
+        
         model = models.Cellpose(gpu=False, model_type='nuclei')
         img = np.squeeze(img)
         assert(img.ndim==2), "_segment_nuclei_cellpose accepts 2D images" 
@@ -441,7 +457,9 @@ class segmentation:
         import matplotlib.pyplot as plt
         import ipywidgets as widgets
         from matplotlib.colors import ListedColormap
-
+        
+        
+            
         if segfun==None:
             segfun = segmentation.segtype_to_segfun(segment_type)
             print('\nusing ' + segfun.__name__ )
@@ -454,6 +472,7 @@ class segmentation:
         defaults = list(segfun.__defaults__)
         input_dict = {args[i]: defaults[i] for i in range(0, nargs-1)} 
 
+        
         L = segfun(img)
 
         fig, ax = plt.subplots()
@@ -477,6 +496,7 @@ class segmentation:
         def update_mask(b):
             print('calculating with new parameters')
             #new_input_dict = {args[i]: eval('text_box_' + str(i)+ '.value') for i in range(0, nargs-1)} 
+            plt.show()
             new_input_dict = {args[i]: tblist[i].value for i in range(0, nargs-1)} 
             new_input_dict = clean_dict(new_input_dict)
             L = segfun(img,**new_input_dict)
