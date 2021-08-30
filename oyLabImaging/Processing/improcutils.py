@@ -23,24 +23,29 @@ def periodic_smooth_decomp(I: np.ndarray) -> (np.ndarray, np.ndarray):
         
         Code from: https://github.com/jacobkimmel/ps_decomp
     '''
+    from pyfftw.interfaces.numpy_fft import fft2, ifft2
     def u2v(u: np.ndarray) -> np.ndarray:
         '''Converts the image `u` into the image `v`
         Parameters
         ----------
         u : np.ndarray
-            [M, N] image
+            [(L), M, N] image
         Returns
             -------
         v : np.ndarray
-            [M, N] image, zeroed expect for the outermost rows and cols
+            [(L), M, N] image, zeroed expect for the outermost rows and cols
         '''
+        
+        if u.ndim==2:
+            np.expand_dims(u,0)
+        
         v = np.zeros(u.shape, dtype=np.float64)
 
-        v[0, :] = np.subtract(u[-1, :], u[0,  :], dtype=np.float64)
-        v[-1,:] = np.subtract(u[0,  :], u[-1, :], dtype=np.float64)
+        v[:,0, :] = np.subtract(u[:,-1, :], u[:,0,  :], dtype=np.float64)
+        v[:,-1,:] = np.subtract(u[:,0,  :], u[:,-1, :], dtype=np.float64)
 
-        v[:,  0] += np.subtract(u[:, -1], u[:,  0], dtype=np.float64)
-        v[:, -1] += np.subtract(u[:,  0], u[:, -1], dtype=np.float64)
+        v[:,:,  0] += np.subtract(u[:,:, -1], u[:,:,  0], dtype=np.float64)
+        v[:,:, -1] += np.subtract(u[:,:,  0], u[:,:, -1], dtype=np.float64)
         return v
 
     def v2s(v_hat: np.ndarray) -> np.ndarray:
@@ -52,7 +57,7 @@ def periodic_smooth_decomp(I: np.ndarray) -> (np.ndarray, np.ndarray):
         v_hat : np.ndarray
             [M, N] DFT of v
         '''
-        M, N = v_hat.shape
+        L, M, N = v_hat.shape
 
         q = np.arange(M).reshape(M, 1).astype(v_hat.dtype)
         r = np.arange(N).reshape(1, N).astype(v_hat.dtype)
@@ -60,17 +65,17 @@ def periodic_smooth_decomp(I: np.ndarray) -> (np.ndarray, np.ndarray):
         den = (2*np.cos( np.divide((2*np.pi*q), M) ) \
              + 2*np.cos( np.divide((2*np.pi*r), N) ) - 4)
         s = np.divide(v_hat, den, out=np.zeros_like(v_hat), where=den!=0)
-        s[0, 0] = 0
+        s[:, 0, 0] = 0
         return s
 
     u = I.astype(np.float64)
     v = u2v(u)
-    v_fft = np.fft.fftn(v)
+    v_fft = fft2(v,threads=8)
     s = v2s(v_fft)
-    s_i = np.fft.ifftn(s)
+    s_i = ifft2(s,threads=8)
     s_f = np.real(s_i)
     p = u - s_f # u = p + s
-    return p, s_f
+    return np.squeeze(p), np.squeeze(s_f)
 
 
 

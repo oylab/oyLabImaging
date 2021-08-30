@@ -320,7 +320,7 @@ class Metadata(object):
         
     
     def stkread(self, groupby='Position', sortby='TimestampFrame',
-                fnames_only=False, metadata=False, **kwargs):
+                finds_only=False, metadata=False, **kwargs):
         """
         Main interface of Metadata
         
@@ -328,7 +328,7 @@ class Metadata(object):
         ----------
         groupby : str - all images with the same groupby field with be stacked
         sortby : str, list(str) - images in stks will be ordered by this(these) fields
-        fnames_only : Bool (default False) - lazy loading
+        finds_only : Bool (default False) - lazy loading
         metadata : Bool (default False) - whether to return metadata of images
         
         kwargs : Property Value pairs to subset images (see below)
@@ -338,8 +338,8 @@ class Metadata(object):
         stk of images if only one value of the groupby_value
         dictionary (groupby_value : stk) if more than one groupby_value
         stk/dict, metadata table if metadata=True
-        fnames if fnames_only true
-        fnames, metadata table if fnames_only and metadata
+        finds if finds_only true
+        finds, metadata table if finds_only and metadata
         
         Implemented kwargs
         ------------------
@@ -362,33 +362,30 @@ class Metadata(object):
         image_subset_table.sort_values(sortby, inplace=True)
         image_groups = image_subset_table.groupby(groupby)
         
-        fnames_output = {}
+        finds_output = {}
         mdata = {}
         for posname in image_groups.groups.keys():
-            if self.type=='ND2':
-                fnames_output[posname] = image_subset_table.loc[image_groups.groups[posname]].index.values
-            else:
-                fnames_output[posname] = image_subset_table.loc[image_groups.groups[posname]].filename.values
+            finds_output[posname] = image_subset_table.loc[image_groups.groups[posname]].index.values
             mdata[posname] = image_subset_table.loc[image_groups.groups[posname]]
 
         # Clunky block of code below allows getting filenames only, and handles returning 
         # dictionary if multiple groups present or ndarray only if single group
-        if fnames_only:
+        if finds_only:
             if metadata:
                 if len(mdata)==1:
                     mdata = mdata[posname]
-                return fnames_output, mdata
+                return finds_output, mdata
             else:
-                return fnames_output
+                return finds_output
         else: #Load and organize images
             if metadata:
                 if len(mdata)==1:
                     mdata = mdata[posname]
-                    return np.squeeze(self._open_file(fnames_output,**kwargs)[posname]), mdata
+                    return np.squeeze(self._open_file(finds_output,**kwargs)[posname]), mdata
                 else:
-                    return self._open_file(fnames_output,**kwargs), mdata
+                    return self._open_file(finds_output,**kwargs), mdata
             else:
-                stk = self._open_file(fnames_output,**kwargs) 
+                stk = self._open_file(finds_output,**kwargs) 
                 if len(list(stk.keys()))==1:
                     return np.squeeze(stk[posname])
                 else:
@@ -407,19 +404,20 @@ class Metadata(object):
 #        return fname
 
     #Helper function to read list of files given an TIFF type metadata and an filename list    
-    def _read_local(self, filename_dict, ffield=False,register=False, verbose=False,**kwargs):
+    def _read_local(self, ind_dict, ffield=False,register=False, verbose=False,**kwargs):
         """
         Load images into dictionary of stks.
         """
    
         images_dict = {}
-        for key, value in filename_dict.items():
+        for key, value in ind_dict.items():
             # key is groupby property value
             # value is list of filenames of images to be loaded as a stk
        
             imgs = []
             
-            for img_idx, fname in enumerate(value):
+            for img_idx, find in enumerate(value):
+                fname = self.image_table.at[find,'filename']
                 # Weird print style to print on same line
                 sys.stdout.write("\r"+'opening '+path.split(fname)[-1])
                 sys.stdout.flush()                
@@ -435,9 +433,9 @@ class Metadata(object):
 
                 
                 if ffield:
-                    img = self._doFlatFieldCorrection(img, fname)
+                    img = self._doFlatFieldCorrection(img, find)
                 if register:
-                    img = self._register(img, fname)
+                    img = self._register(img, find)
                 #if it's a z-stack
                 if img.ndim==3: 
                     img = img.transpose((1,2,0))
@@ -463,17 +461,17 @@ class Metadata(object):
             images_dict = {}
             for key, value in ind_dict.items():
                 imgs = []
-                for img_idx, fname in enumerate(value):
+                for img_idx, find in enumerate(value):
                     # Weird print style to print on same line
-                    sys.stdout.write("\r"+'opening '+ str(fname))
+                    sys.stdout.write("\r"+'opening '+ str(find))
                     sys.stdout.flush()                
 
-                    img = np.array(nd2imgs.parser.get_image(fname))
+                    img = np.array(nd2imgs.parser.get_image(find))
 
                     if ffield:
-                        img = self._doFlatFieldCorrection(img, fname)
+                        img = self._doFlatFieldCorrection(img, find)
                     if register:
-                        img = self._register(img, fname)
+                        img = self._register(img, find)
                     #if it's a z-stack
                     if img.ndim==3: 
                         img = img.transpose((1,2,0))
@@ -524,21 +522,22 @@ class Metadata(object):
     
     
     
-    def _register(self,img,fname):
-        #from skimage import transform
+    def _register(self,img,find):
+        from skimage import transform
         import cv2
        
-        if 'driftTform' in self().columns:        
-            dT = np.array(self()['driftTform'][self.unique('index',filename=fname)])
+        if 'driftTform' in self().columns:    
+            dT = np.array(self.image_table.at[find, 'driftTform'])
             if dT[0]==None:
                 warnings.warn("No drift correction found for position")
                 return img
-            elif len(dT[0])==9:
-                M = np.reshape(dT[0],(3,3)).transpose()
+            elif len(dT)==9:
+                M = np.reshape(dT,(3,3)).transpose()
                 
                 #cv2/scikit and numpy index differently
                 M[0,2], M[1,2] = M[1,2], M[0,2]
-                return cv2.warpAffine(img, M[:2], img.shape[::-1])
+                imreturn = cv2.warpAffine((img*2**16).astype('float64'), M[:2], img.shape[::-1])
+                return imreturn/2**16
                 #return transform.warp(img, np.linalg.inv(M), output_shape=img.shape,preserve_range=True)
         else:
             warnings.warn("No drift correction found for experiment")
@@ -546,7 +545,7 @@ class Metadata(object):
             
 
     # Calculate jitter/drift corrections        
-    def CalculateDriftCorrection(self, Position=None, ZsToLoad=[1]):
+    def CalculateDriftCorrection(self, Position=None, ZsToLoad=[1], Channel='DeepBlue'):
         #from scipy.signal import fftconvolve
         if Position is None:
             Position = self.posnames
@@ -554,11 +553,11 @@ class Metadata(object):
             Position = [Position]
         
         for pos in Position:
-            from pyfftw.interfaces.numpy_fft import rfft2, irfft2
+            from pyfftw.interfaces.numpy_fft import fft2, ifft2
 
             frames = self.frames
 
-            DataPre = self.stkread(Position=pos, Channel='DeepBlue')
+            DataPre = self.stkread(Position=pos, Channel=Channel)
             print('\ncalculating drift correction for position ' + pos)
             DataPre = DataPre-np.mean(DataPre,axis=(1,2),keepdims=True)
 
@@ -570,19 +569,12 @@ class Metadata(object):
             DataPost = np.reshape(DataPost,(DataPost.shape[0],DataPost.shape[1],len(ZsToLoad), len(frames)-1));
 
             #calculate cross correlation
-
-            #imXcorr = fftconvolve((DataPre-np.mean(DataPre,axis=(0,1),keepdims=True)), np.rot90(DataPost-np.mean(DataPost,axis=(0,1),keepdims=True),k=2), mode='same', axes=[0,1])
-
             DataPost = np.rot90(DataPost,axes=(0, 1),k=2)
 
             # So because of dumb licensing issues, fftconvolve can't use fftw but the slower fftpack. Python is wonderful. So we'll do it all by hand like neanderthals 
-            imXcorr = np.zeros_like(DataPre)
-            for i in np.arange(DataPre.shape[-1]):
-                img_fft_1 = rfft2(DataPre[:,:,:,i],axes=(0,1),threads=8)
-                img_fft_2 = rfft2(DataPost[:,:,:,i],axes=(0,1),threads=8)
-                imXcorr[:,:,:,i] = np.abs(np.fft.ifftshift(irfft2(img_fft_1*img_fft_2,axes=(0,1),threads=8)))
-
-
+            img_fft_1 = fft2(DataPre,axes=(0,1),threads=8)
+            img_fft_2 = fft2(DataPost,axes=(0,1),threads=8)
+            imXcorr = np.abs(np.fft.ifftshift(ifft2(img_fft_1*img_fft_2,axes=(0,1),threads=8)))
 
             #if more than 1 slice is calculated, look for mean shift
             imXcorrMeanZ = np.mean(imXcorr,axis=2)
@@ -590,16 +582,16 @@ class Metadata(object):
             for i in range(imXcorrMeanZ.shape[-1]):
                 c.append(np.squeeze(imXcorrMeanZ[:,:,i]).argmax())
 
-            d = np.transpose(np.unravel_index(c, np.squeeze(imXcorrMeanZ[:,:,0]).shape))-np.array(np.squeeze(imXcorrMeanZ[:,:,0]).shape)/2
+            d = np.transpose(np.unravel_index(c, np.squeeze(imXcorrMeanZ[:,:,0]).shape))-np.array(np.squeeze(imXcorrMeanZ[:,:,0]).shape)/2 + 1 #python indexing starts at 0
             D = np.insert(np.cumsum(d, axis=0), 0, [0,0], axis=0)
-
+            
             if 'driftTform' not in self.image_table.columns:
                 self.image_table['driftTform']=None
 
             for frame in self.frames:
                 inds = self.unique(Attr='index',Position=pos, frame=frame)
                 for ind in inds:
-                    self.image_table.at[ind, 'driftTform']=[1, 0, 0 , 0, 1, 0 , D[frame-1,0], D[frame-1,1], 1]
+                    self.image_table.at[ind, 'driftTform']=[1, 0, 0 , 0, 1, 0 , D[frame,0], D[frame,1], 1]
             print('calculated drift correction for position ' + pos)
         self.pickle()
     
