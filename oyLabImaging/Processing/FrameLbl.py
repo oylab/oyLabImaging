@@ -10,7 +10,7 @@ from oyLabImaging.Processing.improcutils import segmentation
 from oyLabImaging import Metadata
 
 class FrameLbl(object):
-    def __init__(self, frame=None, MD=None ,pth=None, Pos=None, acq = None, register=False ,periring=False, periringsize=5, NucChannel='DeepBlue',cytoplasm=False,CytoChannel='Yellow', segment_type='watershed', **kwargs):
+    def __init__(self, frame=None, MD=None ,pth=None, Pos=None, acq = None, Zindex=0 ,register=False ,periring=False, periringsize=5, NucChannel='DeepBlue',cytoplasm=False,CytoChannel='Yellow', segment_type='watershed', **kwargs):
 
         if pth is None and MD is not None:
             pth = MD.base_pth
@@ -50,8 +50,8 @@ class FrameLbl(object):
         
         Data = {};
         for ch in self.channels:
-            Data[ch] = np.squeeze(MD.stkread(Channel=ch,frame=frame, Position=Pos))
-            assert Data[ch].ndim==2, "channel/position/frame did not return unique result" 
+            Data[ch] = np.squeeze(MD.stkread(Channel=ch,frame=frame, Position=Pos, Zindex=Zindex,verbose=False))
+            assert Data[ch].ndim==2, "channel/position/frame/Zindex did not return unique result" 
         
         self.imagedims = np.shape(Data[NucChannel]);
 
@@ -113,7 +113,6 @@ class FrameLbl(object):
     
         self.regionprops = props_df
         
-     #   Link21Mat
     
     def __call__(self):
         print('FrameLbl object for position ' + self.posname + ' at frame '+ str(self.frame) + '.')

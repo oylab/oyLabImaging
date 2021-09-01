@@ -324,7 +324,7 @@ def DownScale(imgin): #use 2x downscaling for scrol speed
 
 
 
-class segmentation:
+class segmentation(object):
     """
     class for all segmentation functions
     All functions accept an img and any arguments they need and return a labeled matrix.
@@ -332,6 +332,9 @@ class segmentation:
     import contextlib
     import io
     import sys
+    
+    def segmentation_types():
+         return  ['watershed', 'cellpose_nuclei', 'cellpose_cyto', 'cellpose_nuc_cyto']    
 
     @contextlib.contextmanager
     def nostdout():
@@ -339,13 +342,18 @@ class segmentation:
         sys.stdout = io.BytesIO()
         yield
         sys.stdout = save_stdout
-            
-            
+     
+
+                
     def segtype_to_segfun(segment_type):
         if segment_type=='watershed':
             seg_fun=segmentation._segment_nuclei_watershed
         elif segment_type=='cellpose_nuclei':
             seg_fun=segmentation._segment_nuclei_cellpose
+        elif segment_type=='cellpose_cyto':
+            seg_fun=segmentation._segment_cytoplasm_cellpose
+        elif segment_type=='cellpose_nuc_cyto':
+            seg_fun=segmentation._segment_nuccyto_cellpose
         return seg_fun
             
     def _segment_nuclei_watershed(img, voronoi=None,cellsize=5, hThresh=0.001):
@@ -404,16 +412,22 @@ class segmentation:
         L = measure.label(L);
         return L
     
-    def _segment_nuclei_cellpose(img, diameter=50, scale=0.5,**kwargs):
+    def _segment_nuclei_cellpose(img, diameter=50, scale=0.5, GPU=True,**kwargs):
+        import logging
+        logging.getLogger('cellpose').propagate=False
+        import warnings
+        warnings.filterwarnings("ignore")
         from cellpose import models, io
         from cv2 import resize, INTER_NEAREST, INTER_AREA
         from numpy import squeeze
         from skimage.transform import rescale
         
-        model = models.Cellpose(gpu=False, model_type='nuclei')
+        
+        model = models.Cellpose(gpu=GPU, model_type='nuclei')
         img = np.squeeze(img)
         assert(img.ndim==2), "_segment_nuclei_cellpose accepts 2D images" 
    
+
         masks, _, _, _ = model.eval([rescale(img,scale)], diameter=diameter*scale, channels=[[0,0]],**kwargs)        
 
         dim = (img.shape[1], img.shape[0])
@@ -422,13 +436,18 @@ class segmentation:
  
         return L
 
-    def _segment_cytoplasm_cellpose(imgNuc, imgCyto, diameter=75, scale=0.5,**kwargs):
+    def _segment_cytoplasm_cellpose(imgNuc, imgCyto, diameter=75, scale=0.5, GPU=True,**kwargs):
+        import logging
+        logging.getLogger('cellpose').propagate=False
+        import warnings
+        warnings.filterwarnings("ignore")
+        
         from cellpose import models, io
         from cv2 import resize, INTER_NEAREST, INTER_AREA
         from numpy import squeeze
         from skimage.transform import rescale
 
-        model = models.Cellpose(gpu=False, model_type='cyto')
+        model = models.Cellpose(gpu=GPU, model_type='cyto')
         
         imgNucCyto = rescale(np.concatenate((np.expand_dims(imgNuc,2), np.expand_dims(imgCyto,2)), axis=2),(scale, scale, 1))
         
@@ -439,9 +458,9 @@ class segmentation:
         return resize(masks[0], dim, interpolation = INTER_NEAREST)
     
     
-    def _segment_nuccyto_cellpose(imgNuc, imgCyto, diameter_nuc=50,diameter_cyto=75, scale=0.5,**kwargs):
-        Lnuc = segmentation._segment_nuclei_cellpose(imgNuc, diameter=diameter_nuc, scale=scale,**kwargs)
-        Lcyto = segmentation._segment_cytoplasm_cellpose(imgNuc, imgCyto, diameter=diameter_cyto, scale=scale,**kwargs)
+    def _segment_nuccyto_cellpose(imgNuc, imgCyto, diameter_nuc=50,diameter_cyto=75, scale=0.5,GPU=True,**kwargs):
+        Lnuc = segmentation._segment_nuclei_cellpose(imgNuc, diameter=diameter_nuc, scale=scale, gpu=GPU,**kwargs)
+        Lcyto = segmentation._segment_cytoplasm_cellpose(imgNuc, imgCyto, diameter=diameter_cyto, scale=scale, gpu=GPU,**kwargs)
         
         Lcyto_new = np.zeros_like(Lcyto)
 
@@ -457,7 +476,7 @@ class segmentation:
         return Lnuc, Lcyto_new
     
     
-    def test_segmentation_params(img,segfun=None, segment_type='watershed'):
+    def test_segmentation_params(img,segfun=None, segment_type='watershed',**kwargs):
         import numpy as np
         import matplotlib.pyplot as plt
         import ipywidgets as widgets
@@ -476,9 +495,9 @@ class segmentation:
         args = [segfun.__code__.co_varnames[i] for i in range(1, nargs)]
         defaults = list(segfun.__defaults__)
         input_dict = {args[i]: defaults[i] for i in range(0, nargs-1)} 
-
+        input_dict = {**input_dict, **kwargs}
         
-        L = segfun(img)
+        L = segfun(img, **input_dict)
 
         fig, ax = plt.subplots()
         fig.subplots_adjust(bottom=0.1)
@@ -491,8 +510,8 @@ class segmentation:
         def clean_dict(d):
             result = {}
             for key, value in d.items():
-                if value=='None':
-                    value = None
+                if not value.isnumeric():
+                    value = eval(value)
                 else:
                     value = float(value)
                 result[key] = value
@@ -500,9 +519,8 @@ class segmentation:
 
         def update_mask(b):
             print('calculating with new parameters')
-            #new_input_dict = {args[i]: eval('text_box_' + str(i)+ '.value') for i in range(0, nargs-1)} 
-            plt.show()
-            new_input_dict = {args[i]: tblist[i].value for i in range(0, nargs-1)} 
+            #new_input_dict = {args[i]: eval('text_box_' + str(i)+ '.value') for i in range(0, nargs-1)}
+            new_input_dict = {tblist[i].description: tblist[i].value for i in range(0, len(tblist))} 
             new_input_dict = clean_dict(new_input_dict)
             L = segfun(img,**new_input_dict)
             l.set_data(L)

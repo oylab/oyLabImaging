@@ -12,7 +12,10 @@ import dill as pickle
 from ast import literal_eval
 import warnings 
 from PIL import Image
+import logging
 
+md_logger = logging.getLogger(__name__)
+md_logger.setLevel(logging.DEBUG)
 
 usecolslist = ['acq',  'Position', 'frame','Channel', 'Marker', 'Fluorophore', 'group', 
        'XY', 'Z', 'Zindex','Exposure','PixelSize', 'PlateType', 'TimestampFrame','TimestampImage', 'filename']
@@ -192,7 +195,7 @@ class Metadata(object):
                 for f in filez:
                     if f==self._md_name:
                         self.append(self._load_method(pth=join(subdir),fname=f))
-                        print('loaded ' + self.type + ' metadata from' +join(subdir,f))  
+                        print('loaded ' + self.type + ' metadata from' +join(subdir,f))
 
         
     
@@ -305,7 +308,8 @@ class Metadata(object):
             pickle.dump(self, dbfile)
             self.image_table['root_pth'] = self.image_table['filename']
             self.image_table['filename'] = tempfn
-            print('saved metadata')
+            md_logger.info('saved metadata')
+
         
     def unpickle(self,pth,fname='*.pickle', delimiter='\t'):
         with open(join(pth,fname), 'rb') as dbfile:
@@ -404,7 +408,7 @@ class Metadata(object):
 #        return fname
 
     #Helper function to read list of files given an TIFF type metadata and an filename list    
-    def _read_local(self, ind_dict, ffield=False,register=False, verbose=False,**kwargs):
+    def _read_local(self, ind_dict, ffield=False,register=False, verbose=True,**kwargs):
         """
         Load images into dictionary of stks.
         """
@@ -419,8 +423,10 @@ class Metadata(object):
             for img_idx, find in enumerate(value):
                 fname = self.image_table.at[find,'filename']
                 # Weird print style to print on same line
-                sys.stdout.write("\r"+'opening '+path.split(fname)[-1])
-                sys.stdout.flush()                
+                if verbose:
+                    sys.stdout.write("\r"+'opening '+path.split(fname)[-1])
+                    sys.stdout.flush() 
+                #md_logger.info("\r"+'opening '+path.split(fname)[-1])
                 
                 #For speed: use PIL when loading a single image, imread when using stack
                 im = Image.open(join(fname))
@@ -445,13 +451,13 @@ class Metadata(object):
             # Best performance has most frequently indexed dimension first 
             images_dict[key] = np.array(imgs) / 2**16  
             if verbose:
-                print('Loaded {0} group of images.'.format(key))
+                print('\nLoaded {0} group of images.'.format(key))
             
         return images_dict
 
     
     #Helper function to read list of files given an ND type metadata and an index list
-    def _read_nd2(self, ind_dict, ffield=False,register=False, verbose=False,**kwargs):
+    def _read_nd2(self, ind_dict, ffield=False,register=False, verbose=True,**kwargs):
         """
         Load images into dictionary of stks.
         """
@@ -463,8 +469,9 @@ class Metadata(object):
                 imgs = []
                 for img_idx, find in enumerate(value):
                     # Weird print style to print on same line
-                    sys.stdout.write("\r"+'opening '+ str(find))
-                    sys.stdout.flush()                
+                    if verbose:
+                        sys.stdout.write("\r"+'opening '+ str(find))
+                        sys.stdout.flush()                
 
                     img = np.array(nd2imgs.parser.get_image(find))
 
@@ -481,7 +488,7 @@ class Metadata(object):
                 # Best performance has most frequently indexed dimension first 
                 images_dict[key] = np.array(imgs) / 2**16  
                 if verbose:
-                    print('Loaded {0} group of images.'.format(key))
+                    print('/nLoaded {0} group of images.'.format(key))
 
             return images_dict
 

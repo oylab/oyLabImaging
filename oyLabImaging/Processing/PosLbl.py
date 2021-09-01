@@ -9,15 +9,16 @@ import pandas as pd
 import numpy as np
 from skimage import measure
 from oyLabImaging import Metadata
-from multiprocessing import Pool
+import torch.multiprocessing as mp #import Pool, set_start_method
 from functools import partial
 from oyLabImaging.Processing import FrameLbl
 from scipy.spatial import KDTree
 import lap
 from tqdm import tqdm
 
+
 class PosLbl(object):
-    def __init__(self, Pos=None, MD=None ,pth=None, acq = None, threads=10, **kwargs):
+    def __init__(self, Pos=None, MD=None ,pth=None, acq = None, Channel='DeepBlue', threads=10, **kwargs):
         
 
         if any([Pos is None]):
@@ -46,19 +47,19 @@ class PosLbl(object):
         
         # Create all framelabels for the different TPs. This will segment and measure stuff. 
         
-        def mute():
-            sys.stdout = open(os.devnull, 'w')    
+        #def mute():
+        #    sys.stdout = open(os.devnull, 'w')    
 
-        with Pool(threads, initializer=mute) as ppool:
-            frames = list(tqdm(ppool.imap(partial(FrameLbl, MD = MD, pth = pth, Pos=Pos, **kwargs), self.frames), total=len(self.frames)))
+        with mp.Pool(threads) as ppool:
+            frames = list(tqdm(ppool.imap(partial(FrameLbl, MD = MD, pth = pth, Pos=Pos, NucChannel=Channel, **kwargs), self.frames), total=len(self.frames)))
             ppool.close()
             ppool.join()
         self.framelabels = np.array(frames)
-        print('\nFinished loading and segmenting position ' + Pos)
+        print('\nFinished loading and segmenting position ' + str(Pos))
             
         
     def __call__(self):
-        print('PosLbl object for position ' + self.posname + '.')
+        print('PosLbl object for position ' + str(self.posname) + '.')
         print('\nThe path to the experiment is: \n ' + self.pth)
         print('\n '+ str(len(self.frames)) + ' frames processed.')        
 
