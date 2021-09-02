@@ -18,7 +18,7 @@ from tqdm import tqdm
 
 
 class PosLbl(object):
-    def __init__(self, Pos=None, MD=None ,pth=None, acq = None, Channel='DeepBlue', threads=10, **kwargs):
+    def __init__(self, Pos=None, MD=None ,pth=None, acq = None, NucChannel='DeepBlue', threads=10, **kwargs):
         
 
         if any([Pos is None]):
@@ -43,6 +43,7 @@ class PosLbl(object):
         self.channels = MD.unique('Channel',Position=Pos) 
         self.acq = MD.unique('acq',Position=Pos) 
         self.frames = MD.unique('frame',Position=Pos)
+        self._tracked=False
         
         
         # Create all framelabels for the different TPs. This will segment and measure stuff. 
@@ -51,7 +52,7 @@ class PosLbl(object):
         #    sys.stdout = open(os.devnull, 'w')    
 
         with mp.Pool(threads) as ppool:
-            frames = list(tqdm(ppool.imap(partial(FrameLbl, MD = MD, pth = pth, Pos=Pos, NucChannel=Channel, **kwargs), self.frames), total=len(self.frames)))
+            frames = list(tqdm(ppool.imap(partial(FrameLbl, MD = MD, pth = pth, Pos=Pos, NucChannel=NucChannel, **kwargs), self.frames), total=len(self.frames)))
             ppool.close()
             ppool.join()
         self.framelabels = np.array(frames)
@@ -126,6 +127,7 @@ class PosLbl(object):
     class _onetrack(object):
         def __init__(self,outer, i=0):
             self.trackinds = outer.trackinds[i]
+            self.numtracks = len(outer.trackinds)
             self._outer = outer
         
         @property
@@ -186,10 +188,12 @@ class PosLbl(object):
         '''
         self._link(**kwargs)
         self._closegaps(**kwargs)
+        self._tracked=True
         
     
-    def _link(self, ch=None,search_radius=75,**kwargs):
+    def _link(self, NucChannel=None,search_radius=75,**kwargs):
         #todo: extend for a general cost function. make class of cost functions that returns shape, cc, ii, jj
+        ch = NucChannel
         if ch is None:
             ch = self.channels[0]
             print('No channel provided, using '+ch)
@@ -244,7 +248,7 @@ class PosLbl(object):
     
 
     
-    def _getTrackLinks(self,i=0,l=0):
+    def _getTrackLinks(self,i=0,l=0,**kwargs):
         '''
         recursive function that gets an initial frame i and starting cell label 
         l and returns all labels
@@ -261,7 +265,7 @@ class PosLbl(object):
                 pass
     
 
-    def _getAllContinuousTrackSegs(self, minseglength=5):
+    def _getAllContinuousTrackSegs(self, minseglength=5, **kwargs):
         '''
         function that returns the frame indexing of all contiuous tracks (chained links) longer than minseglength.
 
@@ -278,8 +282,9 @@ class PosLbl(object):
         return trackbits[(np.array([np.sum(r != None) for r in trackbits])>=minseglength)]
     
     
-    def _closegaps(self, maxStep=100, ch=None,maxAmpRatio=1.5, mintracklength=20, **kwargs):
+    def _closegaps(self, maxStep=100, NucChannel=None,maxAmpRatio=1.5, mintracklength=20, **kwargs):
         #todo: split. When a stub that starts in the middle has a plausible link, make a compound track
+        ch=NucChannel
         if ch is None:
             ch = self.channels[0]
             
@@ -365,10 +370,18 @@ class PosLbl(object):
     
     
     
+    def img(self,Channel='DeepBlue', **kwargs):
+        from oyLabImaging import Metadata
+        pth = self.pth
+        MD = Metadata(pth)
+        return MD.stkread(Channel=Channel, Position=self.posname, register=True, **kwargs)
     
-    
-    
-    
+    def _pointmat(self):
+        a = []
+        for i, cen in enumerate(self.centroid):
+            a.append((np.pad(cen, ((0,0), (1,0)),constant_values=i)))
+        return(np.concatenate(a))
+
     
     
     

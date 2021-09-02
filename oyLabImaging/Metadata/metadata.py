@@ -45,26 +45,22 @@ class Metadata(object):
         
         # Determine which type of metadata we're working with
         self.type = self._determine_metadata_type(pth)
+        self._md_name = self._determine_metadata_name(pth)
        
         # If it can't find a supported MD, it exits w/o doing anything
         if self.type==None:
             return
 
-        # short circuit recursive search for metadatas if present in the top directory of 
-        # the supplied pth.
         
         # How should metadata be read?
         if self.type=='PICKLE':
             self._load_method=self.unpickle
         elif self.type=='TXT':
             self._load_method=self._load_metadata_txt
-            self._md_name='Metadata.txt' 
         elif self.type=='MM':
             self._load_method=self._load_metadata_MM
-            self._md_name='metadata.txt' 
         elif self.type=='ND2':
             self._load_method=self._load_metadata_nd
-        
 
                   
         # With all we've learned, we can now load the metadata
@@ -160,12 +156,15 @@ class Metadata(object):
         fname, fext = path.splitext(pth)
         if path.isdir(pth):
             for subdir, curdir, filez in walk(pth):
+                
+                assert len([f for f in filez if f.endswith('.nd2')])<2, "directory had multiple nd2 files. Either specify a direct path or (preferably) organize your data so that every nd2 file is in a separate folder"
+                        
                 for f in filez:
                     fname, fext = path.splitext(f)
+                    if f=='metadata.pickle':
+                        return 'PICKLE'
                     if fext=='.nd2':
                         return 'ND2'
-                    #if fext=='.pickle':
-                    #    return 'PICKLE'
                     if fext=='.txt':
                         if fname=='metadata':
                             return 'MM'
@@ -173,17 +172,45 @@ class Metadata(object):
                             return 'TXT'
         else:
             fname, fext = path.splitext(str.split(pth,'/')[-1])
+            if str.split(pth,'/')[-1]=='metadata.pickle':
+                return 'PICKLE'
             if fext=='.nd2':
                 return 'ND2'
-            if fext=='.pickle':
-                return 'PICKLE'
             if fext=='.txt':
                 if fname=='metadata':
                     return 'MM'
                 if fname=='Metadata':
                     return 'TXT'     
         return None
-
+    
+    def _determine_metadata_name(self, pth):
+        from os import path, walk
+        fname, fext = path.splitext(pth)
+        if path.isdir(pth):
+            for subdir, curdir, filez in walk(pth):
+                for f in filez:
+                    fname, fext = path.splitext(f)
+                    if f=='metadata.pickle':
+                        return f
+                    if fext=='.nd2':
+                        return f
+                    if fext=='.txt':
+                        if fname=='metadata':
+                            return f
+                        if fname=='Metadata':
+                            return f
+        else:
+            fname, fext = path.splitext(str.split(pth,'/')[-1])
+            if str.split(pth,'/')[-1]=='metadata.pickle':
+                return str.split(pth,'/')[-1]
+            if fext=='.nd2':
+                return str.split(pth,'/')[-1]
+            if fext=='.txt':
+                if fname=='metadata':
+                    return str.split(pth,'/')[-1]
+                if fname=='Metadata':
+                    return str.split(pth,'/')[-1]     
+        return None
     
     def _load_metadata(self):
         if self._md_name in listdir(self.base_pth):   
@@ -201,18 +228,18 @@ class Metadata(object):
     
     def _load_metadata_nd(self, pth, fname='', delimiter='\t'):
         """
-        Helper function to load a micromanager txt metadata file.
+        Helper function to load nikon nd2 metadata.
         """
         import nd2reader as nd2
         import pandas as pd
         from os.path import sep
-
+        import time
         
         usecolslist = ['acq',  'Position', 'frame','Channel', 'XY', 'Z', 
                        'Zindex','Exposure','PixelSize', 'TimestampFrame','TimestampImage', 'filename']
         image_table = pd.DataFrame(columns=usecolslist)
 
-        acq = fname#pth.split(sep)[-1]
+        acq = fname
         with nd2.ND2Reader(join(self.base_pth,fname)) as imgs:
             Ninds = imgs.metadata['total_images_per_channel']*len(imgs.metadata['channels'])
             frames = imgs.metadata['frames']
@@ -222,18 +249,18 @@ class Metadata(object):
             Zpos = imgs.metadata['z_coordinates']
             Zind = imgs.metadata['z_levels']
             pixsize = imgs.metadata['pixel_microns']
-            acq = fname#pth.split(sep)[-1]
+            acq = fname
             for i in np.arange(Ninds):
                 frame = int(i/imgsPerFrame)
                 xy = XY[frame,]
                 z = Zpos[frame]
-                zind = imgs.parser.calculate_image_properties(i)[2]
-                chan = imgs.parser.calculate_image_properties(i)[1]
-                pos = imgs.parser.calculate_image_properties(i)[0]
+                props = imgs.parser.calculate_image_properties(i)
+                zind = props[2]
+                chan = props[1]
+                pos = props[0]
                 exptime = imgs.parser._raw_metadata.camera_exposure_time[frame]
-                framedata={'acq':acq,'Position':pos,'frame':frame,'Channel':chan,'XY':list(xy), 'Z':z, 'Zindex':zind,'Exposure':exptime ,'PixelSize':pixsize,'TimestampFrame':imgs.timesteps[frame],'TimestampImage':imgs.timesteps[frame],'filename':acq}
+                framedata={'acq':acq,'Position':pos,'frame':frame,'Channel':chan,'XY':list(xy), 'Z':z, 'Zindex':zind,'Exposure':exptime,'PixelSize':pixsize,'TimestampFrame':imgs.timesteps[frame],'TimestampImage':imgs.timesteps[frame],'filename':acq}
                 image_table = image_table.append(framedata, sort=False,ignore_index=True)
-
             image_table['root_pth'] = image_table.filename
             image_table.filename = [join(pth, f.split('/')[-1]) for f in image_table.filename]
             return image_table
@@ -301,7 +328,7 @@ class Metadata(object):
     
     # Save metadata in pickle format
     def pickle(self):
-        with open(join(self.base_pth,self._md_name.split('.')[0]+ '.pickle'), 'wb') as dbfile:
+        with open(join(self.base_pth,'metadata.pickle'), 'wb') as dbfile:
             tempfn = self.image_table['filename'].copy()
             self.image_table['filename'] = self.image_table['root_pth']
             del self.image_table['root_pth']
@@ -316,7 +343,7 @@ class Metadata(object):
             MD = pickle.load(dbfile)
             MD.image_table['root_pth'] = MD.image_table.filename
             MD.image_table.filename = [join(pth, f) for f in MD.image_table.filename]
-            self._md_name = MD._md_name
+            self._md_name = 'metadata.pickle'
             self.type = MD.type
             return MD.image_table
             
@@ -424,7 +451,7 @@ class Metadata(object):
                 fname = self.image_table.at[find,'filename']
                 # Weird print style to print on same line
                 if verbose:
-                    sys.stdout.write("\r"+'opening '+path.split(fname)[-1])
+                    sys.stdout.write("\r"+'opening file '+path.split(fname)[-1])
                     sys.stdout.flush() 
                 #md_logger.info("\r"+'opening '+path.split(fname)[-1])
                 
@@ -462,7 +489,7 @@ class Metadata(object):
         Load images into dictionary of stks.
         """
         import nd2reader as nd2
-        with nd2.ND2Reader(join(self.base_pth,self._md_name)) as nd2imgs:
+        with nd2.ND2Reader(self.unique('filename')[0]) as nd2imgs:
           
             images_dict = {}
             for key, value in ind_dict.items():
@@ -470,7 +497,7 @@ class Metadata(object):
                 for img_idx, find in enumerate(value):
                     # Weird print style to print on same line
                     if verbose:
-                        sys.stdout.write("\r"+'opening '+ str(find))
+                        sys.stdout.write("\r"+'opening index '+ str(find))
                         sys.stdout.flush()                
 
                     img = np.array(nd2imgs.parser.get_image(find))
@@ -488,7 +515,7 @@ class Metadata(object):
                 # Best performance has most frequently indexed dimension first 
                 images_dict[key] = np.array(imgs) / 2**16  
                 if verbose:
-                    print('/nLoaded {0} group of images.'.format(key))
+                    print('\nLoaded {0} group of images.'.format(key))
 
             return images_dict
 

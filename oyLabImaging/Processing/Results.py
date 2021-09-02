@@ -71,6 +71,21 @@ class results(object):
             self.PosLbls.update({p : PosLbl(MD=MD, Pos=p, pth=MD.base_pth, **kwargs)})
         self.save()
 
+    def calculate_tracks(self, pos=None, NucChannel='DeepBlue', **kwargs):
+        if pos==None:
+            pos = list(self.PosLbls.keys())
+        pos = pos if isinstance(pos, list) else [pos]
+        assert any(elem in self.PosLbls.keys()  for elem in pos), str(pos) + ' not segmented yet'
+        for p in pos:
+            self.PosLbls[p].trackcells(NucChannel=NucChannel,**kwargs)
+            
+        
+
+    def tracks(self, pos):
+        assert pos in self.PosLbls.keys(), str(pos) +' not segmented yet'
+        assert self.PosLbls[pos]._tracked, str(pos) +' not tracked yet'
+        return self.PosLbls[pos].get_track
+
     def save(self):
         with open(join(self.pth,'results.pickle'), 'wb') as dbfile:
             cloudpickle.dump(self, dbfile)
