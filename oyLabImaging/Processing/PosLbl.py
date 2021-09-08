@@ -373,21 +373,51 @@ class PosLbl(object):
     def img(self,Channel='DeepBlue', **kwargs):
         from oyLabImaging import Metadata
         pth = self.pth
-        MD = Metadata(pth)
+        MD = Metadata(pth, verbose=False)
         return MD.stkread(Channel=Channel, Position=self.posname, register=True, **kwargs)
     
     def _pointmat(self):
         a = []
-        for i, cen in enumerate(self.centroid):
-            a.append((np.pad(cen, ((0,0), (1,0)),constant_values=i)))
+        [a.append((np.pad(cen, ((0,0), (1,0)),constant_values=i))) for i,cen in enumerate(self.centroid)]
         return(np.concatenate(a))
-
+    
+    def _tracksmat(self, J=None):
+        t0 = self.get_track
+        if any(J==None):
+            J = np.arange(t0().numtracks)
+        else:
+            if not (isinstance(J, list) or isinstance(J, np.ndarray)):
+                J = [J]
+            J = [j for j in J if j in np.arange(t0().numtracks)]      
+        return np.concatenate([np.pad(np.concatenate((np.expand_dims(t0(i).T,1),t0(i).centroid),1), ((0,0), (1,0)),constant_values=i) for i in J])
     
     
     
     
     
-    
+    def plot_tracks(self, J=None,Channel='DeepBlue',**kwargs):
+        assert self._tracked, str(pos) +' not tracked yet'
+        
+        from oyLabImaging.Processing.imvisutils import get_or_create_viewer
+        viewer = get_or_create_viewer() 
+        trackmat = self._tracksmat(J=J)
+        stk = self.img(Channel=Channel,verbose=False, **kwargs)
+        viewer.add_image(stk,blending='additive')
+        viewer.add_tracks(trackmat,blending='opaque')
+        
+        
+    def plot_points(self, J=None,Channel='DeepBlue',colormap='cool' ,**kwargs):
+        assert self._tracked, str(pos) +' not tracked yet'
+        
+        from oyLabImaging.Processing.imvisutils import get_or_create_viewer
+        viewer = get_or_create_viewer() 
+        pointsmat = self._pointmat()
+        stk = self.img(Channel=Channel,verbose=False, **kwargs)
+        
+        point_props = {'mean' : np.concatenate(self.mean(Channel))}
+        viewer.add_image(stk,blending='additive')
+        viewer.add_points(pointsmat,properties=point_props, face_color='mean', face_colormap=colormap ,blending='opaque')
+        
     
     
     

@@ -20,6 +20,8 @@ class results(object):
         else:
             self.pth = pth
         
+        pth = self.pth
+        
         if 'results.pickle' in listdir(pth):   
                 r = self.load(pth ,fname='results.pickle')
                 self.PosNames = r.PosNames
@@ -79,13 +81,26 @@ class results(object):
         for p in pos:
             self.PosLbls[p].trackcells(NucChannel=NucChannel,**kwargs)
             
-        
-
     def tracks(self, pos):
         assert pos in self.PosLbls.keys(), str(pos) +' not segmented yet'
         assert self.PosLbls[pos]._tracked, str(pos) +' not tracked yet'
         return self.PosLbls[pos].get_track
+    
+    def show_tracks(self, pos, J=None,Channel='DeepBlue',**kwargs):
+        assert pos in self.PosLbls.keys(), str(pos) +' not segmented yet'
+        self.PosLbls[pos].plot_tracks(J=J,Channel=Channel,**kwargs)
+    
 
+    def show_points(self, pos, J=None,Channel='DeepBlue',**kwargs):
+        assert pos in self.PosLbls.keys(), str(pos) +' not segmented yet'
+        self.PosLbls[pos].plot_points(Channel=Channel,**kwargs)
+    
+    
+    
+    
+    
+    
+    
     def save(self):
         with open(join(self.pth,'results.pickle'), 'wb') as dbfile:
             cloudpickle.dump(self, dbfile)

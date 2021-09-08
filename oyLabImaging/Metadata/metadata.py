@@ -29,7 +29,7 @@ from skimage import img_as_float, img_as_uint, io
 class Metadata(object):
     
     
-    def __init__(self, pth='', load_type='local'):
+    def __init__(self, pth='', load_type='local', verbose=True):
         
         # get the base path (directory where it it) to the metadata file. 
         #If full path to file is given, separate out the directory
@@ -64,7 +64,7 @@ class Metadata(object):
 
                   
         # With all we've learned, we can now load the metadata
-        self._load_metadata()
+        self._load_metadata(verbose=verbose)
 
         # Handle columns that don't import from text well
         try:
@@ -147,10 +147,6 @@ class Metadata(object):
 
 
         
-        
-        
-        
-        
     def _determine_metadata_type(self, pth):
         from os import path, walk
         fname, fext = path.splitext(pth)
@@ -211,18 +207,21 @@ class Metadata(object):
                 if fname=='Metadata':
                     return str.split(pth,'/')[-1]     
         return None
-    
-    def _load_metadata(self):
+ 
+
+    def _load_metadata(self, verbose=True):
         if self._md_name in listdir(self.base_pth):   
             self.append(self._load_method(pth=self.base_pth ,fname=self._md_name))
-            print('loaded ' + self.type + ' metadata from' + join(self.base_pth, self._md_name))
+            if verbose:
+                print('loaded ' + self.type + ' metadata from' + join(self.base_pth, self._md_name))
         else:
             #if there is no MD in the folder, look at subfolders and append all 
             for subdir, curdir, filez in walk(self.base_pth):
                 for f in filez:
                     if f==self._md_name:
                         self.append(self._load_method(pth=join(subdir),fname=f))
-                        print('loaded ' + self.type + ' metadata from' +join(subdir,f))
+                        if verbose:
+                            print('loaded ' + self.type + ' metadata from' +join(subdir,f))
 
         
     
