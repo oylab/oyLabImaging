@@ -383,7 +383,7 @@ class PosLbl(object):
     
     def _tracksmat(self, J=None):
         t0 = self.get_track
-        if any(J==None):
+        if J==None or any(J==None):
             J = np.arange(t0().numtracks)
         else:
             if not (isinstance(J, list) or isinstance(J, np.ndarray)):
@@ -416,7 +416,7 @@ class PosLbl(object):
         
         point_props = {'mean' : np.concatenate(self.mean(Channel))}
         viewer.add_image(stk,blending='additive')
-        viewer.add_points(pointsmat,properties=point_props, face_color='mean', face_colormap=colormap ,blending='opaque')
+        viewer.add_points(pointsmat,properties=point_props, face_color='mean', face_colormap=colormap,  size=30,blending='opaque')
         
     
     

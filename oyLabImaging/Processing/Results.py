@@ -80,6 +80,7 @@ class results(object):
         assert any(elem in self.PosLbls.keys()  for elem in pos), str(pos) + ' not segmented yet'
         for p in pos:
             self.PosLbls[p].trackcells(NucChannel=NucChannel,**kwargs)
+        self.save()
             
     def tracks(self, pos):
         assert pos in self.PosLbls.keys(), str(pos) +' not segmented yet'
