@@ -34,11 +34,7 @@ class FrameLbl(object):
             raise AssertionError('Frame does not exist in dataset')
         self.frame = frame
         
-        
-        #if segment_type=='watershed':
-        #    self._seg_fun=segmentation._segment_nuclei_watershed
-        #elif segment_type=='cellpose_nuclei':
-        #    self._seg_fun=segmentation._segment_nuclei_cellpose
+
         self._seg_fun = segmentation.segtype_to_segfun(segment_type)
         
         self.channels = MD.unique('Channel',Position=Pos, frame=frame) 
@@ -55,6 +51,14 @@ class FrameLbl(object):
         
         self.imagedims = np.shape(Data[NucChannel]);
 
+        nargs = self._seg_fun.__code__.co_argcount
+        args = [self._seg_fun.__code__.co_varnames[i] for i in range(1, nargs)]
+        defaults = list(self._seg_fun.__defaults__)
+        input_dict = {args[i]: defaults[i] for i in range(0, nargs-1)} 
+        input_dict = {**input_dict, **kwargs}
+        
+        self._seg_params = input_dict
+        
         L = self._seg_fun(img=Data[NucChannel],**kwargs)
         
 
@@ -196,7 +200,6 @@ class FrameLbl(object):
     
     
     #presentation stuff
-    
     def img(self,Channel='DeepBlue'):
         from oyLabImaging import Metadata
         pth = self.pth

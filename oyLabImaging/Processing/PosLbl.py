@@ -402,7 +402,7 @@ class PosLbl(object):
         viewer = get_or_create_viewer() 
         trackmat = self._tracksmat(J=J)
         stk = self.img(Channel=Channel,verbose=False, **kwargs)
-        viewer.add_image(stk,blending='additive')
+        viewer.add_image(stk,blending='opaque', contrast_limits=[np.percentile(stk.flatten(),1),np.percentile(stk.flatten(),99.9)])
         viewer.add_tracks(trackmat,blending='opaque')
         
         
@@ -415,8 +415,8 @@ class PosLbl(object):
         stk = self.img(Channel=Channel,verbose=False, **kwargs)
         
         point_props = {'mean' : np.concatenate(self.mean(Channel))}
-        viewer.add_image(stk,blending='additive')
-        viewer.add_points(pointsmat,properties=point_props, face_color='mean', face_colormap=colormap,  size=30,blending='opaque')
+        viewer.add_image(stk,blending='opaque', contrast_limits=[np.percentile(stk.flatten(),1),np.percentile(stk.flatten(),99.9)])
+        viewer.add_points(pointsmat,properties=point_props, face_color='mean',edge_width=0, face_colormap=colormap,  size=20,blending='opaque')
         
     
     

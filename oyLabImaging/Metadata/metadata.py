@@ -560,11 +560,12 @@ class Metadata(object):
         import cv2
        
         if 'driftTform' in self().columns:    
-            dT = np.array(self.image_table.at[find, 'driftTform'])
-            if dT[0]==None:
+            dT = self.image_table.at[find, 'driftTform']
+            if dT is None:
                 warnings.warn("No drift correction found for position")
                 return img
-            elif len(dT)==9:
+            dT = np.array(dT)
+            if len(dT)==9:
                 M = np.reshape(dT,(3,3)).transpose()
                 
                 #cv2/scikit and numpy index differently
