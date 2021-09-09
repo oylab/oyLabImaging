@@ -10,7 +10,7 @@ from oyLabImaging.Processing.improcutils import segmentation
 from oyLabImaging import Metadata
 
 class FrameLbl(object):
-    def __init__(self, frame=None, MD=None ,pth=None, Pos=None, acq = None, Zindex=0 ,register=False ,periring=False, periringsize=5, NucChannel='DeepBlue',cytoplasm=False,CytoChannel='Yellow', segment_type='watershed', **kwargs):
+    def __init__(self, frame=None, MD=None ,pth=None, Pos=None, acq = None, Zindex=0 ,register=True ,periring=False, periringsize=5, NucChannel='DeepBlue',cytoplasm=False,CytoChannel='Yellow', segment_type='watershed', **kwargs):
 
         if pth is None and MD is not None:
             pth = MD.base_pth
@@ -111,7 +111,7 @@ class FrameLbl(object):
                 for i in np.arange(props_df.index.size):
                     props_df.at[i,'centroid'] = tuple(np.add(props_df.at[i,'centroid'],Tforms[6:8]))
                     props_df.at[i,'weighted_centroid'] = tuple(np.add(props_df.at[i,'weighted_centroid'],Tforms[6:8]))
-                print('\nRegistered centroids')
+                #print('\nRegistered centroids')
             else:
                 print('No drift correction found')
     

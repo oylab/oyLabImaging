@@ -48,8 +48,8 @@ class results(object):
     def __call__(self):
         print('Results object for path to experiment in path: \n ' + self.pth)
         print('\nAvailable channels are : ' + ', '.join(list(self.channels))+ '.')
-        print('\nPositions already segmented are : ' + ', '.join(sorted(self.PosLbls.keys())))
-        print('\nAvailable positions : ' + ', '.join(list(self.PosNames))+ '.')
+        print('\nPositions already segmented are : ' + ', '.join(sorted([str(a) for a in self.PosLbls.keys()])))
+        print('\nAvailable positions : ' + ', '.join(list([str(a) for a in self.PosNames]))+ '.')
         print('\nAvailable frames : ' + str(len(self.frames)) + '.')
         
         
@@ -65,7 +65,7 @@ class results(object):
         if Position is None:
             Position = self.PosNames
             
-        elif type(Position) is str:
+        elif type(Position) is not list:
             Position = [Position]
             
         for p in Position:
@@ -87,12 +87,18 @@ class results(object):
         assert self.PosLbls[pos]._tracked, str(pos) +' not tracked yet'
         return self.PosLbls[pos].get_track
     
-    def show_tracks(self, pos, J=None,Channel='DeepBlue',**kwargs):
+    def show_tracks(self, pos, J=None,Channel=None,**kwargs):
+        if Channel not in self.channels:
+            Channel = self.channels[0]
+            print('showing channel '+ str(Channel))
         assert pos in self.PosLbls.keys(), str(pos) +' not segmented yet'
         self.PosLbls[pos].plot_tracks(J=J,Channel=Channel,**kwargs)
     
 
-    def show_points(self, pos, J=None,Channel='DeepBlue',**kwargs):
+    def show_points(self, pos, J=None,Channel=None,**kwargs):
+        if Channel not in self.channels:
+            Channel = self.channels[0]
+            print('showing channel '+ str(Channel))
         assert pos in self.PosLbls.keys(), str(pos) +' not segmented yet'
         self.PosLbls[pos].plot_points(Channel=Channel,**kwargs)
     

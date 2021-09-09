@@ -250,15 +250,16 @@ class Metadata(object):
             pixsize = imgs.metadata['pixel_microns']
             acq = fname
             for i in np.arange(Ninds):
+                fps = int(i/len(imgs.metadata['channels']))
                 frame = int(i/imgsPerFrame)
-                xy = XY[frame,]
-                z = Zpos[frame]
+                xy = XY[fps,]
+                z = Zpos[fps]
                 props = imgs.parser.calculate_image_properties(i)
                 zind = props[2]
                 chan = props[1]
                 pos = props[0]
-                exptime = imgs.parser._raw_metadata.camera_exposure_time[frame]
-                framedata={'acq':acq,'Position':pos,'frame':frame,'Channel':chan,'XY':list(xy), 'Z':z, 'Zindex':zind,'Exposure':exptime,'PixelSize':pixsize,'TimestampFrame':imgs.timesteps[frame],'TimestampImage':imgs.timesteps[frame],'filename':acq}
+                exptime = imgs.parser._raw_metadata.camera_exposure_time[fps]
+                framedata={'acq':acq,'Position':pos,'frame':frame,'Channel':chan,'XY':list(xy), 'Z':z, 'Zindex':zind,'Exposure':exptime,'PixelSize':pixsize,'TimestampFrame':imgs.timesteps[fps],'TimestampImage':imgs.timesteps[fps],'filename':acq}
                 image_table = image_table.append(framedata, sort=False,ignore_index=True)
             image_table['root_pth'] = image_table.filename
             image_table.filename = [join(pth, f.split('/')[-1]) for f in image_table.filename]
@@ -579,25 +580,25 @@ class Metadata(object):
             
 
     # Calculate jitter/drift corrections        
-    def CalculateDriftCorrection(self, Position=None, ZsToLoad=[1], Channel='DeepBlue'):
+    def CalculateDriftCorrection(self, Position=None, ZsToLoad=[0], Channel='DeepBlue'):
         #from scipy.signal import fftconvolve
         if Position is None:
             Position = self.posnames
-        elif type(Position) is str:
+        elif type(Position) is not list:
             Position = [Position]
+        assert Channel in self.channels, "%s isn't a channel, try %s" % (Channel, ', '.join(list(self.channels)))
         
         for pos in Position:
             from pyfftw.interfaces.numpy_fft import fft2, ifft2
 
             frames = self.frames
 
-            DataPre = self.stkread(Position=pos, Channel=Channel)
-            print('\ncalculating drift correction for position ' + pos)
+            DataPre = self.stkread(Position=pos, Channel=Channel, Zindex=ZsToLoad)
+            print('\ncalculating drift correction for position ' + str(pos))
             DataPre = DataPre-np.mean(DataPre,axis=(1,2),keepdims=True)
 
             DataPost = DataPre[1:,:,:].transpose((1,2,0))
             DataPre = DataPre[:-1,:,:].transpose((1,2,0))
-
             #this is in prep for # Zs>1
             DataPre = np.reshape(DataPre,(DataPre.shape[0],DataPre.shape[1],len(ZsToLoad), len(frames)-1));
             DataPost = np.reshape(DataPost,(DataPost.shape[0],DataPost.shape[1],len(ZsToLoad), len(frames)-1));
@@ -626,6 +627,6 @@ class Metadata(object):
                 inds = self.unique(Attr='index',Position=pos, frame=frame)
                 for ind in inds:
                     self.image_table.at[ind, 'driftTform']=[1, 0, 0 , 0, 1, 0 , D[frame,0], D[frame,1], 1]
-            print('calculated drift correction for position ' + pos)
+            print('calculated drift correction for position ' + str(pos))
         self.pickle()
     

@@ -383,7 +383,7 @@ class PosLbl(object):
     
     def _tracksmat(self, J=None):
         t0 = self.get_track
-        if J==None or any(J==None):
+        if J is None:
             J = np.arange(t0().numtracks)
         else:
             if not (isinstance(J, list) or isinstance(J, np.ndarray)):
@@ -395,24 +395,24 @@ class PosLbl(object):
     
     
     
-    def plot_tracks(self, J=None,Channel='DeepBlue',**kwargs):
+    def plot_tracks(self, J=None,Channel='DeepBlue',Zindex=[0], **kwargs):
         assert self._tracked, str(pos) +' not tracked yet'
         
         from oyLabImaging.Processing.imvisutils import get_or_create_viewer
         viewer = get_or_create_viewer() 
         trackmat = self._tracksmat(J=J)
-        stk = self.img(Channel=Channel,verbose=False, **kwargs)
+        stk = self.img(Channel=Channel,verbose=False,Zindex=Zindex , **kwargs)
         viewer.add_image(stk,blending='opaque', contrast_limits=[np.percentile(stk.flatten(),1),np.percentile(stk.flatten(),99.9)])
         viewer.add_tracks(trackmat,blending='opaque')
         
         
-    def plot_points(self, J=None,Channel='DeepBlue',colormap='cool' ,**kwargs):
+    def plot_points(self, J=None,Channel='DeepBlue',colormap='cool' ,Zindex=[0],**kwargs):
         assert self._tracked, str(pos) +' not tracked yet'
         
         from oyLabImaging.Processing.imvisutils import get_or_create_viewer
         viewer = get_or_create_viewer() 
         pointsmat = self._pointmat()
-        stk = self.img(Channel=Channel,verbose=False, **kwargs)
+        stk = self.img(Channel=Channel,verbose=False,Zindex=Zindex, **kwargs)
         
         point_props = {'mean' : np.concatenate(self.mean(Channel))}
         viewer.add_image(stk,blending='opaque', contrast_limits=[np.percentile(stk.flatten(),1),np.percentile(stk.flatten(),99.9)])
