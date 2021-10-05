@@ -18,8 +18,66 @@ from tqdm import tqdm
 
 
 class PosLbl(object):
+    """
+    Class for data from a single position (multi timepoint, position, single experiment, multi channel). Handles image tracking.
+    Parameters
+    ----------
+    MD : relevant metadata OR
+    pth : str path to relevant metadata
+    
+    Attributes
+    ----------
+    Pos : position name
+    acq : acquisition name
+    Zindex : Zindex
+    
+    These must specify a unique frame
+    
+    Segmentation parameters
+    -----------------------
+    NucChannel : ['DeepBlue'] str name of nuclear channel
+    **kwargs : specific args for segmentation function, anything that goes into FrameLbl
+    Threads : how many threads to use for parallel execution. Limited to ~6 for GPU based segmentation and 128 for CPU (but don't use all 128)
+    
+    Returns
+    -------
+    PosLbl instance with segmented FrameLbls
+    
+    Class properties
+    ----------------
+     'acq',
+     'area',
+     'area_um2',
+     'centroid',
+     'centroid_um',
+     'channels',
+     'density',
+     'framelabels',
+     'frames',
+     'maxint',
+     'mean',
+     'median',
+     'minint',
+     'ninetyint',
+     'num',
+     'PixelSize',
+     'posname',
+     'pth',
+     'trackinds',
+     'weighted_centroid',
+     'weighted_centroid_um']
+    
+    Class methods
+    -------------
+     'trackcells',
+     'get_track',
+     'img',
+     'plot_images',
+     'plot_points',
+     'plot_tracks',
+    
+    """
     def __init__(self, Pos=None, MD=None ,pth=None, acq = None, NucChannel='DeepBlue', threads=10, **kwargs):
-        
 
         if any([Pos is None]):
             raise ValueError('Please provide position')
@@ -44,12 +102,10 @@ class PosLbl(object):
         self.acq = MD.unique('acq',Position=Pos) 
         self.frames = MD.unique('frame',Position=Pos)
         self._tracked=False
-        
+        self.PixelSize = MD.unique('PixelSize')[0]
         
         # Create all framelabels for the different TPs. This will segment and measure stuff. 
-        
-        #def mute():
-        #    sys.stdout = open(os.devnull, 'w')    
+          
 
         with mp.Pool(threads) as ppool:
             frames = list(tqdm(ppool.imap(partial(FrameLbl, MD = MD, pth = pth, Pos=Pos, NucChannel=NucChannel, **kwargs), self.frames), total=len(self.frames)))
@@ -120,11 +176,46 @@ class PosLbl(object):
     
     
     def get_track(self, i=0):
+        """
+        function to return specific track. Best use as a first class citizen.
+        Parameters
+        ----------
+        i : ind track index
+        
+        Returns
+        -------
+        _onetrack object
+        """
         assert(i<=len(self.trackinds)), "track index must be < %i" % len(self.trackinds)
         return self._onetrack(self, i=i)
     
     #class for a single track. return everything we care about
     class _onetrack(object):
+        """
+        Class that manages a single track.
+        
+        Class Properties
+        ----------------
+         'T',
+         'area',
+         'area_um2',
+         'centroid',
+         'centroid_um',
+         'maxint',
+         'mean',
+         'median',
+         'minint',
+         'ninetyint',
+         'numtracks',
+         'trackinds',
+         'weighted_centroid',
+         'weighted_centroid_um'
+         
+        Class Methods
+        -------------
+         'show_movie'
+
+        """
         def __init__(self,outer, i=0):
             self.trackinds = outer.trackinds[i]
             self.numtracks = len(outer.trackinds)
@@ -172,6 +263,29 @@ class PosLbl(object):
         def ninetyint(self,ch, periring=False):
             m = self._outer.ninetyint(ch, periring)
             return np.array([m[j][self.trackinds[j]] for j in self.T])
+        
+        def show_movie(self, Channel='DeepBlue', boxsize=50, cmaps = ['red', 'green', 'blue', 'cyan', 'magenta', 'yellow'] ,**kwargs):
+            """
+            Function to display a close up movie of a cell being tracked.
+            Parameters
+            ----------
+            Channel : ['DeepBlue'] str or list of strs
+            boxsize : [50] num size of box around the cell
+            cmaps : order of colormaps for each channel
+            """
+            if type(Channel)==str:
+                cmaps = ['gray']
+            
+            from oyLabImaging.Processing.imvisutils import get_or_create_viewer
+            viewer = get_or_create_viewer() 
+            viewer.scale_bar.unit = "um"
+            crp = np.ceil(np.concatenate((self.centroid-boxsize, self.centroid+boxsize),axis=1 )).astype(int)
+            
+            for ind, ch in enumerate(Channel):
+                imgs = self._outer.img(ch, frame=list(self.T),verbose=False)
+         
+                stk = np.array([np.pad(im1, boxsize)[crp1[0]+boxsize:crp1[2]+boxsize, crp1[1]+boxsize:crp1[3]+boxsize] for im1, crp1 in zip(imgs, crp)])
+                viewer.add_image(stk,blending='additive', contrast_limits=[np.percentile(stk.flatten(),1),np.percentile(stk.flatten(),99.9)],name=ch, colormap=cmaps[ind%len(cmaps)],scale=[self._outer.PixelSize, self._outer.PixelSize])
 
     
     
@@ -185,14 +299,30 @@ class PosLbl(object):
         TODO: add mitosis detector: https://academic.oup.com/bioinformatics/article/35/15/2644/5259190
         TODO: add support for splitting cells
         
+        Parameters
+        ----------
+        kwargs that go into tracking helper functions: search_radius, NucChannel, maxStep for skip ,maxAmpRatio for skip, mintracklength
+        
+        
         '''
         self._link(**kwargs)
         self._closegaps(**kwargs)
-        self._tracked=True
+        self._tracked=True       
+        self._calculate_trackmat()
+        self._calculate_pointmat()
         
     
-    def _link(self, NucChannel=None,search_radius=75,**kwargs):
-        #todo: extend for a general cost function. make class of cost functions that returns shape, cc, ii, jj
+    def _link(self, NucChannel='DeepBlue',search_radius=75,**kwargs):
+        """
+        Helper function : link adjecent frames using JV lap. 
+        
+        TODO: extend for a general cost function. make class of cost functions that returns shape, cc, ii, jj
+        Parameters
+        ----------
+        NucChannel : ['DeepBlue']
+        search_radius : [75]
+        """
+        
         ch = NucChannel
         if ch is None:
             ch = self.channels[0]
@@ -250,7 +380,7 @@ class PosLbl(object):
     
     def _getTrackLinks(self,i=0,l=0,**kwargs):
         '''
-        recursive function that gets an initial frame i and starting cell label 
+        Helper function recursive function that gets an initial frame i and starting cell label 
         l and returns all labels
         '''
         if i<len(self.frames)-1:
@@ -267,9 +397,13 @@ class PosLbl(object):
 
     def _getAllContinuousTrackSegs(self, minseglength=5, **kwargs):
         '''
-        function that returns the frame indexing of all contiuous tracks (chained links) longer than minseglength.
+        Helper function that returns the frame indexing of all contiuous tracks (chained links) longer than minseglength.
 
         Assumes links have been calculated
+        
+        Parameters
+        ----------
+        minseglength : [5] smallest stub that doesnt get disgarded
         '''
         trackbits = []
         for i in np.arange(len(self.frames)-1):
@@ -282,8 +416,17 @@ class PosLbl(object):
         return trackbits[(np.array([np.sum(r != None) for r in trackbits])>=minseglength)]
     
     
-    def _closegaps(self, maxStep=100, NucChannel=None,maxAmpRatio=1.5, mintracklength=20, **kwargs):
-        #todo: split. When a stub that starts in the middle has a plausible link, make a compound track
+    def _closegaps(self, maxStep=100, NucChannel='DeepBlue',maxAmpRatio=1.5, mintracklength=20, **kwargs):
+        
+        """
+        Helper function : close gaps between open stubs using JV lap. 
+        
+        todo: split. When a stub that starts in the middle has a plausible link, make a compound track
+        ----------
+        NucChannel : ['DeepBlue']
+        maxAmpRatio : [1.5] max allowd ratio of amplitudes for linking
+        mintracklength : [20] final minimum length of a track
+        """
         ch=NucChannel
         if ch is None:
             ch = self.channels[0]
@@ -335,7 +478,7 @@ class PosLbl(object):
                         
             if len(ii)==0:
                 print('\nFinished connecting tracks')
-                doneflag=1
+                notdoneflag=0
                 break
 
             shape = (len(trackbits),len(trackbits))
@@ -370,18 +513,66 @@ class PosLbl(object):
     
     
     
-    def img(self,Channel='DeepBlue', **kwargs):
+    def img(self,Channel='DeepBlue', register=True,Zindex=[0], **kwargs):
+        """
+        Parameters
+        ----------
+        Channel : [DeepBlue] str or list of strings
+        register : {[True], False}
+        Zindex=[0]
+        
+        Returns
+        -------
+        Image stack of given channels
+        """
         from oyLabImaging import Metadata
         pth = self.pth
         MD = Metadata(pth, verbose=False)
-        return MD.stkread(Channel=Channel, Position=self.posname, register=True, **kwargs)
+        return MD.stkread(Channel=Channel, Position=self.posname, register=register,Zindex=Zindex, **kwargs)
     
-    def _pointmat(self):
+    
+    def _calculate_pointmat(self):
+        """
+        helper function, calculate points in a napari-friendly way 
+        """
         a = []
         [a.append((np.pad(cen, ((0,0), (1,0)),constant_values=i))) for i,cen in enumerate(self.centroid)]
-        return(np.concatenate(a))
+        self._pointmatrix = np.concatenate(a)
+    
+    def _pointmat(self,frames=None):
+        """
+        helper function, return points in a napari-friendly way for given frames
+        Parameters
+        ----------
+        frames
+        """
+        if frames is None:
+            frames = self.frames
+        else:
+            if not (isinstance(frames, list) or isinstance(frames, np.ndarray)):
+                frames = [frames]
+        frames = [j for j in frames if j in self.frames]        
+        return self._pointmatrix[np.in1d(self._pointmatrix[:,0], frames)]
+        
+    
+    
+    def _calculate_trackmat(self):
+        """
+        helper function, calculate tracks in a napari-friendly way 
+        """
+        t0 = self.get_track
+        J = np.arange(t0().numtracks)
+        #self._trackmatrix=np.concatenate([[np.insert(y,0,i) for y in [np.insert(x,0,ind) for ind,x in zip(t0(i).T, t0(i).centroid)]] for i in tqdm(J)])
+        #J=[0, 1, 2]
+        self._trackmatrix=np.concatenate([[np.append([i, ind],x) for ind, x in zip(t0(i).T, t0(i).centroid)] for i in tqdm(J)])
     
     def _tracksmat(self, J=None):
+        """
+        helper function, return tracks in a napari-friendly way for given tracks
+        Parameters
+        ----------
+        J - track indices to return
+        """
         t0 = self.get_track
         if J is None:
             J = np.arange(t0().numtracks)
@@ -389,25 +580,56 @@ class PosLbl(object):
             if not (isinstance(J, list) or isinstance(J, np.ndarray)):
                 J = [J]
             J = [j for j in J if j in np.arange(t0().numtracks)]      
-        return np.concatenate([np.pad(np.concatenate((np.expand_dims(t0(i).T,1),t0(i).centroid),1), ((0,0), (1,0)),constant_values=i) for i in J])
+        return self._trackmatrix[np.in1d(self._trackmatrix[:,0], J)]
     
     
-    
-    
+
+    def plot_images(self, Channel='DeepBlue',Zindex=[0], **kwargs):    
+        """
+        Parameters
+        ----------
+        Channel : [DeepBlue] str or list of strings
+        Zindex : [0]
+
+        Draws image stks in current napari viewer
+        """
+        from oyLabImaging.Processing.imvisutils import get_or_create_viewer
+        viewer = get_or_create_viewer() 
+        stk = self.img(Channel=Channel,verbose=False,Zindex=Zindex , **kwargs)
+        viewer.add_image(stk,blending='opaque', contrast_limits=[np.percentile(stk.flatten(),1),np.percentile(stk.flatten(),99.9)], scale=[self.PixelSize, self.PixelSize])
     
     def plot_tracks(self, J=None,Channel='DeepBlue',Zindex=[0], **kwargs):
+        """
+        Parameters
+        ----------
+        J : track indices - plots all tracks if not provided
+        Channel : [DeepBlue] str or list of strings
+        Zindex : [0]
+        
+        
+        Draws image stks with overlaying tracks in current napari viewer
+        """
         assert self._tracked, str(pos) +' not tracked yet'
         
         from oyLabImaging.Processing.imvisutils import get_or_create_viewer
         viewer = get_or_create_viewer() 
         trackmat = self._tracksmat(J=J)
         stk = self.img(Channel=Channel,verbose=False,Zindex=Zindex , **kwargs)
-        viewer.add_image(stk,blending='opaque', contrast_limits=[np.percentile(stk.flatten(),1),np.percentile(stk.flatten(),99.9)])
-        viewer.add_tracks(trackmat,blending='opaque')
+        viewer.add_image(stk,blending='opaque', contrast_limits=[np.percentile(stk.flatten(),1),np.percentile(stk.flatten(),99.9)], scale=[self.PixelSize, self.PixelSize])
+        viewer.add_tracks(trackmat,blending='opaque', scale=[self.PixelSize, self.PixelSize])
         
         
-    def plot_points(self, J=None,Channel='DeepBlue',colormap='cool' ,Zindex=[0],**kwargs):
-        assert self._tracked, str(pos) +' not tracked yet'
+    def plot_points(self, Channel='DeepBlue',colormap='cool' ,Zindex=[0],**kwargs):
+        """
+        Parameters
+        ----------
+        Channel : [DeepBlue] str or list of strings
+        Zindex : [0]
+        
+        
+        Draws image stks with overlaying points in current napari viewer
+        """
+        #assert self._tracked, str(pos) +' not tracked yet'
         
         from oyLabImaging.Processing.imvisutils import get_or_create_viewer
         viewer = get_or_create_viewer() 
@@ -415,8 +637,8 @@ class PosLbl(object):
         stk = self.img(Channel=Channel,verbose=False,Zindex=Zindex, **kwargs)
         
         point_props = {'mean' : np.concatenate(self.mean(Channel))}
-        viewer.add_image(stk,blending='opaque', contrast_limits=[np.percentile(stk.flatten(),1),np.percentile(stk.flatten(),99.9)])
-        viewer.add_points(pointsmat,properties=point_props, face_color='mean',edge_width=0, face_colormap=colormap,  size=20,blending='opaque')
+        viewer.add_image(stk,blending='opaque', contrast_limits=[np.percentile(stk.flatten(),1),np.percentile(stk.flatten(),99.9)], scale=[self.PixelSize, self.PixelSize])
+        viewer.add_points(pointsmat,properties=point_props, face_color='mean',edge_width=0, face_colormap=colormap,  size=20,blending='opaque', scale=[self.PixelSize, self.PixelSize])
         
     
     

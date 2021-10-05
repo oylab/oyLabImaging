@@ -27,7 +27,41 @@ from skimage import img_as_float, img_as_uint, io
 #Metadata stores all relevant info about an imaging experiment. 
 
 class Metadata(object):
+    """
+    General class for opening image metadata and for loading images.
+    Parameters
+    ----------
+    pth : str folder where metadata is stored
+    verbose : boolean 
     
+    Implemented MD types
+    --------------------
+    MicroManager metadata.txt
+    Wollman lab Scope class Metadata.txt
+    Nikon *.nd2
+    
+    Class methods
+    -------------
+    'CalculateDriftCorrection',
+    'append',
+    'pickle',
+    'stkread',
+    'unique',
+    'unpickle'
+    
+    Class properties
+    ----------------
+    'Zindexes',
+    'acqnames', 
+    'base_pth',
+    'channels',
+    'frames',
+    'groups',
+    'image_table',
+    'posnames',
+    'type',
+
+    """
     
     def __init__(self, pth='', load_type='local', verbose=True):
         
@@ -68,7 +102,7 @@ class Metadata(object):
 
         # Handle columns that don't import from text well
         try:
-            self.convert_data('XY', float)
+            self._convert_data('XY', float)
         except Exception as e:
             self.image_table['XY'] = [literal_eval(i) for i in self.image_table['XY']]
 
@@ -89,29 +123,66 @@ class Metadata(object):
           
     @property
     def posnames(self):
+        """
+        Returns all unique position names
+        """
         return self().Position.unique()
 
     @property
     def frames(self):
+        """
+        Returns all unique frames 
+        """
         return list(self().frame.unique())
       
     @property
     def channels(self):
+        """
+        Returns all unique channel names
+        """
         return self().Channel.unique()
     
     @property
     def Zindexes(self):
+        """
+        Returns all unique Zindexes
+        """
         return self().Zindex.unique()
     
     @property
     def acqnames(self):
+        """
+        Returns all unique acquisition names
+        """
         return self().acq.unique()
     
     @property
     def groups(self):
+        """
+        Returns all unique group names
+        """
         return self().group.unique()
     
     def unique(self, Attr=None ,**kwargs):
+        """
+        Parameters
+        ----------
+        Attr : The desired attribute
+        kwargs : Property Value pairs to subset images (see below)
+        
+        Returns
+        -------
+        list of unique values that Attr can have in the subset of images defined by kwargs. 
+        Default Attr is image size. 
+        
+        Implemented kwargs
+        ------------------
+        Position : str, list(str)
+        Channel : str, list(str)
+        Zindex : int, list(int)
+        frames : int, list(int)
+        acq : str, list(str)
+        """
         for key, value in kwargs.items():
             if not isinstance(value, list):
                 kwargs[key] = [value]
@@ -134,7 +205,10 @@ class Metadata(object):
         
         
     
-    def convert_data(self, column, dtype, isnan=np.nan):
+    def _convert_data(self, column, dtype, isnan=np.nan):
+        """
+        Helper function to convert text lists to lists of numbers
+        """
         converted = []
         arr = self.image_table[column].values
         for i in arr:
@@ -148,6 +222,12 @@ class Metadata(object):
 
         
     def _determine_metadata_type(self, pth):
+        """
+        Helper function to determine metadata type
+        Returns
+        -------
+        str - MD type
+        """
         from os import path, walk
         fname, fext = path.splitext(pth)
         if path.isdir(pth):
@@ -180,6 +260,13 @@ class Metadata(object):
         return None
     
     def _determine_metadata_name(self, pth):
+        """
+        Helper function to determine metadata name
+        Returns
+        -------
+        str - MD name
+        """
+        
         from os import path, walk
         fname, fext = path.splitext(pth)
         if path.isdir(pth):
@@ -210,6 +297,13 @@ class Metadata(object):
  
 
     def _load_metadata(self, verbose=True):
+        """
+        Helper function to load metadata.
+        
+        Parameters
+        -------
+        verbose - [True] boolean
+        """
         if self._md_name in listdir(self.base_pth):   
             self.append(self._load_method(pth=self.base_pth ,fname=self._md_name))
             if verbose:
@@ -228,6 +322,9 @@ class Metadata(object):
     def _load_metadata_nd(self, pth, fname='', delimiter='\t'):
         """
         Helper function to load nikon nd2 metadata.
+        Returns
+        -------
+        image_table - pd dataframe of metadata image table
         """
         import nd2reader as nd2
         import pandas as pd
@@ -270,6 +367,9 @@ class Metadata(object):
     def _load_metadata_MM(self, pth, fname='metadata.txt', delimiter='\t'):
         """
         Helper function to load a micromanager txt metadata file.
+        Returns
+        -------
+        image_table - pd dataframe of metadata image table
         """
         import json
         with open(join(pth,fname)) as f:
@@ -296,6 +396,9 @@ class Metadata(object):
     def _load_metadata_txt(self, pth, fname='Metadata.txt', delimiter='\t'):
         """
         Helper function to load a text metadata file.
+        Returns
+        -------
+        image_table - pd dataframe of metadata image table
         """
         image_table = pd.read_csv(join(pth, fname), delimiter=delimiter)
         image_table['root_pth'] = image_table.filename
@@ -313,6 +416,12 @@ class Metadata(object):
 
     #This is how everything gets added to a MD
     def append(self,framedata):
+        """
+        main method of adding data to metadata object
+        Parameters
+        ----------
+        framedata - pd dataframe of metadata
+        """
         self.image_table = self.image_table.append(framedata, sort=False,ignore_index=True)
         
         #framedata can be another MD dataframe 
@@ -328,6 +437,9 @@ class Metadata(object):
     
     # Save metadata in pickle format
     def pickle(self):
+        """
+        save metadata as a pickle file. Saves as 'metadata.pickle' in the metadata root path.
+        """
         with open(join(self.base_pth,'metadata.pickle'), 'wb') as dbfile:
             tempfn = self.image_table['filename'].copy()
             self.image_table['filename'] = self.image_table['root_pth']
@@ -339,6 +451,15 @@ class Metadata(object):
 
         
     def unpickle(self,pth,fname='*.pickle', delimiter='\t'):
+        """
+        load metadata from pickle file. 
+        Parameters
+        ----------
+        pth : str - path to root folder where data is
+        Returns
+        -------
+        image_table - pd dataframe of metadata image table
+        """
         with open(join(pth,fname), 'rb') as dbfile:
             MD = pickle.load(dbfile)
             MD.image_table['root_pth'] = MD.image_table.filename
@@ -434,13 +555,15 @@ class Metadata(object):
 #                t.save(img_as_uint(images))
 #        return fname
 
-    #Helper function to read list of files given an TIFF type metadata and an filename list    
+     
     def _read_local(self, ind_dict, ffield=False,register=False, verbose=True,**kwargs):
         """
+        Helper function to read list of files given an TIFF type metadata and an filename list 
         Load images into dictionary of stks.
         """
    
         images_dict = {}
+    
         for key, value in ind_dict.items():
             # key is groupby property value
             # value is list of filenames of images to be loaded as a stk
@@ -483,9 +606,10 @@ class Metadata(object):
         return images_dict
 
     
-    #Helper function to read list of files given an ND type metadata and an index list
+    
     def _read_nd2(self, ind_dict, ffield=False,register=False, verbose=True,**kwargs):
         """
+        Helper function to read list of files given an ND type metadata and an index list.
         Load images into dictionary of stks.
         """
         import nd2reader as nd2
@@ -557,6 +681,15 @@ class Metadata(object):
     
     
     def _register(self,img,find):
+        """
+        Perform image registration.
+        
+        Parameters
+        ----------
+        img : numpy.ndarray
+            2D image of type integer
+        find : file identifier in metadata table
+        """
         from skimage import transform
         import cv2
        
@@ -581,6 +714,16 @@ class Metadata(object):
 
     # Calculate jitter/drift corrections        
     def CalculateDriftCorrection(self, Position=None, ZsToLoad=[0], Channel='DeepBlue'):
+        """
+        Calculate image registration (jitter correction) parameters and add to metadata.
+        
+        Parameters
+        ----------
+        Position : str or list of strings
+        ZsToLoad : list of int - which Zs to load to calculate registration. If list, registration will be the average of the different zstack layers
+        Channel : str, channel name to use for registration
+            
+        """
         #from scipy.signal import fftconvolve
         if Position is None:
             Position = self.posnames

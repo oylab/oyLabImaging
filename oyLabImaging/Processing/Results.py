@@ -11,6 +11,44 @@ import dill
 import cloudpickle
 
 class results(object):
+    """
+    Class for experiment results (multi timepoint, multi position, single experiment, multi channel). 
+    Parameters
+    ----------
+    MD : relevant metadata OR
+    pth : str path to relevant metadata
+    
+    Segmentation parameters
+    -----------------------
+    **kwargs : specific args for segmentation function, anything that goes into FrameLbl
+    Threads : how many threads to use for parallel execution. Limited to ~6 for GPU based segmentation and 128 for CPU (but don't use all 128)
+    
+    Returns
+    -------
+    results instance
+    
+    Class properties
+    ----------------
+     'PosLbls',
+     'PosNames',
+     'acq',
+     'channels',
+     'frames',
+     'groups',
+     'pth',
+     'tracks'
+    
+    Class methods
+    -------------
+     'calculate_tracks',
+     'load',
+     'save',
+     'setPosLbls',
+     'show_images',
+     'show_points',
+     'show_tracks',
+
+    """
     def __init__(self, MD=None ,pth=None, threads=10, **kwargs):
         
         
@@ -54,9 +92,14 @@ class results(object):
         
         
     def setPosLbls(self, MD=None, groups=None, Position=None, **kwargs):
-        '''
-        function to make Poslabels. Accepts group/position list. By default it will generate pos labels for all positions. override by specifying groups or Pos. groups override pos       
-        '''
+        """
+        function to create PosLbl instances. 
+        
+        Parameters
+        ----------
+        Position - [All Positions] position name or list of position names
+
+        """
         if MD is None:
             MD = Metadata(self.pth)         
         if groups is not None:
@@ -74,6 +117,15 @@ class results(object):
         self.save()
 
     def calculate_tracks(self, pos=None, NucChannel='DeepBlue', **kwargs):
+        """
+        function to calculate tracks for a PosLbl instance. 
+        
+        Parameters
+        ----------
+        Position : [All Positions] position name or list of position names
+        NucChannel : ['DeepBlue'] name of nuclear channel
+
+        """
         if pos==None:
             pos = list(self.PosLbls.keys())
         pos = pos if isinstance(pos, list) else [pos]
@@ -83,11 +135,34 @@ class results(object):
         self.save()
             
     def tracks(self, pos):
+        """
+        Wrapper for PosLbl.get_track
+        Parameters
+        ----------
+        pos : position name
+        
+        Returns
+        -------
+        function handle for track generator
+        """
         assert pos in self.PosLbls.keys(), str(pos) +' not segmented yet'
         assert self.PosLbls[pos]._tracked, str(pos) +' not tracked yet'
         return self.PosLbls[pos].get_track
     
     def show_tracks(self, pos, J=None,Channel=None,**kwargs):
+        """
+        Wrapper for PosLbl.plot_tracks
+        Parameters
+        ----------
+        pos : position name
+        J : track indices - plots all tracks if not provided
+        Channel : [DeepBlue] str or list of strings
+        Zindex : [0]
+        
+        
+        Draws image stks with overlaying tracks in current napari viewer
+ 
+        """
         if Channel not in self.channels:
             Channel = self.channels[0]
             print('showing channel '+ str(Channel))
@@ -96,11 +171,40 @@ class results(object):
     
 
     def show_points(self, pos, J=None,Channel=None,**kwargs):
+        """
+        Wrapper for PosLbl.plot_points
+        Parameters
+        ----------
+        pos : position name
+        Channel : [DeepBlue] str or list of strings
+        Zindex : [0]
+        
+        Draws image stks with overlaying points in current napari viewer
+        
+  
+        """
         if Channel not in self.channels:
             Channel = self.channels[0]
             print('showing channel '+ str(Channel))
         assert pos in self.PosLbls.keys(), str(pos) +' not segmented yet'
         self.PosLbls[pos].plot_points(Channel=Channel,**kwargs)
+    
+    def show_images(self, pos,Channel=None,**kwargs):
+        """
+        Wrapper for PosLbl.plot_images
+        Parameters
+        ----------
+        pos : position name
+        Channel : [DeepBlue] str or list of strings
+        Zindex : [0]
+
+        Draws image stks in current napari viewer
+
+        """
+        if Channel not in self.channels:
+            Channel = self.channels[0]
+            print('showing channel '+ str(Channel))
+        self.PosLbls[pos].plot_images(Channel=Channel,**kwargs)
     
     
     
@@ -109,11 +213,17 @@ class results(object):
     
     
     def save(self):
+        """
+        save results
+        """
         with open(join(self.pth,'results.pickle'), 'wb') as dbfile:
             cloudpickle.dump(self, dbfile)
             print('saved results')
         
     def load(self,pth,fname='results.pickle'):
+        """
+        load results
+        """
         with open(join(pth,fname), 'rb') as dbfile:
             r=dill.load(dbfile)
         return r

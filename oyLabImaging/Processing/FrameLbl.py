@@ -10,6 +10,67 @@ from oyLabImaging.Processing.improcutils import segmentation
 from oyLabImaging import Metadata
 
 class FrameLbl(object):
+    """
+    Class for data from a single frame (single timepoint, position, experiment, multi channel). Handles image segmentation.
+    Parameters
+    ----------
+    MD : relevant metadata OR
+    pth : str path to relevant metadata
+    
+    Attributes
+    ----------
+    frame :  int - frame number
+    Pos : position name
+    acq : acquisition name
+    Zindex : Zindex
+    
+    These must specify a unique frame
+    
+    Segmentation parameters
+    -----------------------
+    NucChannel : ['DeepBlue'] str name of nuclear channel
+    segment_type : {[watershed], 'cellpose_nuclei', 'cellpose_cytoplasm'...}
+    CytoChannel : OPTIONAL
+    periring : {[False], True} should it calculate a perinuclear ring?
+    periringsize : [5] size of perinuclear ring in pixels
+    **kwargs : specific args for segmentation function
+    
+    Returns
+    -------
+    FrameLbl instance with segmented cells
+    
+    Class properties
+    ----------------
+     'XY',
+     'acq',
+     'area',
+     'area_um2',
+     'centroid',
+     'centroid_um',
+     'channels',
+     'density',
+     'frame',
+     'imagedims',
+     'img',
+     'link1in2',
+     'maxint',
+     'mean',
+     'median',
+     'minint',
+     'ninetyint',
+     'num',
+     'posname',
+     'pth',
+     'regionprops',
+     'weighted_centroid',
+     'weighted_centroid_um']
+    
+    Class methods
+    -------------
+     'img'
+     'scattershow'
+    
+    """
     def __init__(self, frame=None, MD=None ,pth=None, Pos=None, acq = None, Zindex=0 ,register=True ,periring=False, periringsize=5, NucChannel='DeepBlue',cytoplasm=False,CytoChannel='Yellow', segment_type='watershed', **kwargs):
 
         if pth is None and MD is not None:
@@ -200,13 +261,31 @@ class FrameLbl(object):
     
     
     #presentation stuff
-    def img(self,Channel='DeepBlue'):
+    def img(self,Channel='DeepBlue',verbose=False, **kwargs):
+        """
+        Parameters
+        ----------
+        Channel : [DeepBlue] str or list of strings
+        
+        Returns
+        -------
+        Image at given frame and channels
+        """
         from oyLabImaging import Metadata
         pth = self.pth
-        MD = Metadata(pth)
-        return MD.stkread(Channel=Channel,frame=self.frame, Position=self.posname, register=True)
+        MD = Metadata(pth,verbose=verbose)
+        return MD.stkread(Channel=Channel,frame=self.frame, Position=self.posname, register=True,verbose=verbose, **kwargs)
     
     def scattershow(self,Channel='DeepBlue'):
+        """
+        Parameters
+        ----------
+        Channel : [DeepBlue] str or list of strings
+        
+        Returns
+        -------
+        Image at given frame and channels and overlaying points of segmented cells
+        """
         import matplotlib.pyplot as plt
         img = self.img(Channel=Channel)
         fig, ax = plt.subplots()
