@@ -77,7 +77,7 @@ class PosLbl(object):
      'plot_tracks',
     
     """
-    def __init__(self, Pos=None, MD=None ,pth=None, acq = None, NucChannel='DeepBlue', threads=10, **kwargs):
+    def __init__(self, Pos=None, MD=None ,pth=None, acq = None, NucChannel='DeepBlue', threads=10, register=True, **kwargs):
 
         if any([Pos is None]):
             raise ValueError('Please provide position')
@@ -101,6 +101,9 @@ class PosLbl(object):
         self.channels = MD.unique('Channel',Position=Pos) 
         self.acq = MD.unique('acq',Position=Pos) 
         self.frames = MD.unique('frame',Position=Pos)
+        if len(self.frames)==1:
+            register=False
+        self._registerflag=register
         self._tracked=False
         self.PixelSize = MD.unique('PixelSize')[0]
         
@@ -108,10 +111,11 @@ class PosLbl(object):
           
 
         with mp.Pool(threads) as ppool:
-            frames = list(tqdm(ppool.imap(partial(FrameLbl, MD = MD, pth = pth, Pos=Pos, NucChannel=NucChannel, **kwargs), self.frames), total=len(self.frames)))
+            frames = list(tqdm(ppool.imap(partial(FrameLbl, MD = MD, pth = pth, Pos=Pos, NucChannel=NucChannel,register=self._registerflag, **kwargs), self.frames), total=len(self.frames)))
             ppool.close()
             ppool.join()
         self.framelabels = np.array(frames)
+        self._calculate_pointmat()
         print('\nFinished loading and segmenting position ' + str(Pos))
             
         
@@ -309,7 +313,7 @@ class PosLbl(object):
         self._closegaps(**kwargs)
         self._tracked=True       
         self._calculate_trackmat()
-        self._calculate_pointmat()
+        
         
     
     def _link(self, NucChannel='DeepBlue',search_radius=75,**kwargs):
@@ -513,7 +517,7 @@ class PosLbl(object):
     
     
     
-    def img(self,Channel='DeepBlue', register=True,Zindex=[0], **kwargs):
+    def img(self,Channel='DeepBlue',Zindex=[0], **kwargs):
         """
         Parameters
         ----------
@@ -528,7 +532,7 @@ class PosLbl(object):
         from oyLabImaging import Metadata
         pth = self.pth
         MD = Metadata(pth, verbose=False)
-        return MD.stkread(Channel=Channel, Position=self.posname, register=register,Zindex=Zindex, **kwargs)
+        return MD.stkread(Channel=Channel, Position=self.posname, register=self._registerflag,Zindex=Zindex, **kwargs)
     
     
     def _calculate_pointmat(self):
@@ -562,8 +566,6 @@ class PosLbl(object):
         """
         t0 = self.get_track
         J = np.arange(t0().numtracks)
-        #self._trackmatrix=np.concatenate([[np.insert(y,0,i) for y in [np.insert(x,0,ind) for ind,x in zip(t0(i).T, t0(i).centroid)]] for i in tqdm(J)])
-        #J=[0, 1, 2]
         self._trackmatrix=np.concatenate([[np.append([i, ind],x) for ind, x in zip(t0(i).T, t0(i).centroid)] for i in tqdm(J)])
     
     def _tracksmat(self, J=None):
@@ -596,49 +598,49 @@ class PosLbl(object):
         from oyLabImaging.Processing.imvisutils import get_or_create_viewer
         viewer = get_or_create_viewer() 
         stk = self.img(Channel=Channel,verbose=False,Zindex=Zindex , **kwargs)
-        viewer.add_image(stk,blending='opaque', contrast_limits=[np.percentile(stk.flatten(),1),np.percentile(stk.flatten(),99.9)], scale=[self.PixelSize, self.PixelSize])
+        viewer.add_image(stk,blending='additive', contrast_limits=[np.percentile(stk.flatten(),1),np.percentile(stk.flatten(),99.9)], scale=[self.PixelSize, self.PixelSize],**kwargs)
     
-    def plot_tracks(self, J=None,Channel='DeepBlue',Zindex=[0], **kwargs):
+    def plot_tracks(self, J=None, **kwargs):
         """
         Parameters
         ----------
         J : track indices - plots all tracks if not provided
-        Channel : [DeepBlue] str or list of strings
-        Zindex : [0]
         
         
-        Draws image stks with overlaying tracks in current napari viewer
+        Draws overlaying tracks in current napari viewer
         """
         assert self._tracked, str(pos) +' not tracked yet'
         
         from oyLabImaging.Processing.imvisutils import get_or_create_viewer
         viewer = get_or_create_viewer() 
         trackmat = self._tracksmat(J=J)
-        stk = self.img(Channel=Channel,verbose=False,Zindex=Zindex , **kwargs)
-        viewer.add_image(stk,blending='opaque', contrast_limits=[np.percentile(stk.flatten(),1),np.percentile(stk.flatten(),99.9)], scale=[self.PixelSize, self.PixelSize])
-        viewer.add_tracks(trackmat,blending='opaque', scale=[self.PixelSize, self.PixelSize])
+        viewer.add_tracks(trackmat,blending='additive', scale=[self.PixelSize, self.PixelSize])
         
         
-    def plot_points(self, Channel='DeepBlue',colormap='cool' ,Zindex=[0],**kwargs):
+    def plot_points(self, Channel='DeepBlue', periring=False,colormap='afmhot' ,func=lambda x : x,**kwargs):
         """
         Parameters
         ----------
         Channel : [DeepBlue] str or list of strings
-        Zindex : [0]
+        periring : {[False], True} will error on Trueif periring wasnt calculated
+        colormap : colormap to use for points
+        func : transformation to color, i.e. np.log, logicle, or whatever
         
-        
-        Draws image stks with overlaying points in current napari viewer
+        Draws overlaying points colorcoded by intensity in current napari viewer
         """
         #assert self._tracked, str(pos) +' not tracked yet'
         
         from oyLabImaging.Processing.imvisutils import get_or_create_viewer
         viewer = get_or_create_viewer() 
-        pointsmat = self._pointmat()
-        stk = self.img(Channel=Channel,verbose=False,Zindex=Zindex, **kwargs)
+        try:
+            pointsmat = self._pointmat()
+        except:
+            self._calculate_pointmat()
+            pointsmat = self._pointmat()
+            
         
-        point_props = {'mean' : np.concatenate(self.mean(Channel))}
-        viewer.add_image(stk,blending='opaque', contrast_limits=[np.percentile(stk.flatten(),1),np.percentile(stk.flatten(),99.9)], scale=[self.PixelSize, self.PixelSize])
-        viewer.add_points(pointsmat,properties=point_props, face_color='mean',edge_width=0, face_colormap=colormap,  size=20,blending='opaque', scale=[self.PixelSize, self.PixelSize])
+        point_props = {'mean' : func(np.concatenate(self.mean(Channel,periring=periring)))}
+        viewer.add_points(pointsmat,properties=point_props, face_color='mean',edge_width=0, face_colormap=colormap,  size=20,blending='translucent', scale=[1, self.PixelSize, self.PixelSize])
         
     
     

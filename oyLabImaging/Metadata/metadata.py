@@ -163,7 +163,7 @@ class Metadata(object):
         """
         return self().group.unique()
     
-    def unique(self, Attr=None ,**kwargs):
+    def unique(self, Attr=None  , sortby='TimestampFrame',**kwargs):
         """
         Parameters
         ----------
@@ -191,7 +191,8 @@ class Metadata(object):
         for attr in image_subset_table.columns:
             if attr in kwargs:
                 image_subset_table = image_subset_table[image_subset_table[attr].isin(kwargs[attr])]
-            
+        image_subset_table.sort_values(sortby, inplace=True)
+        
         if Attr is None:
             return image_subset_table.size
         elif Attr in image_subset_table.columns:  
