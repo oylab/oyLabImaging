@@ -541,6 +541,34 @@ class segmentation(object):
         box = widgets.HBox([widgets.VBox(tblist), exButton])
         return box
 
+    
+    
+    
+class Zernike(object):    
+    def coeff(img, n=8):
+        from zernike import RZern
+        cart = RZern(n)
+        L, K = img.shape
+        ddx = np.linspace(-1.0, 1.0, K)
+        ddy = np.linspace(-1.0, 1.0, L)
+        xv, yv = np.meshgrid(ddx, ddy)
+        cart.make_cart_grid(xv, yv)
+
+        c1 = cart.fit_cart_grid(img)[0] 
+        return c1, L, K
+
+    def reconstruct(c1,L,K,n=8):
+        from zernike import RZern
+        cart = RZern(n)
+
+        ddx = np.linspace(-1.0, 1.0, K)
+        ddy = np.linspace(-1.0, 1.0, L)
+        xv, yv = np.meshgrid(ddx, ddy)
+        cart.make_cart_grid(xv, yv)
+
+        return cart.eval_grid(c1[0:cart.nk], matrix=True)
+
+    
 
 ##Filters
 

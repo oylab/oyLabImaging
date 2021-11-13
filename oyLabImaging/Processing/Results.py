@@ -149,25 +149,22 @@ class results(object):
         assert self.PosLbls[pos]._tracked, str(pos) +' not tracked yet'
         return self.PosLbls[pos].get_track
     
-    def show_tracks(self, pos, J=None,Channel=None,**kwargs):
+    def show_tracks(self, pos, J=None,**kwargs):
         """
         Wrapper for PosLbl.plot_tracks
         Parameters
         ----------
         pos : position name
         J : track indices - plots all tracks if not provided
-        Channel : [DeepBlue] str or list of strings
         Zindex : [0]
         
         
         Draws image stks with overlaying tracks in current napari viewer
  
         """
-        if Channel not in self.channels:
-            Channel = self.channels[0]
-            print('showing channel '+ str(Channel))
+
         assert pos in self.PosLbls.keys(), str(pos) +' not segmented yet'
-        self.PosLbls[pos].plot_tracks(J=J,Channel=Channel,**kwargs)
+        self.PosLbls[pos].plot_tracks(J=J,**kwargs)
     
 
     def show_points(self, pos, J=None,Channel=None,**kwargs):
@@ -176,7 +173,7 @@ class results(object):
         Parameters
         ----------
         pos : position name
-        Channel : [DeepBlue] str or list of strings
+        Channel : [DeepBlue] str 
         Zindex : [0]
         
         Draws image stks with overlaying points in current napari viewer
@@ -201,9 +198,12 @@ class results(object):
         Draws image stks in current napari viewer
 
         """
-        if Channel not in self.channels:
-            Channel = self.channels[0]
-            print('showing channel '+ str(Channel))
+        if not isinstance(Channel, list):
+                Channel = [Channel]
+        Channel = [ch for ch in Channel if ch in self.channels]
+        if not Channel:
+            Channel = [self.channels[0]]
+        print('showing channel '+ str(Channel))
         self.PosLbls[pos].plot_images(Channel=Channel,**kwargs)
     
     

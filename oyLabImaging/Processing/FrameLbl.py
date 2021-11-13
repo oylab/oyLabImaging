@@ -1,13 +1,14 @@
 # FrameLbl module for microscopy data. 
 # Loads, segments, and retrieves single cell data for a single position and a single timepoint
 # AOY
-
 import pandas as pd
 import numpy as np
 from skimage import measure
 from oyLabImaging.Processing.generalutils import regionprops_to_df
 from oyLabImaging.Processing.improcutils import segmentation
 from oyLabImaging import Metadata
+from oyLabImaging.Processing.improcutils import Zernike
+from scipy import stats
 
 class FrameLbl(object):
     """
@@ -71,7 +72,7 @@ class FrameLbl(object):
      'scattershow'
     
     """
-    def __init__(self, frame=None, MD=None ,pth=None, Pos=None, acq = None, Zindex=0 ,register=True ,periring=True, periringsize=5, NucChannel='DeepBlue',cytoplasm=False,CytoChannel='Yellow', segment_type='watershed', **kwargs):
+    def __init__(self, frame=None, MD=None ,pth=None, Pos=None, acq = None, Zindex=0 ,register=True ,periring=True, periringsize=5, NucChannel='DeepBlue',cytoplasm=False,CytoChannel='Yellow',zernike=False, segment_type='watershed', **kwargs):
 
         if pth is None and MD is not None:
             pth = MD.base_pth
@@ -124,10 +125,18 @@ class FrameLbl(object):
         
 
             
-        props = measure.regionprops(L,intensity_image=Data[NucChannel])     
+        props = measure.regionprops(L,intensity_image=Data[NucChannel])   
+        
+        
+        
         props_df = regionprops_to_df(props)
         props_df.drop(['mean_intensity', 'max_intensity', 'min_intensity'], axis=1,inplace=True)
-        
+        if zernike:
+            L1 = [list(Zernike.coeff(stats.zscore(r.intensity_image)))[1] for r in props]
+            K1 = [list(Zernike.coeff(stats.zscore(r.intensity_image)))[2] for r in props]  
+            props_df['L'] = L1
+            props_df['K'] = K1
+                
         for ch in self.channels:
             props_channel = measure.regionprops(L,intensity_image=Data[ch])
             mean_channel = [r.mean_intensity for r in props_channel]
@@ -141,6 +150,10 @@ class FrameLbl(object):
             props_df['min_'+ch] = min_channel
             props_df['90th_'+ch] = Ninty_channel
             props_df['median_'+ch] = median_channel
+            
+            if zernike:
+                c1 = [list(Zernike.coeff(stats.zscore(r.intensity_image)))[0] for r in props_channel]  
+                props_df['zernike_'+ch] = c1            
         
         
         if periring:

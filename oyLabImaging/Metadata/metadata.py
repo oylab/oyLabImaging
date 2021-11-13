@@ -373,8 +373,16 @@ class Metadata(object):
         image_table - pd dataframe of metadata image table
         """
         import json
-        with open(join(pth,fname)) as f:
-            mddata = json.load(f)
+        try:
+            with open(join(pth,fname)) as f:
+                mddata = json.load(f)
+        except:
+            with open(join(pth,fname),'a') as f:
+                f.write("}")
+            with open(join(pth,fname)) as f:
+                mddata = json.load(f)
+            
+            
         usecolslist = ['acq',  'Position', 'frame','Channel', 'Marker', 'Fluorophore', 'group', 
        'XY', 'Z', 'Zindex','Exposure','PixelSize', 'PlateType', 'TimestampFrame','TimestampImage', 'filename']
         image_table = pd.DataFrame(columns=usecolslist)
@@ -561,6 +569,7 @@ class Metadata(object):
         """
         Helper function to read list of files given an TIFF type metadata and an filename list 
         Load images into dictionary of stks.
+        TODO - add crop at load
         """
    
         images_dict = {}
@@ -714,7 +723,7 @@ class Metadata(object):
             
 
     # Calculate jitter/drift corrections        
-    def CalculateDriftCorrection(self, Position=None, ZsToLoad=[0], Channel='DeepBlue'):
+    def CalculateDriftCorrection(self, Position=None,frames=None, ZsToLoad=[0], Channel='DeepBlue'):
         """
         Calculate image registration (jitter correction) parameters and add to metadata.
         
@@ -730,14 +739,20 @@ class Metadata(object):
             Position = self.posnames
         elif type(Position) is not list:
             Position = [Position]
+        
+        if frames is None:
+            frames = self.frames
+        elif type(frames) is not list:
+            frames = [frames]
+            
         assert Channel in self.channels, "%s isn't a channel, try %s" % (Channel, ', '.join(list(self.channels)))
         
         for pos in Position:
             from pyfftw.interfaces.numpy_fft import fft2, ifft2
 
-            frames = self.frames
+            
 
-            DataPre = self.stkread(Position=pos, Channel=Channel, Zindex=ZsToLoad)
+            DataPre = self.stkread(Position=pos, Channel=Channel, Zindex=ZsToLoad, frame=frames)
             print('\ncalculating drift correction for position ' + str(pos))
             DataPre = DataPre-np.mean(DataPre,axis=(1,2),keepdims=True)
 
@@ -751,9 +766,9 @@ class Metadata(object):
             DataPost = np.rot90(DataPost,axes=(0, 1),k=2)
 
             # So because of dumb licensing issues, fftconvolve can't use fftw but the slower fftpack. Python is wonderful. So we'll do it all by hand like neanderthals 
-            img_fft_1 = fft2(DataPre,axes=(0,1),threads=8)
-            img_fft_2 = fft2(DataPost,axes=(0,1),threads=8)
-            imXcorr = np.abs(np.fft.ifftshift(ifft2(img_fft_1*img_fft_2,axes=(0,1),threads=8)))
+            img_fft_1 = fft2(DataPre,axes=(0,1),threads=32)
+            img_fft_2 = fft2(DataPost,axes=(0,1),threads=32)
+            imXcorr = np.abs(np.fft.ifftshift(ifft2(img_fft_1*img_fft_2,axes=(0,1),threads=32)))
 
             #if more than 1 slice is calculated, look for mean shift
             imXcorrMeanZ = np.mean(imXcorr,axis=2)
@@ -767,7 +782,7 @@ class Metadata(object):
             if 'driftTform' not in self.image_table.columns:
                 self.image_table['driftTform']=None
 
-            for frame in self.frames:
+            for frame in frames:
                 inds = self.unique(Attr='index',Position=pos, frame=frame)
                 for ind in inds:
                     self.image_table.at[ind, 'driftTform']=[1, 0, 0 , 0, 1, 0 , D[frame,0], D[frame,1], 1]

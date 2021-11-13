@@ -77,7 +77,7 @@ class PosLbl(object):
      'plot_tracks',
     
     """
-    def __init__(self, Pos=None, MD=None ,pth=None, acq = None, NucChannel='DeepBlue', threads=10, register=True, **kwargs):
+    def __init__(self, Pos=None, MD=None ,pth=None, acq = None,frames=None, NucChannel='DeepBlue', threads=10, register=True, **kwargs):
 
         if any([Pos is None]):
             raise ValueError('Please provide position')
@@ -100,12 +100,19 @@ class PosLbl(object):
   
         self.channels = MD.unique('Channel',Position=Pos) 
         self.acq = MD.unique('acq',Position=Pos) 
-        self.frames = MD.unique('frame',Position=Pos)
+        
+        if frames is None:
+            self.frames = MD.unique('frame',Position=Pos)
+        elif type(frames) is not list:
+            self.frames = [frames]
+        else:
+            self.frames = frames
+        
         if len(self.frames)==1:
             register=False
         self._registerflag=register
         self._tracked=False
-        self.PixelSize = MD.unique('PixelSize')[0]
+        #self.PixelSize = MD.unique('PixelSize')[0]
         
         # Create all framelabels for the different TPs. This will segment and measure stuff. 
           
@@ -129,6 +136,14 @@ class PosLbl(object):
     
 
     np.warnings.filterwarnings('ignore', category=np.VisibleDeprecationWarning) 
+    @property
+    def PixelSize(self):
+        return self.framelabels[0]._pixelsize
+    
+    @property
+    def XY(self):
+        return self.framelabels[0].XY
+    
     @property
     def num(self):
         return np.array([r.num for r in self.framelabels])
@@ -230,43 +245,52 @@ class PosLbl(object):
             return np.nonzero(~np.isnan(self.trackinds.astype('float')))[0]           
         @property
         def centroid(self):
-            cents = self._outer.centroid
-            return np.array([list(cents[j][self.trackinds[j],:]) for j in self.T])
+            return self.prop('centroid')
         @property
         def weighted_centroid(self):
-            cents = self._outer.weighted_centroid
-            return np.array([list(cents[j][self.trackinds[j],:]) for j in self.T])
+            return self.prop('weighted_centroid')
         @property
         def centroid_um(self):
-            cents = self._outer.centroid_um
-            return np.array([list(cents[j][self.trackinds[j],:]) for j in self.T])
+            return self._outer.XY + self._outer.PixelSize*self.centroid
+              
         @property
         def weighted_centroid_um(self):
-            cents = self._outer.weighted_centroid_um
-            return np.array([list(cents[j][self.trackinds[j],:]) for j in self.T])
+            return self._outer.XY + self._outer.PixelSize*self.weighted_centroid
         @property
         def area(self):
-            a = self._outer.area
-            return np.array([a[j][self.trackinds[j]] for j in self.T])
+            return self.prop('area')
         @property
         def area_um2(self):
-            a = self._outer.area_um2
-            return np.array([a[j][self.trackinds[j]] for j in self.T])
+            return self.prop('area')*(self._outer.PixelSize**2)
+        
         def mean(self,ch, periring=False):
-            m = self._outer.mean(ch, periring)
-            return np.array([m[j][self.trackinds[j]] for j in self.T])
+            peritext=''
+            if periring:
+                peritext = '_periring'
+            return self.prop('mean_'+ch+peritext)
         def median(self,ch, periring=False):
-            m = self._outer.median(ch, periring)
-            return np.array([m[j][self.trackinds[j]] for j in self.T])
+            peritext=''
+            if periring:
+                peritext = '_periring'
+            return self.prop('median_'+ch+peritext)
         def minint(self,ch, periring=False):
-            m = self._outer.minint(ch, periring)
-            return np.array([m[j][self.trackinds[j]] for j in self.T])
+            peritext=''
+            if periring:
+                peritext = '_periring'
+            return self.prop('min_'+ch+peritext)
         def maxint(self,ch, periring=False):
-            m = self._outer.maxint(ch, periring)
-            return np.array([m[j][self.trackinds[j]] for j in self.T])
+            peritext=''
+            if periring:
+                peritext = '_periring'
+            return self.prop('max_'+ch+peritext)
         def ninetyint(self,ch, periring=False):
-            m = self._outer.ninetyint(ch, periring)
-            return np.array([m[j][self.trackinds[j]] for j in self.T])
+            peritext=''
+            if periring:
+                peritext = '_periring'
+            return self.prop('90th_'+ch+peritext)
+        
+        def prop(self, prop='area'):    
+            return np.array([self._outer.framelabels[j].regionprops[prop][self.trackinds[j]] for j in self.T])
         
         def show_movie(self, Channel='DeepBlue', boxsize=50, cmaps = ['red', 'green', 'blue', 'cyan', 'magenta', 'yellow'] ,**kwargs):
             """
@@ -305,7 +329,7 @@ class PosLbl(object):
         
         Parameters
         ----------
-        kwargs that go into tracking helper functions: search_radius, NucChannel, maxStep for skip ,maxAmpRatio for skip, mintracklength
+        kwargs that go into tracking helper functions: search_radius, params (list of tuples, (channel, weight)), maxStep for skip ,maxAmpRatio for skip, mintracklength
         
         
         '''
@@ -316,24 +340,34 @@ class PosLbl(object):
         
         
     
-    def _link(self, NucChannel='DeepBlue',search_radius=75,**kwargs):
+    def _link(self, search_radius=25,params=[],**kwargs):
         """
         Helper function : link adjecent frames using JV lap. 
         
         TODO: extend for a general cost function. make class of cost functions that returns shape, cc, ii, jj
         Parameters
         ----------
-        NucChannel : ['DeepBlue']
-        search_radius : [75]
+        params : [(channel,weight)] list of tuples 
+        search_radius : [25]
         """
         
-        ch = NucChannel
-        if ch is None:
-            ch = self.channels[0]
-            print('No channel provided, using '+ch)
+        #ch = NucChannel
+        #if ch is None:
+        #    ch = self.channels[0]
+        #    print('No channel provided, using '+ch)
         cents = self.centroid_um
-        ints = self.ninetyint(ch)
+        #ints = self.ninetyint(ch)
         nums = self.num
+        
+        if params:
+            Cp = [p[0] for p in params if p[0] in self.channels]
+            Wp = [p[1] for p in params if p[0] in self.channels]
+            ints = {}
+            for cp in Cp:
+                ints[cp] = self.ninetyint(cp)
+        else:
+            Cp=[]
+            Wp=[]
 
         for i in np.arange(nums.shape[0]-1):
             
@@ -359,8 +393,11 @@ class PosLbl(object):
                 j+=1
             ii = np.concatenate(ii)
 
-            #ii jj cc are now sparse matrix in COO format
-            ampRatio = np.array(max(list(ints[i][ii]), list(ints[i+1][jj])))/np.array(min(list(ints[i][ii]), list(ints[i+1][jj])))
+                        #ii jj cc are now sparse matrix in COO format
+            ampRatio=1
+            for cp, wp in zip(Cp, Wp):
+                ampRatio = ampRatio + wp*(np.array(np.maximum(list(ints[cp][i][ii]), list(ints[cp][i+1][jj])))/np.array(np.minimum(list(ints[cp][i][ii]), list(ints[cp][i+1][jj])))-1)
+
 
             #costs of match
             cc = np.concatenate(dists)*ampRatio
@@ -399,7 +436,7 @@ class PosLbl(object):
                 pass
     
 
-    def _getAllContinuousTrackSegs(self, minseglength=5, **kwargs):
+    def _getAllContinuousTrackSegs(self, minseglength=4, **kwargs):
         '''
         Helper function that returns the frame indexing of all contiuous tracks (chained links) longer than minseglength.
 
@@ -420,27 +457,36 @@ class PosLbl(object):
         return trackbits[(np.array([np.sum(r != None) for r in trackbits])>=minseglength)]
     
     
-    def _closegaps(self, maxStep=100, NucChannel='DeepBlue',maxAmpRatio=1.5, mintracklength=20, **kwargs):
+    def _closegaps(self, maxStep=15, params=[],maxAmpRatio=5, mintracklength=20, **kwargs):
         
         """
         Helper function : close gaps between open stubs using JV lap. 
         
         todo: split. When a stub that starts in the middle has a plausible link, make a compound track
         ----------
-        NucChannel : ['DeepBlue']
-        maxAmpRatio : [1.5] max allowd ratio of amplitudes for linking
+        #NucChannel : ['DeepBlue']
+        params : [(channel,weight)] list of tuples 
+        maxAmpRatio : [2] max allowd ratio of amplitudes for linking
         mintracklength : [20] final minimum length of a track
         """
-        ch=NucChannel
-        if ch is None:
-            ch = self.channels[0]
+        #ch=NucChannel
+        #if ch is None:
+        #    ch = self.channels[0]
             
-
+        if params:
+            Cp = [p[0] for p in params if p[0] in self.channels]
+            Wp = [p[1] for p in params if p[0] in self.channels]
+            ints = {}
+            for cp in Cp:
+                ints[cp] = self.ninetyint(cp)
+        else:
+            Cp=[]
+            Wp=[]
+            
         
         trackbits = self._getAllContinuousTrackSegs(**kwargs)
         
         cents = self.centroid_um
-        ints = self.ninetyint(ch)
         notdoneflag=1
 
         while notdoneflag:
@@ -464,7 +510,10 @@ class PosLbl(object):
                 ind2 = trackbits[possiblelinks[i][0]][frame2]
                 dt = frame2-frame1
                 dr = np.linalg.norm(cents[frame1][ind1]-cents[frame2][ind2])
-                da = max(ints[frame1][ind1], ints[frame2][ind2])/min(ints[frame1][ind1], ints[frame2][ind2])
+                
+                da=1
+                for cp, wp in zip(Cp, Wp):
+                    da = da + wp*(np.maximum(ints[cp][frame1][ind1], ints[cp][frame2][ind2])/np.minimum(ints[cp][frame1][ind1], ints[cp][frame2][ind2])-1)
 
                 if dr <= (np.sqrt(dt)*maxStep):
                     if da<=maxAmpRatio:
@@ -586,7 +635,7 @@ class PosLbl(object):
     
     
 
-    def plot_images(self, Channel='DeepBlue',Zindex=[0], **kwargs):    
+    def plot_images(self, Channel='DeepBlue',Zindex=[0], cmaps = ['red', 'green', 'blue', 'cyan', 'magenta', 'yellow'], **kwargs):    
         """
         Parameters
         ----------
@@ -595,10 +644,19 @@ class PosLbl(object):
 
         Draws image stks in current napari viewer
         """
+        if len(Channel)==1:
+                cmaps = ['gray']
+                
         from oyLabImaging.Processing.imvisutils import get_or_create_viewer
         viewer = get_or_create_viewer() 
-        stk = self.img(Channel=Channel,verbose=False,Zindex=Zindex , **kwargs)
-        viewer.add_image(stk,blending='additive', contrast_limits=[np.percentile(stk.flatten(),1),np.percentile(stk.flatten(),99.9)], scale=[self.PixelSize, self.PixelSize],**kwargs)
+        viewer.scale_bar.unit = "um"
+        viewer.scale_bar.font_size=16
+        
+        for ind, ch in enumerate(Channel):
+            stk = self.img(Channel=ch,verbose=False,Zindex=Zindex , **kwargs)
+            viewer.add_image(stk,blending='additive', contrast_limits=[np.percentile(stk.flatten(),1),np.percentile(stk.flatten(),99.9)], scale=[self.PixelSize, self.PixelSize], colormap=cmaps[ind%len(cmaps)] ,**kwargs)
+    
+    
     
     def plot_tracks(self, J=None, **kwargs):
         """
