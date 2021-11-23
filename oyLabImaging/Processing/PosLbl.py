@@ -132,7 +132,7 @@ class PosLbl(object):
         print('\nThe path to the experiment is: \n ' + self.pth)
         print('\n '+ str(len(self.frames)) + ' frames processed.')        
 
-        print('\nAvailable channels are : ' + ', '.join(list(self.channels))+ '.')
+        print('\nAvailable channels are :  ' + ', '.join(list(self.channels))+ '.')
     
     
 
