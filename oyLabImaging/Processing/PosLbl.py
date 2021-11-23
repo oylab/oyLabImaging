@@ -112,6 +112,7 @@ class PosLbl(object):
             register=False
         self._registerflag=register
         self._tracked=False
+        self._splitflag=False
         #self.PixelSize = MD.unique('PixelSize')[0]
         
         # Create all framelabels for the different TPs. This will segment and measure stuff. 
@@ -237,6 +238,8 @@ class PosLbl(object):
         """
         def __init__(self,outer, i=0):
             self.trackinds = outer.trackinds[i]
+            if outer._splitflag:
+                self.relatives = outer.relatives[i]
             self.numtracks = len(outer.trackinds)
             self._outer = outer
         
@@ -318,7 +321,7 @@ class PosLbl(object):
     
     
     
-    def trackcells(self, **kwargs):
+    def trackcells(self, split=False, **kwargs):
         '''
         all tracking is done using the Jonker Volgenant lap algorithm:
         R. Jonker and A. Volgenant, "A Shortest Augmenting Path Algorithm for Dense and Sparse Linear Assignment Problems", Computing 38, 325-340 (1987)
@@ -335,12 +338,17 @@ class PosLbl(object):
         '''
         self._link(**kwargs)
         self._closegaps(**kwargs)
-        self._tracked=True       
+        self._tracked=True  
+        if split:
+            self._split(**kwargs)
+            self._splitflag=True
+        else:
+            self._splitflag=False
         self._calculate_trackmat()
         
         
     
-    def _link(self, search_radius=25,params=[],**kwargs):
+    def _link(self, search_radius=15,params=[],**kwargs):
         """
         Helper function : link adjecent frames using JV lap. 
         
@@ -356,15 +364,12 @@ class PosLbl(object):
         #    ch = self.channels[0]
         #    print('No channel provided, using '+ch)
         cents = self.centroid_um
-        #ints = self.ninetyint(ch)
         nums = self.num
         
         if params:
             Cp = [p[0] for p in params if p[0] in self.channels]
             Wp = [p[1] for p in params if p[0] in self.channels]
             ints = {}
-            for cp in Cp:
-                ints[cp] = self.ninetyint(cp)
         else:
             Cp=[]
             Wp=[]
@@ -396,7 +401,8 @@ class PosLbl(object):
                         #ii jj cc are now sparse matrix in COO format
             ampRatio=1
             for cp, wp in zip(Cp, Wp):
-                ampRatio = ampRatio + wp*(np.array(np.maximum(list(ints[cp][i][ii]), list(ints[cp][i+1][jj])))/np.array(np.minimum(list(ints[cp][i][ii]), list(ints[cp][i+1][jj])))-1)
+                ints = self.ninetyint(cp)
+                ampRatio = ampRatio + wp*(np.array(np.maximum(list(ints[i][ii]), list(ints[i+1][jj])))/np.array(np.minimum(list(ints[i][ii]), list(ints[i+1][jj])))-1)
 
 
             #costs of match
@@ -444,7 +450,7 @@ class PosLbl(object):
         
         Parameters
         ----------
-        minseglength : [5] smallest stub that doesnt get disgarded
+        minseglength : [5] smallest stub that doesnt get discarded
         '''
         trackbits = []
         for i in np.arange(len(self.frames)-1):
@@ -457,7 +463,7 @@ class PosLbl(object):
         return trackbits[(np.array([np.sum(r != None) for r in trackbits])>=minseglength)]
     
     
-    def _closegaps(self, maxStep=15, params=[],maxAmpRatio=5, mintracklength=20, **kwargs):
+    def _closegaps(self, maxStep=10, params=[],maxAmpRatio=5,maxTimeJump=4, mintracklength=10, **kwargs):
         
         """
         Helper function : close gaps between open stubs using JV lap. 
@@ -495,7 +501,7 @@ class PosLbl(object):
             trackends = np.array([np.where(~np.isnan(r.astype('float')))[0][-1] for r in trackbits])
             
             dtmat = np.expand_dims(trackstarts,1)-np.expand_dims(trackends,0)
-            possiblelinks = np.transpose(np.nonzero((dtmat>0)*(dtmat<4)))
+            possiblelinks = np.transpose(np.nonzero((dtmat>0)*(dtmat<maxTimeJump)))
             ii = []
             jj = []
             cc = []
@@ -563,6 +569,115 @@ class PosLbl(object):
         
         sortind = np.lexsort((np.arange(len(trackbits)) ,[np.sum(np.isnan(r.astype('float'))) for r in trackbits] ,[np.sum(r==None) for r in trackbits]))
         self.trackinds = trackbits[sortind]
+    
+    
+    
+    def _split(self, search_radius=20, params=[],maxAmpRatio=5, **kwargs):
+        
+        """
+        Helper function : find splits using JV lap. 
+        
+        ----------
+        params : [(channel,weight)] list of tuples 
+        maxAmpRatio : [5] max allowd ratio of amplitudes for linking
+        search_radius : [40] search radius
+        """
+        #ch=NucChannel
+        #if ch is None:
+        #    ch = self.channels[0]
+            
+        if params:
+            Cp = [p[0] for p in params if p[0] in self.channels]
+            Wp = [p[1] for p in params if p[0] in self.channels]
+            ints = {}
+            for cp in Cp:
+                ints[cp] = self.ninetyint(cp)
+        else:
+            Cp=[]
+            Wp=[]
+            
+        
+        trackbits = self.trackinds
+        
+        cents = self.centroid_um
+        relatives = [[]]*len(trackbits)
+        notdoneflag=1
+
+        while notdoneflag:
+            
+            trackstarts = np.array([np.where(~np.isnan(r.astype('float')))[0][0] for r in trackbits])
+            trackends = np.array([np.where(~np.isnan(r.astype('float')))[0] for r in trackbits])
+
+            dtmat = np.expand_dims(trackstarts,1)-np.expand_dims(trackends,0)
+            dt1array = np.zeros_like(dtmat)
+            for (x, y), element in np.ndenumerate(dtmat):
+                try:
+                    dt1array[x,y] = np.nonzero(element==1)[0][0]
+                except:
+                    dt1array[x,y] = None
+
+            possiblelinks = np.transpose(np.where(dt1array!=None))   
+
+            ii = []
+            jj = []
+            cc = []
+            for i in np.arange(len(possiblelinks)):
+                # frame1 - end of possible to link
+                frame2 = trackstarts[possiblelinks[i][0]]
+                # frame1 - end of possible to link
+                frame1 = frame2-1
+                # cell label in frame 1 to link
+                ind1 = trackbits[possiblelinks[i][1]][frame1]
+                # cell label in frame 2 to link
+                ind2 = trackbits[possiblelinks[i][0]][frame2]
+                
+                dr = np.linalg.norm(cents[frame1][ind1]-cents[frame2][ind2])
+
+                
+                da=1
+                for cp, wp in zip(Cp, Wp):
+                    da = da + wp*(np.maximum(ints[cp][frame1][ind1], ints[cp][frame2][ind2])/np.minimum(ints[cp][frame1][ind1], ints[cp][frame2][ind2])-1)
+
+                if dr <= search_radius:
+                    if da<=maxAmpRatio:
+                        ii.append(possiblelinks[i][1])
+                        jj.append(possiblelinks[i][0])
+                        
+                        #maybe one day we'll change this somehow. Not sure how rn
+                        cost = dr*da
+                        
+                        cc.append(cost)
+            ii = np.array(ii)
+            jj = np.array(jj)
+            cc = np.array(cc)
+
+                        
+            if len(ii)==0:
+                print('\nFinished finding splits')
+                notdoneflag=0
+                break
+
+            shape = (len(trackbits),len(trackbits))
+            cc, ii, kk = prepare_sparse_cost(shape,cc,ii,jj, 1000)
+            match1, _ = lap.lapmod(len(ii)-1, cc, ii, kk, return_cost=False)
+            match1[match1 >= shape[1]] = -1
+            #inds in n+1 that match inds (1:N) in n
+            match1 = np.array(match1[:shape[0]])
+
+            trackindstofill = np.nonzero(match1+1)[0]
+            trackindstoadd = match1[np.nonzero(match1+1)]
+
+            fa = {trackindstofill[i]: trackindstoadd[i] for i in range(len(trackindstoadd))} 
+
+            for i in fa:
+                sf = trackstarts[i]
+                ef = trackstarts[fa[i]]
+                trackbits[fa[i]][np.arange(sf,ef)]=trackbits[i][np.arange(sf,ef)]
+                relatives[i]=relatives[i]+[fa[i]]
+                relatives[fa[i]]=relatives[fa[i]]+[i]
+
+        self.relatives = relatives
+        self.trackinds = trackbits
     
     
     

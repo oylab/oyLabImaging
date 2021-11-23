@@ -149,6 +149,26 @@ class results(object):
         assert self.PosLbls[pos]._tracked, str(pos) +' not tracked yet'
         return self.PosLbls[pos].get_track
     
+    def tracklist(self,pos=None):
+        """
+        Function to consolidate tracks from different positions
+        Parameters
+        ----------
+        pos : [All positions] position name, list of position names
+        
+        Returns
+        -------
+        List of tracks in pos
+        """
+        if pos==None:
+            pos = list(self.PosLbls.keys())
+        pos = pos if isinstance(pos, list) else [pos]
+        ts=[]
+        for p in pos:
+            t0 = self.tracks(p)
+            ([ts.append(t0(i)) for i in np.arange(t0(0).numtracks)])
+        return ts
+    
     def show_tracks(self, pos, J=None,**kwargs):
         """
         Wrapper for PosLbl.plot_tracks
