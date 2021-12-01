@@ -95,6 +95,8 @@ class Metadata(object):
             self._load_method=self._load_metadata_MM
         elif self.type=='ND2':
             self._load_method=self._load_metadata_nd
+        elif self.type=='TIFFS':
+            self._load_method=self._load_metadata_TIF_GUI
 
                   
         # With all we've learned, we can now load the metadata
@@ -121,8 +123,17 @@ class Metadata(object):
     def __call__(self):
         return self.image_table
           
+        
+    #keeping some multiples for backwards compatability
     @property
     def posnames(self):
+        """
+        Returns all unique position names
+        """
+        return self().Position.unique()
+    
+    @property
+    def Position(self):
         """
         Returns all unique position names
         """
@@ -130,6 +141,13 @@ class Metadata(object):
 
     @property
     def frames(self):
+        """
+        Returns all unique frames 
+        """
+        return list(self().frame.unique())
+    
+    @property
+    def frame(self):
         """
         Returns all unique frames 
         """
@@ -143,11 +161,26 @@ class Metadata(object):
         return self().Channel.unique()
     
     @property
+    def Channel(self):
+        """
+        Returns all unique channel names
+        """
+        return self().Channel.unique()
+    
+    
+    @property
     def Zindexes(self):
         """
         Returns all unique Zindexes
         """
         return self().Zindex.unique()
+    
+    @property
+    def acq(self):
+        """
+        Returns all unique acquisition names
+        """
+        return self().acq.unique()
     
     @property
     def acqnames(self):
@@ -247,6 +280,10 @@ class Metadata(object):
                             return 'MM'
                         if fname=='Metadata':
                             return 'TXT'
+                for f in filez: #if you couldn't find any others, try tiffs
+                    if fext=='.tif' or fext=='.TIF':
+                        print('Manual loading from tiffs')
+                        return 'TIFFS'
         else:
             fname, fext = path.splitext(str.split(pth,'/')[-1])
             if str.split(pth,'/')[-1]=='metadata.pickle':
@@ -257,7 +294,10 @@ class Metadata(object):
                 if fname=='metadata':
                     return 'MM'
                 if fname=='Metadata':
-                    return 'TXT'     
+                    return 'TXT'
+            if fext=='.tif' or fext=='.TIF':
+                print('Manual loading from tiffs')
+                return 'TIFFS'
         return None
     
     def _determine_metadata_name(self, pth):
@@ -305,7 +345,9 @@ class Metadata(object):
         -------
         verbose - [True] boolean
         """
-        if self._md_name in listdir(self.base_pth):   
+        if self.type=="TIFFS":
+            self._load_method(pth=self.base_pth)
+        elif self._md_name in listdir(self.base_pth):   
             self.append(self._load_method(pth=self.base_pth ,fname=self._md_name))
             if verbose:
                 print('loaded ' + self.type + ' metadata from' + join(self.base_pth, self._md_name))
@@ -414,14 +456,206 @@ class Metadata(object):
         image_table.filename = [join(pth, f.split('/')[-1]) for f in image_table.filename]
         return image_table
     
- 
+    #functions for generic TIF loading!
+    
+    def _load_metadata_TIF_GUI(self,pth=''):
+        GlobText = self._getPatternsFromPathGUI(pth=pth)
+        box1 = self._getMappingFromGUI(GlobText)
+        
+    
+    def _getPatternsFromPathGUI(self, pth=''):
+        from ipywidgets import Button, Text, widgets, HBox, Layout
+        from tkinter import Tk, filedialog
+        from IPython.display import clear_output, display
+        from oyLabImaging.Processing.generalutils import findregexp, findstem, extractFieldsByRegex
+        out1 = widgets.Output()
+        out2 = widgets.Output()
+
+        FolderText = Text(value='',placeholder='Enter path to image files',description='Path:',layout=Layout(width='70%', height='30px'))    
+        GlobText = Text(value='',placeholder='*',description='Regular expression:',layout=Layout(width='70%', height='30px'), style={'description_width': 'initial'})    
+
+        def select_files(b):
+            with out1:
+                out1.clear_output()
+                root = Tk()
+                root.withdraw() # Hide the main window.
+                root.call('wm', 'attributes', '.', '-topmost', True) # Raise the root to the top of all windows.
+                b.dir = filedialog.askdirectory() # List of selected folder will be set button's file attribute.
+                FolderText.value=b.dir+'/*'
+                print(b.dir) # Print the list of files selected.
+
+        fileselect = Button(description="Browse directory")
+        fileselect.on_click(select_files)
+
+        left_box = HBox([fileselect, FolderText])
+        display(left_box)
+
+        def on_value_change_path(change):
+            with out1:
+                out1.clear_output()
+                print(change['new'])
+            with out2:
+                out2.clear_output()
+                GlobText.fnames = fnamesFromPath(change['new'])
+                if len(GlobText.fnames):
+                    GlobText.value = findregexp(GlobText.fnames)
+                    GlobText.globExp = GlobText.value
+                    GlobText.patterns = extractFieldsByRegex(GlobText.globExp, GlobText.fnames)
+                    GlobText.path = FolderText.value
+                else:
+                    GlobText.value = 'Empty File List!'
+                print(*GlobText.fnames[0:min(5,len(GlobText.fnames))],sep = '\n')
+
+        def fnamesFromPath(pth):
+            import glob
+            import os
+            fnames = glob.glob(pth+'*.TIF')
+            fnames.sort(key=os.path.getmtime)
+            return fnames
+
+        def on_value_change_glob(change):
+            if len(GlobText.fnames):
+                GlobText.globExp = GlobText.value
+                GlobText.patterns = extractFieldsByRegex(GlobText.globExp, GlobText.fnames)
+            else:
+                GlobText.value = 'Empty File List!'
+
+        FolderText.observe(on_value_change_path, names='value')
+        FolderText.value=pth
+
+        GlobText.observe(on_value_change_glob, names='value')
+
+        out1.append_stdout(pth)
+
+        print('Files:')
+        display(out2)
+
+        display(GlobText)
+        return(GlobText)
+
+    def _getMappingFromGUI(self, GlobText):
+        from ipywidgets import Button, Text, widgets, HBox, Layout
+        from IPython.display import clear_output, display
+        import itertools
+        out1 = widgets.Output()
+        out3 = widgets.Output()
+        box1 = HBox()
+        buttonDone = Button(description='Done',layout=Layout(width='25%', height='80px'),button_style='success',style=dict(
+        font_size='48',
+        font_weight='bold'))
+        def change_traits(change):
+            with out1:
+                out1.clear_output()
+                ordered_list_of_traits=[]
+                for i in range(1, len(box1.children), 2):
+                    ordered_list_of_traits.append(box1.children[i].value)
+                box1.ordered_list_of_traits = ordered_list_of_traits
+                print(ordered_list_of_traits)
+                print(*GlobText.patterns[0:min(5,len(GlobText.fnames))],sep = '\n')
+
+
+        def on_change(t):
+            with out3:
+                out3.clear_output()
+                print('Found regular expression with '+str(len(GlobText.patterns[0]))+' :')
+
+                parts = GlobText.globExp.split('*')
+                options = ['Channel', 'Position', 'frame', 'Zindex', 'IGNORE']
+                layout = widgets.Layout(width='auto', height='40px') #set width and height
+
+                dddict = {}
+                for i in range(len(parts)-1):
+                    # dynamically create key
+                    key = parts[i]
+                    # calculate value
+                    value = [widgets.Label(parts[i]), widgets.Dropdown(options=options,value=options[i], layout=Layout(width='9%'))]
+                    dddict[key] = value 
+                key = parts[-1]
+                value = [widgets.Label(parts[-1])]
+                dddict[key] = value 
+
+                ddlist = list(itertools.chain.from_iterable(dddict.values()))
+                box1.children = tuple(ddlist)
+                for dd in box1.children:
+                    dd.observe(change_traits,names='value')
+                display(box1)
+
+
+        def on_click_done(b):
+            b.disabled=True
+            self._load_imagetable_Tiffs(box1.ordered_list_of_traits, GlobText.fnames, GlobText.patterns, GlobText.path)
 
 
 
+        display(out3)            
+        on_change(GlobText)
+        box1.children[1].value = 'frame'
+        box1.children[1].value = 'Channel'
+
+        box2 = HBox([out1, buttonDone])
+        display(box2)
+
+        GlobText.observe(on_change, names='value')
+        buttonDone.on_click(on_click_done)
+
+        return box1
+    
+    def _load_imagetable_Tiffs(self, ordered_list_of_traits, fnames, patterns, pth):
+        """
+        Helper function to load minimal metadata from tiffs.
+        Returns
+        -------
+        image_table - pd dataframe of metadata image table
+        """
+        import pandas as pd
+        from os.path import join, isdir
 
 
+        traitdict={}
+        for i,trait in enumerate(ordered_list_of_traits):
+            if not trait=='IGNORE':
+                key=trait
+                value=[p[i] for p in patterns]
+                traitdict[key]=value
+
+        usecolslist = ['acq',  'Position', 'frame','Channel', 'Marker', 'Fluorophore', 'group', 
+        'XY', 'Z', 'Zindex','Exposure','PixelSize', 'PlateType', 'TimestampFrame','TimestampImage', 'filename']
+        image_table = pd.DataFrame(columns=usecolslist)
 
 
+        image_table['filename']=fnames
+        image_table['root_pth'] = image_table.filename
+
+        #Default values
+        image_table['acq']=pth
+        image_table['XY']=[[0,0]]*len(fnames)
+        image_table['Z']=0
+        image_table['Zindex']=0
+        image_table['Channel']=0
+        image_table['Position']=0
+        image_table['frame']=0
+        image_table['PixelSize']=1
+
+        #update whichever values we got from the names
+        for trait in traitdict:
+            image_table[trait]=traitdict[trait]
+
+        image_table.filename = [join(pth, f.split('/')[-1]) for f in image_table.filename]
+        self.image_table = image_table
+
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
 
     #This is how everything gets added to a MD
     def append(self,framedata):
