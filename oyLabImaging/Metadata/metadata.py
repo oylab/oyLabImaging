@@ -470,10 +470,12 @@ class Metadata(object):
         from oyLabImaging.Processing.generalutils import findregexp, findstem, extractFieldsByRegex
         out1 = widgets.Output()
         out2 = widgets.Output()
+        out3 = widgets.Output()
 
-        FolderText = Text(value='',placeholder='Enter path to image files',description='Path:',layout=Layout(width='70%', height='30px'))    
+        FolderText = Text(value='',placeholder='Enter path to image files',description='Path:',layout=Layout(width='70%', height='30px'))  
+        
         GlobText = Text(value='',placeholder='*',description='Regular expression:',layout=Layout(width='70%', height='30px'), style={'description_width': 'initial'})    
-
+        GlobText.flag=0
         def select_files(b):
             with out1:
                 out1.clear_output()
@@ -502,23 +504,27 @@ class Metadata(object):
                     GlobText.globExp = GlobText.value
                     GlobText.patterns = extractFieldsByRegex(GlobText.globExp, GlobText.fnames)
                     GlobText.path = FolderText.value
+                    GlobText.flag=1
                 else:
                     GlobText.value = 'Empty File List!'
+                    GlobText.flag=0
                 print(*GlobText.fnames[0:min(5,len(GlobText.fnames))],sep = '\n')
 
         def fnamesFromPath(pth):
             import glob
             import os
-            fnames = glob.glob(pth+'*.TIF')
+            fnames = glob.glob(pth+'**/*.TIF',recursive=True)
             fnames.sort(key=os.path.getmtime)
             return fnames
 
         def on_value_change_glob(change):
-            if len(GlobText.fnames):
-                GlobText.globExp = GlobText.value
-                GlobText.patterns = extractFieldsByRegex(GlobText.globExp, GlobText.fnames)
-            else:
-                GlobText.value = 'Empty File List!'
+            with out3:
+                out3.clear_output()
+                if len(GlobText.fnames):
+                    GlobText.globExp = GlobText.value
+                    GlobText.patterns = extractFieldsByRegex(GlobText.globExp, GlobText.fnames)
+                else:
+                    GlobText.value = 'Empty File List!'
 
         FolderText.observe(on_value_change_path, names='value')
         FolderText.value=pth
@@ -557,28 +563,31 @@ class Metadata(object):
         def on_change(t):
             with out3:
                 out3.clear_output()
-                print('Found regular expression with '+str(len(GlobText.patterns[0]))+' :')
+                if GlobText.flag:
+                    print('Found regular expression with '+str(len(GlobText.patterns[0]))+' :')
 
-                parts = GlobText.globExp.split('*')
-                options = ['Channel', 'Position', 'frame', 'Zindex', 'IGNORE']
-                layout = widgets.Layout(width='auto', height='40px') #set width and height
+                    parts = GlobText.globExp.split('*')
+                    options = ['Channel', 'Position', 'frame', 'Zindex', 'IGNORE']
+                    layout = widgets.Layout(width='auto', height='40px') #set width and height
 
-                dddict = {}
-                for i in range(len(parts)-1):
-                    # dynamically create key
-                    key = parts[i]
-                    # calculate value
-                    value = [widgets.Label(parts[i]), widgets.Dropdown(options=options,value=options[i], layout=Layout(width='9%'))]
+                    dddict = {}
+                    for i in range(len(parts)-1):
+                        # dynamically create key
+                        key = parts[i]
+                        # calculate value
+                        value = [widgets.Label(parts[i]), widgets.Dropdown(options=options,value=options[i], layout=Layout(width='9%'))]
+                        dddict[key] = value 
+                    key = parts[-1]
+                    value = [widgets.Label(parts[-1])]
                     dddict[key] = value 
-                key = parts[-1]
-                value = [widgets.Label(parts[-1])]
-                dddict[key] = value 
 
-                ddlist = list(itertools.chain.from_iterable(dddict.values()))
-                box1.children = tuple(ddlist)
-                for dd in box1.children:
-                    dd.observe(change_traits,names='value')
-                display(box1)
+                    ddlist = list(itertools.chain.from_iterable(dddict.values()))
+                    box1.children = tuple(ddlist)
+                    for dd in box1.children:
+                        dd.observe(change_traits,names='value')
+                    box1.children[1].value = 'frame'
+                    box1.children[1].value = 'Channel'
+                    display(box1)
 
 
         def on_click_done(b):
@@ -587,10 +596,10 @@ class Metadata(object):
 
 
 
-        display(out3)            
-        on_change(GlobText)
-        box1.children[1].value = 'frame'
-        box1.children[1].value = 'Channel'
+        display(out3)
+        if GlobText.flag:
+            on_change(GlobText)
+            
 
         box2 = HBox([out1, buttonDone])
         display(box2)

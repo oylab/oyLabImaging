@@ -176,6 +176,8 @@ def extractFieldsByRegex(globExp, fnames):
     matches=[]
     for f in fnames:
         match = re.findall(globExp.replace('*','(.*)'), f)
-        assert len(match)==1, "Non unique matches from regexp"
+        if not len(match)==1:
+            print("Non unique matches from regexp")
+            break
         matches.append(match[0])
     return(matches)
