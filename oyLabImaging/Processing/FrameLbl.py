@@ -114,14 +114,19 @@ class FrameLbl(object):
         self.imagedims = np.shape(Data[NucChannel]);
 
         nargs = self._seg_fun.__code__.co_argcount
-        args = [self._seg_fun.__code__.co_varnames[i] for i in range(1, nargs)]
+        args = [self._seg_fun.__code__.co_varnames[i] for i in range(2, nargs)]
         defaults = list(self._seg_fun.__defaults__)
-        input_dict = {args[i]: defaults[i] for i in range(0, nargs-1)} 
+        input_dict = {args[i]: defaults[i] for i in range(0, nargs-2)} 
         input_dict = {**input_dict, **kwargs}
         
         self._seg_params = input_dict
         
-        L = self._seg_fun(img=Data[NucChannel],**kwargs)
+        try:
+            imgCyto=Data[CytoChannel]
+        except:
+            imgCyto=''
+        
+        L = self._seg_fun(img=Data[NucChannel],imgCyto=imgCyto,**kwargs)
         
 
             

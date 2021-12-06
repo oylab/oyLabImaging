@@ -321,7 +321,7 @@ class PosLbl(object):
     
     
     
-    def trackcells(self, split=False, **kwargs):
+    def trackcells(self, split=True, **kwargs):
         '''
         all tracking is done using the Jonker Volgenant lap algorithm:
         R. Jonker and A. Volgenant, "A Shortest Augmenting Path Algorithm for Dense and Sparse Linear Assignment Problems", Computing 38, 325-340 (1987)
@@ -602,6 +602,7 @@ class PosLbl(object):
         cents = self.centroid_um
         relatives = [[]]*len(trackbits)
         notdoneflag=1
+        
 
         while notdoneflag:
             
@@ -651,11 +652,12 @@ class PosLbl(object):
             jj = np.array(jj)
             cc = np.array(cc)
 
-                        
+            #print(ii)          
             if len(ii)==0:
                 print('\nFinished finding splits')
                 notdoneflag=0
                 break
+                
 
             shape = (len(trackbits),len(trackbits))
             cc, ii, kk = prepare_sparse_cost(shape,cc,ii,jj, 1000)
@@ -787,10 +789,11 @@ class PosLbl(object):
         from oyLabImaging.Processing.imvisutils import get_or_create_viewer
         viewer = get_or_create_viewer() 
         trackmat = self._tracksmat(J=J)
-        viewer.add_tracks(trackmat,blending='additive', scale=[self.PixelSize, self.PixelSize])
+        tracklayer = viewer.add_tracks(trackmat,blending='additive', scale=[self.PixelSize, self.PixelSize])
+        tracklayer.display_id=True
         
         
-    def plot_points(self, Channel='DeepBlue', periring=False,colormap='afmhot' ,func=lambda x : x,**kwargs):
+    def plot_points(self, Channel='DeepBlue', periring=False,colormap='plasma' ,func=lambda x : x,**kwargs):
         """
         Parameters
         ----------
@@ -806,10 +809,10 @@ class PosLbl(object):
         from oyLabImaging.Processing.imvisutils import get_or_create_viewer
         viewer = get_or_create_viewer() 
         try:
-            pointsmat = self._pointmat()
+            pointsmat = self._pointmatrix
         except:
             self._calculate_pointmat()
-            pointsmat = self._pointmat()
+            pointsmat = self._pointmatrix
             
         
         point_props = {'mean' : func(np.concatenate(self.mean(Channel,periring=periring)))}

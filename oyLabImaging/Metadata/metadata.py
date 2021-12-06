@@ -644,13 +644,24 @@ class Metadata(object):
         image_table['Position']=0
         image_table['frame']=0
         image_table['PixelSize']=1
-
+        
+        
         #update whichever values we got from the names
         for trait in traitdict:
             image_table[trait]=traitdict[trait]
+        
+        try:
+            image_table['frame']=[int(f) for f in image_table['frame']]
+        except:
+            pass
+                    #todo : convert numerical strings to numbers
+
 
         image_table.filename = [join(pth, f.split('/')[-1]) for f in image_table.filename]
         self.image_table = image_table
+        
+        
+
 
         
         
@@ -854,7 +865,7 @@ class Metadata(object):
             # Best performance has most frequently indexed dimension first 
             images_dict[key] = np.array(imgs) / 2**16  
             if verbose:
-                print('\nLoaded {0} group of images.'.format(key))
+                print('\nLoaded group {0} of images.'.format(key))
             
         return images_dict
 
@@ -954,7 +965,6 @@ class Metadata(object):
             dT = np.array(dT)
             if len(dT)==9:
                 M = np.reshape(dT,(3,3)).transpose()
-                
                 #cv2/scikit and numpy index differently
                 M[0,2], M[1,2] = M[1,2], M[0,2]
                 imreturn = cv2.warpAffine((img*2**16).astype('float64'), M[:2], img.shape[::-1])
@@ -965,8 +975,17 @@ class Metadata(object):
             return img
             
 
-    # Calculate jitter/drift corrections        
-    def CalculateDriftCorrection(self, Position=None,frames=None, ZsToLoad=[0], Channel='DeepBlue'):
+    # Calculate jitter/drift corrections   
+    def CalculateDriftCorrection(self, Position=None,frames=None, ZsToLoad=[0], Channel='DeepBlue',threads=8, GPU=True):
+        if GPU:
+            self.CalculateDriftCorrectionGPU(Position=Position,frames=frames, ZsToLoad=ZsToLoad, Channel=Channel)
+        else:
+            self.CalculateDriftCorrectionCPU(Position=Position,frames=frames, ZsToLoad=ZsToLoad, Channel=Channel,threads=8)
+
+
+    
+    
+    def CalculateDriftCorrectionCPU(self, Position=None,frames=None, ZsToLoad=[0], Channel='DeepBlue',threads=8):
         """
         Calculate image registration (jitter correction) parameters and add to metadata.
         
@@ -977,6 +996,7 @@ class Metadata(object):
         Channel : str, channel name to use for registration
             
         """
+        
         #from scipy.signal import fftconvolve
         if Position is None:
             Position = self.posnames
@@ -991,12 +1011,10 @@ class Metadata(object):
         assert Channel in self.channels, "%s isn't a channel, try %s" % (Channel, ', '.join(list(self.channels)))
         
         for pos in Position:
-            from pyfftw.interfaces.numpy_fft import fft2, ifft2
+            from pyfftw.interfaces.numpy_fft import fft2, ifft2            
 
-            
-
-            DataPre = self.stkread(Position=pos, Channel=Channel, Zindex=ZsToLoad, frame=frames)
-            print('\ncalculating drift correction for position ' + str(pos))
+            DataPre = self.stkread(Position=pos, Channel=Channel, Zindex=ZsToLoad, frame=frames, register=False)
+            print('\ncalculating drift correction for position ' + str(pos) + ' on CPU')
             DataPre = DataPre-np.mean(DataPre,axis=(1,2),keepdims=True)
 
             DataPost = DataPre[1:,:,:].transpose((1,2,0))
@@ -1009,9 +1027,9 @@ class Metadata(object):
             DataPost = np.rot90(DataPost,axes=(0, 1),k=2)
 
             # So because of dumb licensing issues, fftconvolve can't use fftw but the slower fftpack. Python is wonderful. So we'll do it all by hand like neanderthals 
-            img_fft_1 = fft2(DataPre,axes=(0,1),threads=32)
-            img_fft_2 = fft2(DataPost,axes=(0,1),threads=32)
-            imXcorr = np.abs(np.fft.ifftshift(ifft2(img_fft_1*img_fft_2,axes=(0,1),threads=32)))
+            img_fft_1 = fft2(DataPre,axes=(0,1),threads=threads)
+            img_fft_2 = fft2(DataPost,axes=(0,1),threads=threads)
+            imXcorr = np.abs(np.fft.ifftshift(ifft2(img_fft_1*img_fft_2,axes=(0,1),threads=threads),axes=(0,1)))
 
             #if more than 1 slice is calculated, look for mean shift
             imXcorrMeanZ = np.mean(imXcorr,axis=2)
@@ -1025,10 +1043,86 @@ class Metadata(object):
             if 'driftTform' not in self.image_table.columns:
                 self.image_table['driftTform']=None
 
-            for frame in frames:
+            for frmind, frame in enumerate(frames):
                 inds = self.unique(Attr='index',Position=pos, frame=frame)
                 for ind in inds:
-                    self.image_table.at[ind, 'driftTform']=[1, 0, 0 , 0, 1, 0 , D[frame,0], D[frame,1], 1]
+                    self.image_table.at[ind, 'driftTform']=[1, 0, 0 , 0, 1, 0 , D[frmind,0], D[frmind,1], 1]
             print('calculated drift correction for position ' + str(pos))
         self.pickle()
-    
+
+        
+    def CalculateDriftCorrectionGPU(self, Position=None,frames=None, ZsToLoad=[0], Channel='DeepBlue',threads=8):
+        """
+        Calculate image registration (jitter correction) parameters and add to metadata.
+        
+        Parameters
+        ----------
+        Position : str or list of strings
+        ZsToLoad : list of int - which Zs to load to calculate registration. If list, registration will be the average of the different zstack layers
+        Channel : str, channel name to use for registration
+            
+        """
+        from cupy.fft import fft2, ifft2
+        from cupy import _default_memory_pool, asarray
+        
+        #from scipy.signal import fftconvolve
+        if Position is None:
+            Position = self.posnames
+        elif type(Position) is not list:
+            Position = [Position]
+        
+        if frames is None:
+            frames = self.frames
+        elif type(frames) is not list:
+            frames = [frames]
+            
+        assert Channel in self.channels, "%s isn't a channel, try %s" % (Channel, ', '.join(list(self.channels)))
+        
+        for pos in Position:
+
+            DataPre = asarray(self.stkread(Position=pos, Channel=Channel, Zindex=ZsToLoad, frame=frames, register=False))
+            print('\ncalculating drift correction for position ' + str(pos)+ ' on GPU')
+            DataPre = DataPre-np.mean(DataPre,axis=(1,2),keepdims=True)
+
+            DataPost = DataPre[1:,:,:].transpose((1,2,0))
+            DataPre = DataPre[:-1,:,:].transpose((1,2,0))
+            #this is in prep for # Zs>1
+            DataPre = np.reshape(DataPre,(DataPre.shape[0],DataPre.shape[1],len(ZsToLoad), len(frames)-1));
+            DataPost = np.reshape(DataPost,(DataPost.shape[0],DataPost.shape[1],len(ZsToLoad), len(frames)-1));
+
+            #calculate cross correlation
+            DataPost = np.rot90(DataPost,axes=(0, 1),k=2)
+
+            # So because of dumb licensing issues, fftconvolve can't use fftw but the slower fftpack. Python is wonderful. So we'll do it all by hand like neanderthals 
+            img_fft_1 = fft2(DataPre,axes=(0,1))
+            del DataPre
+            _default_memory_pool.free_all_blocks()
+            img_fft_2 = fft2(DataPost,axes=(0,1))
+            del DataPost
+            _default_memory_pool.free_all_blocks()
+            imXcorr = np.abs(np.fft.ifftshift(ifft2(img_fft_1*img_fft_2,axes=(0,1)),axes=(0,1)))
+            del img_fft_1
+            _default_memory_pool.free_all_blocks()
+            del img_fft_2
+            _default_memory_pool.free_all_blocks()
+            #if more than 1 slice is calculated, look for mean shift
+            imXcorrMeanZ = np.mean(imXcorr,axis=2).get()
+            del imXcorr
+            c = []
+            for i in range(imXcorrMeanZ.shape[-1]):
+                c.append(np.squeeze(imXcorrMeanZ[:,:,i]).argmax())
+
+            _default_memory_pool.free_all_blocks()
+            
+            d = np.transpose(np.unravel_index(c, np.squeeze(imXcorrMeanZ[:,:,0]).shape))-np.array(np.squeeze(imXcorrMeanZ[:,:,0]).shape)/2 + 1 #python indexing starts at 0
+            D = np.insert(np.cumsum(d, axis=0), 0, [0,0], axis=0)
+            
+            if 'driftTform' not in self.image_table.columns:
+                self.image_table['driftTform']=None
+
+            for frmind, frame in enumerate(frames):
+                inds = self.unique(Attr='index',Position=pos, frame=frame)
+                for ind in inds:
+                    self.image_table.at[ind, 'driftTform']=[1, 0, 0 , 0, 1, 0 , D[frmind,0], D[frmind,1], 1]
+            print('calculated drift correction for position ' + str(pos))
+        self.pickle()

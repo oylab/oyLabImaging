@@ -356,7 +356,7 @@ class segmentation(object):
             seg_fun=segmentation._segment_nuccyto_cellpose
         return seg_fun
             
-    def _segment_nuclei_watershed(img, voronoi=None,cellsize=5, hThresh=0.001):
+    def _segment_nuclei_watershed(img, imgCyto=[], voronoi=None,cellsize=5, hThresh=0.001):
         from skimage import filters, measure
         from skimage.util import invert
         #from skimage.morphology import watershed  
@@ -412,7 +412,7 @@ class segmentation(object):
         L = measure.label(L);
         return L
     
-    def _segment_nuclei_cellpose(img, diameter=50, scale=0.5, GPU=True,**kwargs):
+    def _segment_nuclei_cellpose(img, imgCyto=[], diameter=50, scale=0.5, GPU=True,**kwargs):
         import logging
         logging.getLogger('cellpose').propagate=False
         import warnings
@@ -436,7 +436,7 @@ class segmentation(object):
  
         return L
 
-    def _segment_cytoplasm_cellpose(imgNuc, imgCyto, diameter=75, scale=0.5, GPU=True,**kwargs):
+    def _segment_cytoplasm_cellpose(img, imgCyto=[], diameter=30, scale=0.5, GPU=True,**kwargs):
         import logging
         logging.getLogger('cellpose').propagate=False
         import warnings
@@ -449,18 +449,18 @@ class segmentation(object):
 
         model = models.Cellpose(gpu=GPU, model_type='cyto')
         
-        imgNucCyto = rescale(np.concatenate((np.expand_dims(imgNuc,2), np.expand_dims(imgCyto,2)), axis=2),(scale, scale, 1))
+        imgNucCyto = rescale(np.concatenate((np.expand_dims(img,2), np.expand_dims(imgCyto,2)), axis=2),(scale, scale, 1))
         
         masks, _, _, _ = model.eval([imgNucCyto], diameter=diameter, channels=[[2,1]],**kwargs) 
 
-        dim = (imgNuc.shape[1], imgNuc.shape[0])
+        dim = (img.shape[1], img.shape[0])
         # resize masks to original image size using nearest neighbor interpolation to preserve masks 
         return resize(masks[0], dim, interpolation = INTER_NEAREST)
     
     
-    def _segment_nuccyto_cellpose(imgNuc, imgCyto, diameter_nuc=50,diameter_cyto=75, scale=0.5,GPU=True,**kwargs):
-        Lnuc = segmentation._segment_nuclei_cellpose(imgNuc, diameter=diameter_nuc, scale=scale, gpu=GPU,**kwargs)
-        Lcyto = segmentation._segment_cytoplasm_cellpose(imgNuc, imgCyto, diameter=diameter_cyto, scale=scale, gpu=GPU,**kwargs)
+    def _segment_nuccyto_cellpose(img, imgCyto=[], diameter_nuc=20,diameter_cyto=30, scale=0.5,GPU=True,**kwargs):
+        Lnuc = segmentation._segment_nuclei_cellpose(img, diameter=diameter_nuc, scale=scale, GPU=GPU,**kwargs)
+        Lcyto = segmentation._segment_cytoplasm_cellpose(img, imgCyto, diameter=diameter_cyto, scale=scale, GPU=GPU,**kwargs)
         
         Lcyto_new = np.zeros_like(Lcyto)
 
@@ -476,7 +476,7 @@ class segmentation(object):
         return Lnuc, Lcyto_new
     
     
-    def test_segmentation_params(img,segfun=None, segment_type='watershed',**kwargs):
+    def test_segmentation_params(img,imgCyto=[],  segfun=None, segment_type='watershed',**kwargs):
         import numpy as np
         import matplotlib.pyplot as plt
         import ipywidgets as widgets
@@ -492,12 +492,13 @@ class segmentation(object):
             img = np.squeeze(img[0,:,:])
 
         nargs = segfun.__code__.co_argcount
-        args = [segfun.__code__.co_varnames[i] for i in range(1, nargs)]
         defaults = list(segfun.__defaults__)
-        input_dict = {args[i]: defaults[i] for i in range(0, nargs-1)} 
+        #ndefault = len(defaults)
+        nimgs = 2#nargs-ndefault
+        args = [segfun.__code__.co_varnames[i] for i in range(nimgs, nargs)]
+        input_dict = {args[i]: defaults[i+1] for i in range(len(args))} 
         input_dict = {**input_dict, **kwargs}
-        
-        L = segfun(img, **input_dict)
+        L = segfun(img,imgCyto, **input_dict)
 
         fig, ax = plt.subplots()
         fig.subplots_adjust(bottom=0.1)
@@ -505,6 +506,7 @@ class segmentation(object):
         ax.imshow(img, cmap='gray',vmin=np.percentile(img, 10), vmax=np.percentile(img, 99))
         cmap = ListedColormap( np.random.rand (256,3))
         cmap.colors[0,:]=[0,0,0]
+        
         l=ax.imshow(L, alpha=0.5, cmap=cmap)
 
         def clean_dict(d):
@@ -522,9 +524,13 @@ class segmentation(object):
             #new_input_dict = {args[i]: eval('text_box_' + str(i)+ '.value') for i in range(0, nargs-1)}
             new_input_dict = {tblist[i].description: tblist[i].value for i in range(0, len(tblist))} 
             new_input_dict = clean_dict(new_input_dict)
-            L = segfun(img,**new_input_dict)
+            L = segfun(img,imgCyto, **new_input_dict)
             l.set_data(L)
-            l.set_alpha=0.5
+            l.set_alpha(0.5)
+            cmap = ListedColormap( np.random.rand (256,3))
+            cmap.colors[0,:]=[0,0,0]
+            l.set_cmap(cmap)
+            l.set_clim([0,np.max(L)])
             plt.draw()
             plt.show()
             print('Done!')
