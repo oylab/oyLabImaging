@@ -162,6 +162,10 @@ class PosLbl(object):
         return np.array([r.area for r in self.framelabels])
     
     @property
+    def index(self):
+        return np.array([r.index for r in self.framelabels])
+   
+    @property
     def centroid_um(self):
         return np.array([r.centroid_um for r in self.framelabels])
     
@@ -262,6 +266,7 @@ class PosLbl(object):
         @property
         def area(self):
             return self.prop('area')
+        
         @property
         def area_um2(self):
             return self.prop('area')*(self._outer.PixelSize**2)
@@ -559,8 +564,8 @@ class PosLbl(object):
                 trackbits[fa[i]][np.arange(sf,ef)]=None
 
                 #add nans in gaps
-                eef = trackends[i]+1
-                trackbits[i][np.arange(eef,sf)]=np.nan
+                #eef = trackends[i]+1
+                #trackbits[i][np.arange(eef,sf)]=np.nan
 
             #remove lines that are all Nones
             trackbits = trackbits[[any(~np.isnan(r.astype('float'))) for r in trackbits]]
@@ -748,7 +753,7 @@ class PosLbl(object):
             if not (isinstance(J, list) or isinstance(J, np.ndarray)):
                 J = [J]
             J = [j for j in J if j in np.arange(t0().numtracks)]      
-        return self._trackmatrix[np.in1d(self._trackmatrix[:,0], J)]
+        return self._trackmatrix[np.in1d(self._trackmatrix[:,0], J)], J
     
     
 
@@ -788,9 +793,13 @@ class PosLbl(object):
         
         from oyLabImaging.Processing.imvisutils import get_or_create_viewer
         viewer = get_or_create_viewer() 
-        trackmat = self._tracksmat(J=J)
-        tracklayer = viewer.add_tracks(trackmat,blending='additive', scale=[self.PixelSize, self.PixelSize])
+        trackmat, J = self._tracksmat(J=J)
+        inds_to_include = self.trackinds[J]!=None
+        track_props = {'cell_id' :list(zip(np.where(inds_to_include)[1], self.trackinds[J][np.where(inds_to_include)]))}
+        
+        tracklayer = viewer.add_tracks(trackmat,blending='additive', scale=[self.PixelSize, self.PixelSize],properties=track_props)
         tracklayer.display_id=True
+        return tracklayer
         
         
     def plot_points(self, Channel='DeepBlue', periring=False,colormap='plasma' ,func=lambda x : x,**kwargs):
@@ -815,8 +824,9 @@ class PosLbl(object):
             pointsmat = self._pointmatrix
             
         
-        point_props = {'mean' : func(np.concatenate(self.mean(Channel,periring=periring)))}
-        viewer.add_points(pointsmat,properties=point_props, face_color='mean',edge_width=0, face_colormap=colormap,  size=20,blending='translucent', scale=[1, self.PixelSize, self.PixelSize])
+        point_props = {'mean' : func(np.concatenate(self.mean(Channel,periring=periring))), 'ind' : np.concatenate(self.index)}
+        pointlayer = viewer.add_points(pointsmat,properties=point_props, text='ind', face_color='mean',edge_width=0, face_colormap=colormap,  size=20,blending='translucent', scale=[1, self.PixelSize, self.PixelSize])
+        return pointlayer
         
     
     

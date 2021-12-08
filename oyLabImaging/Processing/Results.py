@@ -186,7 +186,8 @@ class results(object):
         """
 
         assert pos in self.PosLbls.keys(), str(pos) +' not segmented yet'
-        self.PosLbls[pos].plot_tracks(J=J,**kwargs)
+        tracks = self.PosLbls[pos].plot_tracks(J=J,**kwargs)
+        return tracks
     
 
     def show_points(self, pos, J=None,Channel=None,**kwargs):
@@ -206,7 +207,8 @@ class results(object):
             Channel = self.channels[0]
             print('showing channel '+ str(Channel))
         assert pos in self.PosLbls.keys(), str(pos) +' not segmented yet'
-        self.PosLbls[pos].plot_points(Channel=Channel,**kwargs)
+        points = self.PosLbls[pos].plot_points(Channel=Channel,**kwargs)
+        return points
     
     def show_images(self, pos,Channel=None,**kwargs):
         """

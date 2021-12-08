@@ -6,6 +6,7 @@ channels:
   - pytorch
   - defaults
 dependencies:
+  - python=3.8
   - pip
   - scipy
   - tifffile
@@ -20,9 +21,10 @@ dependencies:
   - dill
   - cmake
   - nd2reader
-  - napari
+  - napari=0.4.11
   - pyfftw
   - h5py
+  - cupy
   - pip:
     - cellpose
     - lap

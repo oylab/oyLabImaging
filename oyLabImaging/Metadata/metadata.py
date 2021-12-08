@@ -978,7 +978,11 @@ class Metadata(object):
     # Calculate jitter/drift corrections   
     def CalculateDriftCorrection(self, Position=None,frames=None, ZsToLoad=[0], Channel='DeepBlue',threads=8, GPU=True):
         if GPU:
-            self.CalculateDriftCorrectionGPU(Position=Position,frames=frames, ZsToLoad=ZsToLoad, Channel=Channel)
+            try:
+                self.CalculateDriftCorrectionGPU(Position=Position,frames=frames, ZsToLoad=ZsToLoad, Channel=Channel)
+            except:
+                print('No GPU or no CuPy. If you have a GPU, try installing CuPy')
+                self.CalculateDriftCorrectionCPU(Position=Position,frames=frames, ZsToLoad=ZsToLoad, Channel=Channel,threads=8)
         else:
             self.CalculateDriftCorrectionCPU(Position=Position,frames=frames, ZsToLoad=ZsToLoad, Channel=Channel,threads=8)
 

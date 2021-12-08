@@ -222,6 +222,10 @@ class FrameLbl(object):
         return self.regionprops['area']
     
     @property
+    def index(self):
+        return [i for i,r in enumerate(self.area)]
+    
+    @property
     def centroid_um(self):     
         return self.XY + self._pixelsize*self.centroid
       
