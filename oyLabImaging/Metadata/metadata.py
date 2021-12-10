@@ -3,6 +3,7 @@
 # AOY
 
 from os import walk, listdir, path
+import os
 from os.path import join, isdir
 import sys
 
@@ -263,6 +264,7 @@ class Metadata(object):
         str - MD type
         """
         from os import path, walk
+        import os
         fname, fext = path.splitext(pth)
         if path.isdir(pth):
             for subdir, curdir, filez in walk(pth):
@@ -285,8 +287,8 @@ class Metadata(object):
                         print('Manual loading from tiffs')
                         return 'TIFFS'
         else:
-            fname, fext = path.splitext(str.split(pth,'/')[-1])
-            if str.split(pth,'/')[-1]=='metadata.pickle':
+            fname, fext = path.splitext(str.split(pth,os.path.sep)[-1])
+            if str.split(pth,os.path.sep)[-1]=='metadata.pickle':
                 return 'PICKLE'
             if fext=='.nd2':
                 return 'ND2'
@@ -309,6 +311,7 @@ class Metadata(object):
         """
         
         from os import path, walk
+        import os
         fname, fext = path.splitext(pth)
         if path.isdir(pth):
             for subdir, curdir, filez in walk(pth):
@@ -324,16 +327,16 @@ class Metadata(object):
                         if fname=='Metadata':
                             return f
         else:
-            fname, fext = path.splitext(str.split(pth,'/')[-1])
-            if str.split(pth,'/')[-1]=='metadata.pickle':
-                return str.split(pth,'/')[-1]
+            fname, fext = path.splitext(str.split(pth,os.path.sep)[-1])
+            if str.split(pth,os.path.sep)[-1]=='metadata.pickle':
+                return str.split(pth,os.path.sep)[-1]
             if fext=='.nd2':
-                return str.split(pth,'/')[-1]
+                return str.split(pth,os.path.sep)[-1]
             if fext=='.txt':
                 if fname=='metadata':
-                    return str.split(pth,'/')[-1]
+                    return str.split(pth,os.path.sep)[-1]
                 if fname=='Metadata':
-                    return str.split(pth,'/')[-1]     
+                    return str.split(pth,os.path.sep)[-1]     
         return None
  
 
@@ -402,7 +405,7 @@ class Metadata(object):
                 framedata={'acq':acq,'Position':pos,'frame':frame,'Channel':chan,'XY':list(xy), 'Z':z, 'Zindex':zind,'Exposure':exptime,'PixelSize':pixsize,'TimestampFrame':imgs.timesteps[fps],'TimestampImage':imgs.timesteps[fps],'filename':acq}
                 image_table = image_table.append(framedata, sort=False,ignore_index=True)
             image_table['root_pth'] = image_table.filename
-            image_table.filename = [join(pth, f.split('/')[-1]) for f in image_table.filename]
+            image_table.filename = [join(pth, f.split(os.path.sep)[-1]) for f in image_table.filename]
             return image_table
     
 
@@ -440,7 +443,7 @@ class Metadata(object):
         image_table['root_pth'] = image_table.filename
         
         
-        image_table.filename = [join(pth, f.split('/')[-1]) for f in image_table.filename]
+        image_table.filename = [join(pth, f.split(os.path.sep)[-1]) for f in image_table.filename]
         return image_table
     
     
@@ -453,7 +456,7 @@ class Metadata(object):
         """
         image_table = pd.read_csv(join(pth, fname), delimiter=delimiter)
         image_table['root_pth'] = image_table.filename
-        image_table.filename = [join(pth, f.split('/')[-1]) for f in image_table.filename]
+        image_table.filename = [join(pth, f.split(os.path.sep)[-1]) for f in image_table.filename]
         return image_table
     
     #functions for generic TIF loading!
@@ -657,7 +660,7 @@ class Metadata(object):
                     #todo : convert numerical strings to numbers
 
 
-        image_table.filename = [join(pth, f.split('/')[-1]) for f in image_table.filename]
+        image_table.filename = [join(pth, f.split(os.path.sep)[-1]) for f in image_table.filename]
         self.image_table = image_table
         
         
@@ -903,7 +906,7 @@ class Metadata(object):
                 # Best performance has most frequently indexed dimension first 
                 images_dict[key] = np.array(imgs) / 2**16  
                 if verbose:
-                    print('\nLoaded {0} group of images.'.format(key))
+                    print('\nLoaded group {0} of images.'.format(key))
 
             return images_dict
 
@@ -976,13 +979,17 @@ class Metadata(object):
             
 
     # Calculate jitter/drift corrections   
-    def CalculateDriftCorrection(self, Position=None,frames=None, ZsToLoad=[0], Channel='DeepBlue',threads=8, GPU=True):
+    def CalculateDriftCorrection(self, Position=None,frames=None, ZsToLoad=[0], Channel='DeepBlue',threads=8,chunks=20, GPU=True):
         if GPU:
             try:
-                self.CalculateDriftCorrectionGPU(Position=Position,frames=frames, ZsToLoad=ZsToLoad, Channel=Channel)
-            except:
+#                 self.CalculateDriftCorrectionGPU(Position=Position,frames=frames, ZsToLoad=ZsToLoad, Channel=Channel)
+#             except:
+                print('Trying GPU calculation in chunks of '+ str(chunks))
+                self.CalculateDriftCorrectionGPUChunks(Position=Position,frames=frames, ZsToLoad=ZsToLoad, Channel=Channel,chunks=chunks)
+            finally:
                 print('No GPU or no CuPy. If you have a GPU, try installing CuPy')
-                self.CalculateDriftCorrectionCPU(Position=Position,frames=frames, ZsToLoad=ZsToLoad, Channel=Channel,threads=8)
+                self.CalculateDriftCorrectionCPU(Position=Position,frames=frames, ZsToLoad=ZsToLoad, Channel=Channel,threads=threads)
+
         else:
             self.CalculateDriftCorrectionCPU(Position=Position,frames=frames, ZsToLoad=ZsToLoad, Channel=Channel,threads=8)
 
@@ -1086,16 +1093,21 @@ class Metadata(object):
 
             DataPre = asarray(self.stkread(Position=pos, Channel=Channel, Zindex=ZsToLoad, frame=frames, register=False))
             print('\ncalculating drift correction for position ' + str(pos)+ ' on GPU')
+            DataPre = self.stkread(Position=pos, Channel=Channel, Zindex=ZsToLoad, frame=fr, register=False)               
             DataPre = DataPre-np.mean(DataPre,axis=(1,2),keepdims=True)
 
             DataPost = DataPre[1:,:,:].transpose((1,2,0))
             DataPre = DataPre[:-1,:,:].transpose((1,2,0))
             #this is in prep for # Zs>1
-            DataPre = np.reshape(DataPre,(DataPre.shape[0],DataPre.shape[1],len(ZsToLoad), len(frames)-1));
-            DataPost = np.reshape(DataPost,(DataPost.shape[0],DataPost.shape[1],len(ZsToLoad), len(frames)-1));
+            DataPre = np.reshape(DataPre,(DataPre.shape[0],DataPre.shape[1],len(ZsToLoad), len(fr)-1));
+            DataPost = np.reshape(DataPost,(DataPost.shape[0],DataPost.shape[1],len(ZsToLoad), len(fr)-1));
 
             #calculate cross correlation
             DataPost = np.rot90(DataPost,axes=(0, 1),k=2)
+
+
+            DataPre = asarray(DataPre)
+            DataPost = asarray(DataPost)
 
             # So because of dumb licensing issues, fftconvolve can't use fftw but the slower fftpack. Python is wonderful. So we'll do it all by hand like neanderthals 
             img_fft_1 = fft2(DataPre,axes=(0,1))
@@ -1130,3 +1142,92 @@ class Metadata(object):
                     self.image_table.at[ind, 'driftTform']=[1, 0, 0 , 0, 1, 0 , D[frmind,0], D[frmind,1], 1]
             print('calculated drift correction for position ' + str(pos))
         self.pickle()
+
+    def CalculateDriftCorrectionGPUChunks(self, Position=None,frames=None, ZsToLoad=[0], Channel='DeepBlue',chunks=10):
+        """
+        Calculate image registration (jitter correction) parameters and add to metadata.
+        
+        Parameters
+        ----------
+        Position : str or list of strings
+        ZsToLoad : list of int - which Zs to load to calculate registration. If list, registration will be the average of the different zstack layers
+        Channel : str, channel name to use for registration
+            
+        """
+        from cupy.fft import fft2, ifft2
+        from cupy import get_default_memory_pool, asarray
+        mempool = get_default_memory_pool()
+        #from scipy.signal import fftconvolve
+        if Position is None:
+            Position = self.posnames
+        elif type(Position) is not list:
+            Position = [Position]
+        
+        if frames is None:
+            frames = self.frames
+        elif type(frames) is not list:
+            frames = [frames]
+            
+        assert Channel in self.channels, "%s isn't a channel, try %s" % (Channel, ', '.join(list(self.channels)))
+        
+        def chunker_with_overlap(seq, size):
+            return (seq[np.max((0,pos-1)):pos + size] for pos in range(0, len(seq), size))
+
+        for pos in Position:
+            ds = np.empty((0, 2), float)
+            print('\ncalculating drift correction for position ' + str(pos)+ ' on GPU')
+            for fr in chunker_with_overlap(frames,chunks):
+                DataPre = self.stkread(Position=pos, Channel=Channel, Zindex=ZsToLoad, frame=fr, register=False)               
+                DataPre = DataPre-np.mean(DataPre,axis=(1,2),keepdims=True)
+
+                DataPost = DataPre[1:,:,:].transpose((1,2,0))
+                DataPre = DataPre[:-1,:,:].transpose((1,2,0))
+                #this is in prep for # Zs>1
+                DataPre = np.reshape(DataPre,(DataPre.shape[0],DataPre.shape[1],len(ZsToLoad), len(fr)-1));
+                DataPost = np.reshape(DataPost,(DataPost.shape[0],DataPost.shape[1],len(ZsToLoad), len(fr)-1));
+
+                #calculate cross correlation
+                DataPost = np.rot90(DataPost,axes=(0, 1),k=2)
+
+                
+                DataPre = asarray(DataPre)
+                DataPost = asarray(DataPost)
+
+                
+                # So because of dumb licensing issues, fftconvolve can't use fftw but the slower fftpack. Python is wonderful. So we'll do it all by hand like neanderthals 
+                img_fft_1 = fft2(DataPre,axes=(0,1))
+                del DataPre
+                mempool.free_all_blocks()
+                img_fft_2 = fft2(DataPost,axes=(0,1))
+                del DataPost
+                mempool.free_all_blocks()
+                SF = img_fft_1*img_fft_2
+                del img_fft_1
+                del img_fft_2
+                mempool.free_all_blocks()
+                imXcorr = np.abs(np.fft.ifftshift(ifft2(SF,axes=(0,1)),axes=(0,1)))
+                del SF
+                mempool.free_all_blocks()
+                #if more than 1 slice is calculated, look for mean shift
+                imXcorrMeanZ = np.mean(imXcorr,axis=2).get()
+                del imXcorr
+                mempool.free_all_blocks()
+                c = []
+                for i in range(imXcorrMeanZ.shape[-1]):
+                    c.append(np.squeeze(imXcorrMeanZ[:,:,i]).argmax())
+                
+                mempool.free_all_blocks()
+
+                d = np.transpose(np.unravel_index(c, np.squeeze(imXcorrMeanZ[:,:,0]).shape))-np.array(np.squeeze(imXcorrMeanZ[:,:,0]).shape)/2 + 1 #python indexing starts at 0
+                del imXcorrMeanZ
+                ds = np.concatenate((ds,d))
+            D = np.insert(np.cumsum(ds, axis=0), 0, [0,0], axis=0)
+        
+            if 'driftTform' not in self.image_table.columns:
+                self.image_table['driftTform']=None
+
+            for frmind, frame in enumerate(frames):
+                inds = self.unique(Attr='index',Position=pos, frame=frame)
+                for ind in inds:
+                    self.image_table.at[ind, 'driftTform']=[1, 0, 0 , 0, 1, 0 , D[frmind,0], D[frmind,1], 1]
+            print('calculated drift correction for position ' + str(pos))
