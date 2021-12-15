@@ -137,8 +137,9 @@ class FrameLbl(object):
         props_df = regionprops_to_df(props)
         props_df.drop(['mean_intensity', 'max_intensity', 'min_intensity'], axis=1,inplace=True)
         if zernike:
-            L1 = [list(Zernike.coeff(stats.zscore(r.intensity_image)))[1] for r in props]
-            K1 = [list(Zernike.coeff(stats.zscore(r.intensity_image)))[2] for r in props]  
+            
+            L1 = [list(Zernike.coeff_fast(stats.zscore(r.intensity_image)))[1] for r in props]
+            K1 = [list(Zernike.coeff_fast(stats.zscore(r.intensity_image)))[2] for r in props]  
             props_df['L'] = L1
             props_df['K'] = K1
                 
@@ -157,7 +158,7 @@ class FrameLbl(object):
             props_df['median_'+ch] = median_channel
             
             if zernike:
-                c1 = [list(Zernike.coeff(stats.zscore(r.intensity_image)))[0] for r in props_channel]  
+                c1 = [list(Zernike.coeff_fast(stats.zscore(r.intensity_image)))[0] for r in props_channel]  
                 props_df['zernike_'+ch] = c1            
         
         

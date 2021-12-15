@@ -1024,7 +1024,7 @@ class Metadata(object):
         for pos in Position:
             from pyfftw.interfaces.numpy_fft import fft2, ifft2            
 
-            DataPre = self.stkread(Position=pos, Channel=Channel, Zindex=ZsToLoad, frame=frames, register=False)
+            DataPre = self.stkread(Position=pos, Channel=Channel, Zindex=ZsToLoad, frame=frames, register=False, verbose=False)
             print('\ncalculating drift correction for position ' + str(pos) + ' on CPU')
             DataPre = DataPre-np.mean(DataPre,axis=(1,2),keepdims=True)
 
@@ -1091,7 +1091,7 @@ class Metadata(object):
         
         for pos in Position:
 
-            DataPre = asarray(self.stkread(Position=pos, Channel=Channel, Zindex=ZsToLoad, frame=frames, register=False))
+            DataPre = asarray(self.stkread(Position=pos, Channel=Channel, Zindex=ZsToLoad, frame=frames, register=False,verbose=False))
             print('\ncalculating drift correction for position ' + str(pos)+ ' on GPU')
             DataPre = self.stkread(Position=pos, Channel=Channel, Zindex=ZsToLoad, frame=fr, register=False)               
             DataPre = DataPre-np.mean(DataPre,axis=(1,2),keepdims=True)
@@ -1177,7 +1177,7 @@ class Metadata(object):
             ds = np.empty((0, 2), float)
             print('\ncalculating drift correction for position ' + str(pos)+ ' on GPU')
             for fr in chunker_with_overlap(frames,chunks):
-                DataPre = self.stkread(Position=pos, Channel=Channel, Zindex=ZsToLoad, frame=fr, register=False)               
+                DataPre = self.stkread(Position=pos, Channel=Channel, Zindex=ZsToLoad, frame=fr, register=False,verbose=False)               
                 DataPre = DataPre-np.mean(DataPre,axis=(1,2),keepdims=True)
 
                 DataPost = DataPre[1:,:,:].transpose((1,2,0))
@@ -1231,3 +1231,4 @@ class Metadata(object):
                 for ind in inds:
                     self.image_table.at[ind, 'driftTform']=[1, 0, 0 , 0, 1, 0 , D[frmind,0], D[frmind,1], 1]
             print('calculated drift correction for position ' + str(pos))
+        self.pickle()

@@ -10,12 +10,18 @@ import numpy as np
 from skimage import measure
 from oyLabImaging import Metadata
 import torch.multiprocessing as mp #import Pool, set_start_method
+mp.set_start_method('spawn',force=True)
 from functools import partial
 from oyLabImaging.Processing import FrameLbl
 from scipy.spatial import KDTree
 import lap
 from tqdm import tqdm
+# import threading
 
+# def threaded(fn):
+#     def wrapper(*args, **kwargs):
+#         threading.Thread(target=fn, args=args, kwargs=kwargs).start()
+#     return wrapper
 
 class PosLbl(object):
     """
@@ -116,7 +122,6 @@ class PosLbl(object):
         #self.PixelSize = MD.unique('PixelSize')[0]
         
         # Create all framelabels for the different TPs. This will segment and measure stuff. 
-          
 
         with mp.Pool(threads) as ppool:
             frames = list(tqdm(ppool.imap(partial(FrameLbl, MD = MD, pth = pth, Pos=Pos, NucChannel=NucChannel,register=self._registerflag, **kwargs), self.frames), total=len(self.frames)))
@@ -325,7 +330,6 @@ class PosLbl(object):
 
     
     
-    
     def trackcells(self, split=True, **kwargs):
         '''
         all tracking is done using the Jonker Volgenant lap algorithm:
@@ -405,14 +409,15 @@ class PosLbl(object):
 
                         #ii jj cc are now sparse matrix in COO format
             ampRatio=1
+            eps = 10**-16
             for cp, wp in zip(Cp, Wp):
                 ints = self.ninetyint(cp)
-                ampRatio = ampRatio + wp*(np.array(np.maximum(list(ints[i][ii]), list(ints[i+1][jj])))/np.array(np.minimum(list(ints[i][ii]), list(ints[i+1][jj])))-1)
+                ampRatio = ampRatio + wp*(np.array(np.maximum(list(ints[i][ii]), list(ints[i+1][jj])))/np.array(eps+np.minimum(list(ints[i][ii]), list(ints[i+1][jj])))-1)
 
 
             #costs of match
             cc = np.concatenate(dists)*ampRatio
-
+            cc[cc>1000000]=999999
 
             shape = (nums[i], nums[i+1])
 

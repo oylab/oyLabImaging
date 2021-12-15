@@ -5,8 +5,8 @@ Created on Thu Jul 21 15:46:30 2016
 @author: Alonyan
 """
 import numpy as np
+import os
 import scipy.io as sio
-
       
 def periodic_smooth_decomp(I: np.ndarray) -> (np.ndarray, np.ndarray):
     '''Performs periodic-smooth image decomposition
@@ -417,13 +417,15 @@ class segmentation(object):
         logging.getLogger('cellpose').propagate=False
         import warnings
         warnings.filterwarnings("ignore")
-        from cellpose import models, io
+        
+        from cellpose import models
         from cv2 import resize, INTER_NEAREST, INTER_AREA
         from numpy import squeeze
         from skimage.transform import rescale
+        import cv2
+        cv2.setNumThreads(1)
         
-        
-        model = models.Cellpose(gpu=GPU, model_type='nuclei')
+        model = models.Cellpose(gpu=GPU, model_type='nuclei',torch=GPU)
         img = np.squeeze(img)
         assert(img.ndim==2), "_segment_nuclei_cellpose accepts 2D images" 
    
@@ -437,17 +439,22 @@ class segmentation(object):
         return L
 
     def _segment_cytoplasm_cellpose(img, imgCyto=[], diameter=30, scale=0.5, GPU=True,**kwargs):
+
         import logging
         logging.getLogger('cellpose').propagate=False
         import warnings
         warnings.filterwarnings("ignore")
         
-        from cellpose import models, io
+        from cellpose import models
+        
+        
         from cv2 import resize, INTER_NEAREST, INTER_AREA
         from numpy import squeeze
         from skimage.transform import rescale
-
-        model = models.Cellpose(gpu=GPU, model_type='cyto')
+        import cv2
+        cv2.setNumThreads(1)
+        
+        model = models.Cellpose(gpu=GPU, model_type='cyto',torch=GPU)
         
         imgNucCyto = rescale(np.concatenate((np.expand_dims(img,2), np.expand_dims(imgCyto,2)), axis=2),(scale, scale, 1))
         
@@ -455,6 +462,7 @@ class segmentation(object):
 
         dim = (img.shape[1], img.shape[0])
         # resize masks to original image size using nearest neighbor interpolation to preserve masks 
+        
         return resize(masks[0], dim, interpolation = INTER_NEAREST)
     
     
@@ -548,7 +556,13 @@ class segmentation(object):
         return box
 
     
-    
+def squarify(M,val=np.nan):
+    (a,b)=M.shape
+    if a>b:
+        padding=((0,0),(int(np.floor((a-b)/2)),int(np.ceil((a-b)/2))))
+    else:
+        padding=((int(np.floor((b-a)/2)),int(np.ceil((b-a)/2))),(0,0))
+    return np.pad(M,padding,mode='constant',constant_values=val)    
     
 class Zernike(object):    
     def coeff(img, n=8):
@@ -561,6 +575,14 @@ class Zernike(object):
         cart.make_cart_grid(xv, yv)
 
         c1 = cart.fit_cart_grid(img)[0] 
+        return c1, L, K
+    
+    def coeff_fast(img, n=8): #this is a faster implementation of zernike taken from the poppy package
+        from oyLabImaging.Processing.improcutils import squarify
+        from poppy.zernike import decompose_opd_nonorthonormal_basis
+        L, K = img.shape
+        img=squarify(img)
+        c1 = decompose_opd_nonorthonormal_basis(img,aperture=~np.isnan(img), nterms=int((n+1)*(n+2)/2),iterations=1) 
         return c1, L, K
 
     def reconstruct(c1,L,K,n=8):
@@ -614,3 +636,9 @@ def gaussian_filter(p, sigma=10):
     kernel = np.exp(-(sigma*sigma*(f**2))/(2*(2*np.pi**2)**2))
     img_smooth = np.real(np.fft.ifft2(np.fft.ifftshift(img_fft*kernel)))
     return img_smooth
+
+
+
+
+
+

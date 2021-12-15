@@ -133,7 +133,9 @@ class results(object):
         pos = pos if isinstance(pos, list) else [pos]
         assert any(elem in self.PosLbls.keys()  for elem in pos), str(pos) + ' not segmented yet'
         for p in pos:
+            print('Calculating tracks for position ' + str(p))
             self.PosLbls[p].trackcells(NucChannel=NucChannel,**kwargs)
+        
         self.save()
             
     def tracks(self, pos):
