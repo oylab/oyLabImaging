@@ -318,6 +318,8 @@ class PosLbl(object):
                 cmaps = ['gray']
             
             from oyLabImaging.Processing.imvisutils import get_or_create_viewer
+            from oyLabImaging.Processing.improcutils import sample_stack
+
             viewer = get_or_create_viewer() 
             viewer.scale_bar.unit = "um"
             crp = np.ceil(np.concatenate((self.centroid-boxsize, self.centroid+boxsize),axis=1 )).astype(int)
@@ -326,7 +328,8 @@ class PosLbl(object):
                 imgs = self._outer.img(ch, frame=list(self.T),verbose=False)
          
                 stk = np.array([np.pad(im1, boxsize)[crp1[0]+boxsize:crp1[2]+boxsize, crp1[1]+boxsize:crp1[3]+boxsize] for im1, crp1 in zip(imgs, crp)])
-                viewer.add_image(stk,blending='additive', contrast_limits=[np.percentile(stk.flatten(),1),np.percentile(stk.flatten(),99.9)],name=ch, colormap=cmaps[ind%len(cmaps)],scale=[self._outer.PixelSize, self._outer.PixelSize])
+                stksmp = sample_stack(stk,int(stk.size/100))
+                viewer.add_image(stk,blending='additive', contrast_limits=[np.percentile(stksmp,1),np.percentile(stksmp,99.9)],name=ch, colormap=cmaps[ind%len(cmaps)],scale=[self._outer.PixelSize, self._outer.PixelSize])
 
     
     
@@ -619,16 +622,26 @@ class PosLbl(object):
             trackstarts = np.array([np.where(~np.isnan(r.astype('float')))[0][0] for r in trackbits])
             trackends = np.array([np.where(~np.isnan(r.astype('float')))[0] for r in trackbits])
 
-            dtmat = np.expand_dims(trackstarts,1)-np.expand_dims(trackends,0)
-            dt1array = np.zeros_like(dtmat)
-            for (x, y), element in np.ndenumerate(dtmat):
-                try:
-                    dt1array[x,y] = np.nonzero(element==1)[0][0]
-                except:
-                    dt1array[x,y] = None
+#             dtmat = np.expand_dims(trackstarts,1)-np.expand_dims(trackends,0)
+#             dt1array = np.zeros_like(dtmat)
+#             for (x, y), element in np.ndenumerate(dtmat):
+#                 try:
+#                     dt1array[x,y] = np.nonzero(element==1)[0][0]
+#                 except:
+#                     dt1array[x,y] = None
 
-            possiblelinks = np.transpose(np.where(dt1array!=None))   
-
+#             possiblelinks = np.transpose(np.where(dt1array!=None))   
+            
+            possiblelinks = np.empty((0, 2), int)
+            for J in np.unique(trackstarts):
+                link_a = np.where(trackstarts==J)
+                link_b = np.where(list(map(lambda x: np.any(x==J-1), trackends)))
+                if np.any(link_a):
+                    f = lambda x: np.pad(link_b,((1,0),(0,0)), constant_values=x)
+                    d = np.transpose(np.hstack(list(map(f, link_a[0]))))
+                    possiblelinks = np.concatenate((possiblelinks,d))
+     
+            
             ii = []
             jj = []
             cc = []
@@ -644,12 +657,10 @@ class PosLbl(object):
                 
                 dr = np.linalg.norm(cents[frame1][ind1]-cents[frame2][ind2])
 
-                
-                da=1
-                for cp, wp in zip(Cp, Wp):
-                    da = da + wp*(np.maximum(ints[cp][frame1][ind1], ints[cp][frame2][ind2])/np.minimum(ints[cp][frame1][ind1], ints[cp][frame2][ind2])-1)
-
                 if dr <= search_radius:
+                    da=1
+                    for cp, wp in zip(Cp, Wp):
+                        da = da + wp*(np.maximum(ints[cp][frame1][ind1], ints[cp][frame2][ind2])/np.minimum(ints[cp][frame1][ind1], ints[cp][frame2][ind2])-1)
                     if da<=maxAmpRatio:
                         ii.append(possiblelinks[i][1])
                         jj.append(possiblelinks[i][0])
@@ -762,7 +773,7 @@ class PosLbl(object):
     
     
 
-    def plot_images(self, Channel='DeepBlue',Zindex=[0], cmaps = ['red', 'green', 'blue', 'cyan', 'magenta', 'yellow'], **kwargs):    
+    def plot_images(self, Channel='DeepBlue',Zindex=[0], frames=None, cmaps = ['red', 'green', 'blue', 'cyan', 'magenta', 'yellow'], **kwargs):    
         """
         Parameters
         ----------
@@ -773,15 +784,19 @@ class PosLbl(object):
         """
         if len(Channel)==1:
                 cmaps = ['gray']
+        if frames==None:
+            frames = self.frames
                 
         from oyLabImaging.Processing.imvisutils import get_or_create_viewer
+        from oyLabImaging.Processing.improcutils import sample_stack
         viewer = get_or_create_viewer() 
         viewer.scale_bar.unit = "um"
         viewer.scale_bar.font_size=16
         
         for ind, ch in enumerate(Channel):
-            stk = self.img(Channel=ch,verbose=False,Zindex=Zindex , **kwargs)
-            viewer.add_image(stk,blending='additive', contrast_limits=[np.percentile(stk.flatten(),1),np.percentile(stk.flatten(),99.9)], scale=[self.PixelSize, self.PixelSize], colormap=cmaps[ind%len(cmaps)] ,**kwargs)
+            stk = self.img(Channel=ch,verbose=True,Zindex=Zindex , frames=frames, **kwargs)
+            stksmp = sample_stack(stk,int(stk.size/1000))
+            viewer.add_image(stk,blending='additive', contrast_limits=[np.percentile(stksmp,1),np.percentile(stksmp,99.9)], scale=[self.PixelSize, self.PixelSize], colormap=cmaps[ind%len(cmaps)] ,**kwargs)
     
     
     

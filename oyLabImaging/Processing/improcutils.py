@@ -638,7 +638,10 @@ def gaussian_filter(p, sigma=10):
     return img_smooth
 
 
-
+def sample_stack(img, N=1000):
+    rng = np.random.default_rng()
+    ints = rng.integers([[0]]*N,img.shape)
+    return img[ints[:,0],ints[:,1],ints[:,2]]
 
 
 

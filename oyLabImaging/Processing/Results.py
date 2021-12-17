@@ -116,7 +116,7 @@ class results(object):
             self.PosLbls.update({p : PosLbl(MD=MD, Pos=p, pth=MD.base_pth, **kwargs)})
         self.save()
 
-    def calculate_tracks(self, Position=None, NucChannel='DeepBlue', **kwargs):
+    def calculate_tracks(self, Position=None, NucChannel='DeepBlue',save=True, **kwargs):
         """
         function to calculate tracks for a PosLbl instance. 
         
@@ -135,8 +135,8 @@ class results(object):
         for p in pos:
             print('Calculating tracks for position ' + str(p))
             self.PosLbls[p].trackcells(NucChannel=NucChannel,**kwargs)
-        
-        self.save()
+        if save:
+            self.save()
             
     def tracks(self, pos):
         """
