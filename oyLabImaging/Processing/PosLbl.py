@@ -16,12 +16,6 @@ from oyLabImaging.Processing import FrameLbl
 from scipy.spatial import KDTree
 import lap
 from tqdm import tqdm
-# import threading
-
-# def threaded(fn):
-#     def wrapper(*args, **kwargs):
-#         threading.Thread(target=fn, args=args, kwargs=kwargs).start()
-#     return wrapper
 
 class PosLbl(object):
     """
@@ -145,6 +139,10 @@ class PosLbl(object):
     @property
     def PixelSize(self):
         return self.framelabels[0]._pixelsize
+    
+    @property
+    def imagedims(self):
+        return self.framelabels[0].imagedims
     
     @property
     def XY(self):
@@ -322,13 +320,19 @@ class PosLbl(object):
 
             viewer = get_or_create_viewer() 
             viewer.scale_bar.unit = "um"
-            crp = np.ceil(np.concatenate((self.centroid-boxsize, self.centroid+boxsize),axis=1 )).astype(int)
-            
+            cents = np.fliplr(self.centroid)
+            #cents = self.centroid
+
+            crp = list(map(tuple,np.ceil(np.concatenate((cents-boxsize, cents+boxsize),axis=1 )).astype(int)))
+
             for ind, ch in enumerate(Channel):
-                imgs = self._outer.img(ch, frame=list(self.T),verbose=False)
-         
-                stk = np.array([np.pad(im1, boxsize)[crp1[0]+boxsize:crp1[2]+boxsize, crp1[1]+boxsize:crp1[3]+boxsize] for im1, crp1 in zip(imgs, crp)])
-                stksmp = sample_stack(stk,int(stk.size/100))
+                #imgs = self._outer.img(ch, frame=list(self.T),verbose=False)         
+                #stk = np.array([np.pad(im1, boxsize)[crp1[0]+boxsize:crp1[2]+boxsize, crp1[1]+boxsize:crp1[3]+boxsize] for im1, crp1 in zip(imgs, crp)])
+            
+                stk = self._outer.img(ch, frame=list(self.T),crop=crp,verbose=False)
+                
+                stksmp = stk.flatten()#sample_stack(stk,int(stk.size/100))
+                stksmp = stksmp[stksmp!=0]
                 viewer.add_image(stk,blending='additive', contrast_limits=[np.percentile(stksmp,1),np.percentile(stksmp,99.9)],name=ch, colormap=cmaps[ind%len(cmaps)],scale=[self._outer.PixelSize, self._outer.PixelSize])
 
     

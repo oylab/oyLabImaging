@@ -678,8 +678,8 @@ class Metadata(object):
         
         
         
-        
-
+    #  CORE METADATA FUNCTIONS    
+    #
     #This is how everything gets added to a MD
     def append(self,framedata):
         """
@@ -822,15 +822,15 @@ class Metadata(object):
 #        return fname
 
      
-    def _read_local(self, ind_dict, ffield=False,register=False, verbose=True,**kwargs):
+    def _read_local(self, ind_dict, ffield=False,register=False, verbose=True,crop=None,**kwargs):
         """
         Helper function to read list of files given an TIFF type metadata and an filename list 
         Load images into dictionary of stks.
         TODO - add crop at load
         """
-   
+        pillow=False
+        
         images_dict = {}
-    
         for key, value in ind_dict.items():
             # key is groupby property value
             # value is list of filenames of images to be loaded as a stk
@@ -847,18 +847,43 @@ class Metadata(object):
                 
                 #For speed: use PIL when loading a single image, imread when using stack
                 im = Image.open(join(fname))
+                #PIL crop seems like a faster option for registration, so we'll go with it! 
+                if crop==None:
+                    width, height = im.size
+                    crop=(0,0,width,height)
+                    
                 try:
                     im.seek(1)
                     img = io.imread(join(fname))
                 except:
+                    #sorry, a bit of a mess. If we crop we need to register before cropping. This is a very "cheap" way to do registration. Much faster then affine transforms. Can only do translations.
+
+                    if type(crop)==tuple:
+                        if register:
+                            pillow=True
+                            dT = self.image_table.at[find, 'driftTform'][6:8]
+                            crp1 = (crop[0]-dT[1],crop[1]-dT[0],crop[2]-dT[1],crop[3]-dT[0])
+                            im = im.crop(crp1)
+                        else:
+                            im = im.crop(crop)
+                    if type(crop)==list:
+                        assert len(crop)==len(value), 'C`est pas terrible! crop list length should be the same as loaded images'
+                        if register:
+                            pillow=True
+                            dT = self.image_table.at[find, 'driftTform'][6:8]
+                            crp1 = (crop[img_idx][0]-dT[1],crop[img_idx][1]-dT[0],crop[img_idx][2]-dT[1],crop[img_idx][3]-dT[0])
+                            im = im.crop(crp1)
+                        else:
+                            im = im.crop(crop[img_idx])
                     img = np.array(im)
                 im.close()
 
                 
                 if ffield:
                     img = self._doFlatFieldCorrection(img, find)
-                if register:
-                    img = self._register(img, find)
+                if not pillow:
+                    if register:
+                        img = self._register(img, find)
                 #if it's a z-stack
                 if img.ndim==3: 
                     img = img.transpose((1,2,0))
@@ -874,7 +899,7 @@ class Metadata(object):
 
     
     
-    def _read_nd2(self, ind_dict, ffield=False,register=False, verbose=True,**kwargs):
+    def _read_nd2(self, ind_dict, ffield=False,register=False, verbose=True,crop=None,**kwargs):
         """
         Helper function to read list of files given an ND type metadata and an index list.
         Load images into dictionary of stks.
@@ -946,6 +971,34 @@ class Metadata(object):
         return img
     
     
+    def _register_pil(self,im,find):
+        """
+        Perform image registration.
+        
+        Parameters
+        ----------
+        img : numpy.ndarray
+            2D image of type integer
+        find : file identifier in metadata table
+        """
+        from PIL import Image
+       
+        if 'driftTform' in self().columns:    
+            dT = self.image_table.at[find, 'driftTform']
+            if dT is None:
+                warnings.warn("No drift correction found for position")
+                return im
+            dT = np.array(dT)
+            if len(dT)==9:
+                M = np.reshape(dT,(3,3)).transpose()
+                imreturn = im.transform(im.size,
+                            Image.AFFINE, M.flatten()[0:6],
+                            resample=Image.NEAREST) 
+                return imreturn
+        else:
+            warnings.warn("No drift correction found for experiment")
+            return im
+        
     
     def _register(self,img,find):
         """
