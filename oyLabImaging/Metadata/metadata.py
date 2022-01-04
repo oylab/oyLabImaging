@@ -904,7 +904,10 @@ class Metadata(object):
         Helper function to read list of files given an ND type metadata and an index list.
         Load images into dictionary of stks.
         """
+        pillow=False
+        
         import nd2reader as nd2
+        from PIL import Image
         with nd2.ND2Reader(self.unique('filename')[0]) as nd2imgs:
           
             images_dict = {}
@@ -915,13 +918,38 @@ class Metadata(object):
                     if verbose:
                         sys.stdout.write("\r"+'opening index '+ str(find))
                         sys.stdout.flush()                
-
-                    img = np.array(nd2imgs.parser.get_image(find))
+                    im = Image.fromarray(nd2imgs.parser.get_image(find))
+                    #PIL crop seems like a faster option for registration, so we'll go with it! 
+                    if crop==None:
+                        width, height = im.size
+                        crop=(0,0,width,height)
+                    
+                    if type(crop)==tuple:
+                        if register:
+                            pillow=True
+                            dT = self.image_table.at[find, 'driftTform'][6:8]
+                            crp1 = (crop[0]-dT[1],crop[1]-dT[0],crop[2]-dT[1],crop[3]-dT[0])
+                            im = im.crop(crp1)
+                        else:
+                            im = im.crop(crop)
+                    if type(crop)==list:
+                        assert len(crop)==len(value), 'C`est pas terrible! crop list length should be the same as loaded images'
+                        if register:
+                            pillow=True
+                            dT = self.image_table.at[find, 'driftTform'][6:8]
+                            crp1 = (crop[img_idx][0]-dT[1],crop[img_idx][1]-dT[0],crop[img_idx][2]-dT[1],crop[img_idx][3]-dT[0])
+                            im = im.crop(crp1)
+                        else:
+                            im = im.crop(crop[img_idx])
+                    
+                    
+                    img = np.array(im)
 
                     if ffield:
                         img = self._doFlatFieldCorrection(img, find)
-                    if register:
-                        img = self._register(img, find)
+                    if not pillow:
+                        if register:
+                            img = self._register(img, find)
                     #if it's a z-stack
                     if img.ndim==3: 
                         img = img.transpose((1,2,0))
