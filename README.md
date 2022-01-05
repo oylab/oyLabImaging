@@ -26,4 +26,4 @@ conda env create --name oyimg python=3.8
 
 conda activate oyimg
 
-pip install git+https://github.com/alonyan/oyLabImaging.git[cuda]
+pip install git+https://github.com/alonyan/oyLabImaging.git#egg=oyLabImaging[cuda]
