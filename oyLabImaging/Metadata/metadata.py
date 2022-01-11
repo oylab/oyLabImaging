@@ -1301,6 +1301,7 @@ class Metadata(object):
 
                 d = np.transpose(np.unravel_index(c, np.squeeze(imXcorrMeanZ[:,:,0]).shape))-np.array(np.squeeze(imXcorrMeanZ[:,:,0]).shape)/2 + 1 #python indexing starts at 0
                 del imXcorrMeanZ
+                del c
                 ds = np.concatenate((ds,d))
             D = np.insert(np.cumsum(ds, axis=0), 0, [0,0], axis=0)
         

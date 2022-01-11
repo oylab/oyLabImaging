@@ -253,4 +253,158 @@ class results(object):
         with open(join(pth,fname), 'rb') as dbfile:
             r=dill.load(dbfile)
         return r
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    def track_viewer(R,keep_only=False):
+        from typing import List
+        import matplotlib
+        import matplotlib.pyplot as plt
+        import numpy as np
+        from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
+        from magicgui import magicgui
+        from magicgui.widgets import Checkbox, PushButton, Container
+        from oyLabImaging.Processing.imvisutils import get_or_create_viewer
+        from scipy import stats
+        from napari import run
+
+        cmaps=['cyan', 'magenta', 'yellow', 'red', 'green', 'blue']
+        viewer = get_or_create_viewer()
+
+        matplotlib.use('Agg')
+        mpl_fig = plt.figure()
+        ax = mpl_fig.add_subplot(111)
+        
+        fc = FigureCanvasQTAgg(mpl_fig)
+
+        attr_list = ['area','centroid','weighted_centroid']
+        attr_cmap = plt.cm.get_cmap('Set1',len(attr_list)).colors
+
+        @magicgui(
+            auto_call=True,
+            position={"choices": sorted([str(a) for a in R.PosLbls.keys()])},
+            track_id={"choices": range(R.PosLbls[R.PosNames[0]].get_track(0).numtracks)},
+            channels={"widget_type": "Select", "choices": list(R.channels)},
+            features={"widget_type": "Select", "choices": attr_list},
+        )
+        def widget(position: List[str],track_id: int, channels: List[str], features: List[str]):
+            # preserving these parameters for things that the graphing function
+            # needs... so that anytime this is called we have to graph.
+            ...
+            # do your graphing here
+            PosLbl = R.PosLbls[position] 
+            t0 = PosLbl.get_track(track_id)
+            ax.cla()
+            ax.set_xlabel('Timepoint')
+            ax.set_ylabel('kAU')
+            ch_choices = widget.channels.choices
+            for ch in channels:           
+                ax.plot(t0.T, stats.zscore(t0.mean(ch)), color=cmaps[ch_choices.index(ch)])
+
+            f_choices = widget.features.choices
+            for ch in features:
+                ax.plot(t0.T, stats.zscore(eval('t0.'+ch)),'-.', color=attr_cmap[f_choices.index(ch)])
+            ax.legend(channels + features)
+            fc.draw()
+
+
+        @widget.position.changed.connect
+        def _on_position_changed():
+            PosLbl = R.PosLbls[widget.position.value]
+            try:
+                PosLbl.track_to_use
+            except:
+                PosLbl.track_to_use=[]
+            viewer.layers.clear()
+            #update track_id choices - bug in choices:
+            if keep_only:
+                J = PosLbl.track_to_use
+            else:
+                J = range(PosLbl.get_track(0).numtracks)
+            widget.track_id.choices = []
+            widget.track_id.choices = J
+            #update keep_btn value
+            keep_btn.value= widget.track_id.value in PosLbl.track_to_use
+
+
+        @widget.track_id.changed.connect
+        def _on_track_changed(new_track: int):
+            viewer.layers.clear()
+            keep_btn.value= widget.track_id.value in PosLbl.track_to_use
+            #print("you cahnged to ", new_track)
+
+
+        movie_btn = PushButton(text="Movie")
+        widget.insert(1, movie_btn)
+
+        @movie_btn.clicked.connect
+        def _on_movie_clicked():
+            PosLbl = R.PosLbls[widget.position.value]
+            channels = widget.channels.get_value()
+            track_id = widget.track_id.get_value()
+            t0 = PosLbl.get_track(track_id)
+            viewer.layers.clear()
+            ch_choices = widget.channels.choices
+            t0.show_movie(Channel=channels, cmaps=[cmaps[ch_choices.index(ch)] for ch in channels])
+
+
+        btn = PushButton(text="NEXT")
+        widget.insert(-1, btn)
+
+        @btn.clicked.connect
+        def _on_next_clicked():
+            choices = widget.track_id.choices
+            current_index = choices.index(widget.track_id.value)
+            widget.track_id.value = choices[(current_index + 1) % (len(choices))]
+
+
+        PosLbl = R.PosLbls[widget.position.value]
+        try:
+            PosLbl.track_to_use
+        except:
+            PosLbl.track_to_use=[]
+
+
+        keep_btn = Checkbox(text="Keep")
+        keep_btn.value= widget.track_id.value in PosLbl.track_to_use
+        widget.append(keep_btn)
+
+        @keep_btn.clicked.connect
+        def _on_keep_btn_clicked(value: bool):
+            #print("keep is now", value)
+            PosLbl = R.PosLbls[widget.position.value]
+            if value==True:
+                if widget.track_id.value not in PosLbl.track_to_use: PosLbl.track_to_use.append(widget.track_id.value)
+            if value==False:
+                if widget.track_id.value in PosLbl.track_to_use: PosLbl.track_to_use.remove(widget.track_id.value)
+            R.PosLbls[widget.position.value]=PosLbl
+
+        # widget.native
+        # ... points to the underlying backend widget
+
+        container = Container(layout='horizontal')
+
+        # magicgui container expect magicgui objects
+        # but we can access and modify the underlying QLayout
+        # https://doc.qt.io/qt-5/qlayout.html#addWidget
+
+        layout = container.native.layout()
+
+        layout.addWidget(fc)
+        layout.addWidget(widget.native)  # adding native, because we're in Qt
+
+        #container.show(run=True)
+        # OR
+
+        viewer.window.add_dock_widget(container)
+        run()
+
          

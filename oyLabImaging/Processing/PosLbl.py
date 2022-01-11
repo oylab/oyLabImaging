@@ -65,7 +65,8 @@ class PosLbl(object):
      'pth',
      'trackinds',
      'weighted_centroid',
-     'weighted_centroid_um']
+     'weighted_centroid_um'
+     'tracks_to_use'
     
     Class methods
     -------------
@@ -249,6 +250,7 @@ class PosLbl(object):
                 self.relatives = outer.relatives[i]
             self.numtracks = len(outer.trackinds)
             self._outer = outer
+            
         
         @property
         def T(self):
@@ -302,8 +304,13 @@ class PosLbl(object):
         
         def prop(self, prop='area'):    
             return np.array([self._outer.framelabels[j].regionprops[prop][self.trackinds[j]] for j in self.T])
+
+        def frame(self):    
+            return np.array([int(self._outer.framelabels[j].frame) for j in self.T])
+
+                
         
-        def show_movie(self, Channel='DeepBlue', boxsize=50, cmaps = ['red', 'green', 'blue', 'cyan', 'magenta', 'yellow'] ,**kwargs):
+        def show_movie(self, Channel=['DeepBlue'], boxsize=50, cmaps = ['red', 'green', 'blue', 'cyan', 'magenta', 'yellow'] ,**kwargs):
             """
             Function to display a close up movie of a cell being tracked.
             Parameters
@@ -329,7 +336,7 @@ class PosLbl(object):
                 #imgs = self._outer.img(ch, frame=list(self.T),verbose=False)         
                 #stk = np.array([np.pad(im1, boxsize)[crp1[0]+boxsize:crp1[2]+boxsize, crp1[1]+boxsize:crp1[3]+boxsize] for im1, crp1 in zip(imgs, crp)])
             
-                stk = self._outer.img(ch, frame=list(self.T),crop=crp,verbose=False)
+                stk = self._outer.img(ch, frame=list(self.frame()),crop=crp,verbose=False)
                 
                 stksmp = stk.flatten()#sample_stack(stk,int(stk.size/100))
                 stksmp = stksmp[stksmp!=0]
@@ -361,6 +368,7 @@ class PosLbl(object):
         else:
             self._splitflag=False
         self._calculate_trackmat()
+        self.track_to_use=[]
         
         
     
@@ -480,7 +488,7 @@ class PosLbl(object):
         return trackbits[(np.array([np.sum(r != None) for r in trackbits])>=minseglength)]
     
     
-    def _closegaps(self, maxStep=10, params=[],maxAmpRatio=5,maxTimeJump=4, mintracklength=10, **kwargs):
+    def _closegaps(self, maxStep=10, params=[],maxAmpRatio=5,maxTimeJump=4, mintracklength=30, **kwargs):
         
         """
         Helper function : close gaps between open stubs using JV lap. 
@@ -490,7 +498,7 @@ class PosLbl(object):
         #NucChannel : ['DeepBlue']
         params : [(channel,weight)] list of tuples 
         maxAmpRatio : [2] max allowd ratio of amplitudes for linking
-        mintracklength : [20] final minimum length of a track
+        mintracklength : [30] final minimum length of a track
         """
         #ch=NucChannel
         #if ch is None:
