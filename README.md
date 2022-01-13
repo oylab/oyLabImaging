@@ -8,12 +8,17 @@ git clone https://github.com/alonyan/oyLabImaging
 
 cd oyLabImaging
 
-conda env create --name oyimg python=3.8
+conda create --name oyimg python=3.8
 
 conda activate oyimg
 
+if you have cuda 11.2:
 pip install -e .[cuda]
 
+else:
+pip install -e .
+
+add kernel to jupyter:
 python -m ipykernel install --user --name=oyimg
 
 
@@ -22,8 +27,16 @@ python -m ipykernel install --user --name=oyimg
 ## OR directly from git
 
 
-conda env create --name oyimg python=3.8
+conda create --name oyimg python=3.8
 
 conda activate oyimg
 
+if you have cuda 11.2:
 pip install git+https://github.com/alonyan/oyLabImaging.git#egg=oyLabImaging[cuda]
+
+else:
+pip install git+https://github.com/alonyan/oyLabImaging.git#egg=oyLabImaging
+
+add kernel to jupyter:
+python -m ipykernel install --user --name=oyimg
+

@@ -516,7 +516,7 @@ class Metadata(object):
         def fnamesFromPath(pth):
             import glob
             import os
-            fnames = glob.glob(pth+'**/*.TIF',recursive=True)
+            fnames = glob.glob(pth+'**/*.[tT][iI][fF]',recursive=True)
             fnames.sort(key=os.path.getmtime)
             return fnames
 

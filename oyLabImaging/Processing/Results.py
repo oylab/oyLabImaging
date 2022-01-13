@@ -264,7 +264,15 @@ class results(object):
     
     
     
-    def track_viewer(R,keep_only=False):
+    def track_explorer(R,keep_only=False):
+        """
+        Track explorer app. Written using magicgui (Thanks @tlambert03!)
+        
+        Allows one to easily browse through tracks, plot the data and see the corresponding movies. Can also be used for curation and quality control. 
+
+        Parameters:
+        keep_only : [False] Bool - If true, only tracks that are in PosLbl.track_to_use will be loaded in a given position. This can be used to filter unwanted tracks before examining for quality with the explorer.
+        """
         from typing import List
         import matplotlib
         import matplotlib.pyplot as plt
@@ -275,7 +283,8 @@ class results(object):
         from oyLabImaging.Processing.imvisutils import get_or_create_viewer
         from scipy import stats
         from napari import run
-
+        from natsort import natsorted
+        
         cmaps=['cyan', 'magenta', 'yellow', 'red', 'green', 'blue']
         viewer = get_or_create_viewer()
 
@@ -285,12 +294,12 @@ class results(object):
         
         fc = FigureCanvasQTAgg(mpl_fig)
 
-        attr_list = ['area','centroid','weighted_centroid']
+        attr_list = ['area', 'convex_area','centroid','perimeter','eccentricity','solidity','inertia_tensor_eigvals', 'orientation'] #todo: derive list from F regioprops
         attr_cmap = plt.cm.get_cmap('Set1',len(attr_list)).colors
 
         @magicgui(
             auto_call=True,
-            position={"choices": sorted([str(a) for a in R.PosLbls.keys()])},
+            position={"choices": natsorted([str(a) for a in R.PosLbls.keys()])},
             track_id={"choices": range(R.PosLbls[R.PosNames[0]].get_track(0).numtracks)},
             channels={"widget_type": "Select", "choices": list(R.channels)},
             features={"widget_type": "Select", "choices": attr_list},
@@ -311,7 +320,7 @@ class results(object):
 
             f_choices = widget.features.choices
             for ch in features:
-                ax.plot(t0.T, stats.zscore(eval('t0.'+ch)),'-.', color=attr_cmap[f_choices.index(ch)])
+                ax.plot(t0.T, stats.zscore(eval("t0.prop('"+ch+"')")),'-.', color=attr_cmap[f_choices.index(ch)])
             ax.legend(channels + features)
             fc.draw()
 
@@ -405,6 +414,7 @@ class results(object):
         # OR
 
         viewer.window.add_dock_widget(container)
-        run()
+        #run()
+        matplotlib.use('Qt5Agg')
 
          

@@ -861,7 +861,28 @@ class PosLbl(object):
         return pointlayer
         
     
-    
+    def prop_mat(self, prop='mean', channel=None, periring=False):
+        ch_props = ['mean', 'median', '90th','min','max']
+        props = ['area', 'convex_area','perimeter','eccentricity','solidity','inertia_tensor_eigvals', 'orientation']
+        peritext=''
+        if periring:
+            peritext = '_periring'
+        ts = self.get_track
+        track_mat = np.empty((ts(0).numtracks,len(self.frames)))
+        track_mat[:]=np.NaN
+
+        if prop in ch_props:
+            assert channel in self.channels
+            for i in range(ts(0).numtracks):
+                track_mat[i,ts(i).T] = ts(i).prop(prop+'_'+channel+peritext)
+            return track_mat
+        elif prop in props:
+            for i in range(ts(0).numtracks):
+                track_mat[i,ts(i).T] = ts(i).prop(prop)
+            return track_mat
+        else:
+            print('unsupported property, try: '+','.join(props)+','+','.join(ch_props))
+
     
 def prepare_sparse_cost(shape, cc, ii, jj, cost_limit):
     '''
