@@ -6,7 +6,7 @@ cuda_deps = ['cupy-cuda112',
 
 setup(
     name='oyLabImaging',
-    version='0.2.0',
+    version='0.2.1',
     description='data processing code for the Oyler-Yaniv lab @HMS',
     author='Alon Oyler-Yaniv',
     url='https://github.com/alonyan/oyLabImaging',
