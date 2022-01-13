@@ -2,8 +2,9 @@
 Code for analysis and organization of microscopy data:
 
 
-## Install
+# Install 
 
+## on Linux/Mac:
 git clone https://github.com/alonyan/oyLabImaging
 
 cd oyLabImaging
@@ -16,15 +17,15 @@ if you have cuda 11.2:
 pip install -e .[cuda]
 
 else:
+
 pip install -e .
 
 add kernel to jupyter:
+
 python -m ipykernel install --user --name=oyimg
 
 
-
-
-## OR directly from git
+### OR directly from git
 
 
 conda create --name oyimg python=3.8
@@ -32,11 +33,64 @@ conda create --name oyimg python=3.8
 conda activate oyimg
 
 if you have cuda 11.2:
+
 pip install git+https://github.com/alonyan/oyLabImaging.git#egg=oyLabImaging[cuda]
 
 else:
+
 pip install git+https://github.com/alonyan/oyLabImaging.git#egg=oyLabImaging
 
 add kernel to jupyter:
+
+python -m ipykernel install --user --name=oyimg
+
+
+
+## on Windows:
+
+Download and install VS cpp tools: https://visualstudio.microsoft.com/visual-cpp-build-tools/
+
+git clone https://github.com/alonyan/oyLabImaging
+
+cd oyLabImaging
+
+conda create --name oyimg python=3.8
+
+conda activate oyimg
+
+conda install -c conda-forge lap
+
+if you have cuda 11.2:
+pip install -e .[cuda]
+
+else:
+
+pip install -e .
+
+add kernel to jupyter:
+
+python -m ipykernel install --user --name=oyimg
+
+
+### OR directly from git
+
+
+conda create --name oyimg python=3.8
+
+conda activate oyimg
+
+
+if you have cuda 11.2:
+
+conda install -c conda-forge lap
+
+pip install git+https://github.com/alonyan/oyLabImaging.git#egg=oyLabImaging[cuda]
+
+else:
+
+pip install git+https://github.com/alonyan/oyLabImaging.git#egg=oyLabImaging
+
+add kernel to jupyter:
+
 python -m ipykernel install --user --name=oyimg
 
