@@ -48,7 +48,6 @@ python -m ipykernel install --user --name=oyimg
 
 ## on Windows:
 
-Download and install VS cpp tools: https://visualstudio.microsoft.com/visual-cpp-build-tools/
 
 git clone https://github.com/alonyan/oyLabImaging
 
