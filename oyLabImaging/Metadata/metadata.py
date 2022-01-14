@@ -14,6 +14,7 @@ from ast import literal_eval
 import warnings 
 from PIL import Image
 import logging
+from natsort import natsorted
 
 md_logger = logging.getLogger(__name__)
 md_logger.setLevel(logging.DEBUG)
