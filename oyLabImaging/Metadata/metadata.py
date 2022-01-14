@@ -443,7 +443,7 @@ class Metadata(object):
         image_table['root_pth'] = image_table.filename
         
         
-        image_table.filename = [join(pth, f.split(os.path.sep)[-1]) for f in image_table.filename]
+        image_table.filename = [join(pth, f.split('/')[-1]) for f in image_table.filename]
         return image_table
     
     
@@ -486,7 +486,7 @@ class Metadata(object):
                 root.withdraw() # Hide the main window.
                 root.call('wm', 'attributes', '.', '-topmost', True) # Raise the root to the top of all windows.
                 b.dir = filedialog.askdirectory() # List of selected folder will be set button's file attribute.
-                FolderText.value=b.dir+'/*'
+                FolderText.value=b.dir+os.path.sep+'*'
                 print(b.dir) # Print the list of files selected.
 
         fileselect = Button(description="Browse directory")
@@ -516,7 +516,7 @@ class Metadata(object):
         def fnamesFromPath(pth):
             import glob
             import os
-            fnames = glob.glob(pth+'**/*.[tT][iI][fF]',recursive=True)
+            fnames = glob.glob(pth+'**'+os.path.sep+'*.[tT][iI][fF]',recursive=True)
             fnames.sort(key=os.path.getmtime)
             return fnames
 

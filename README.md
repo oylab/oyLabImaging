@@ -79,10 +79,11 @@ conda create --name oyimg python=3.8
 
 conda activate oyimg
 
+conda install -c conda-forge lap
 
 if you have cuda 11.2:
 
-conda install -c conda-forge lap
+
 
 pip install git+https://github.com/alonyan/oyLabImaging.git#egg=oyLabImaging[cuda]
 
