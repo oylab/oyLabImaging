@@ -294,8 +294,13 @@ class results(object):
         
         fc = FigureCanvasQTAgg(mpl_fig)
 
-        attr_list = ['area', 'convex_area','centroid','perimeter','eccentricity','solidity','inertia_tensor_eigvals', 'orientation'] #todo: derive list from F regioprops
-        attr_cmap = plt.cm.get_cmap('Set1',len(attr_list)).colors
+        #attr_list = ['area', 'convex_area','centroid','perimeter','eccentricity','solidity','inertia_tensor_eigvals', 'orientation'] #todo: derive list from F regioprops
+        
+        position = list(natsorted(R.PosLbls.keys()))[0]
+        PosLbl0 = R.PosLbls[position] 
+        
+        attr_list = [f for f in list(PosLbl0.framelabels[0].regionprops) if not f.startswith(('mean','median','max','min','90th','slice'))]
+        attr_cmap = plt.cm.get_cmap('tab20b',len(attr_list)).colors
 
         @magicgui(
             auto_call=True,
@@ -320,7 +325,16 @@ class results(object):
 
             f_choices = widget.features.choices
             for ch in features:
-                ax.plot(t0.T, stats.zscore(eval("t0.prop('"+ch+"')")),'-.', color=attr_cmap[f_choices.index(ch)])
+                feat_to_plot = eval("t0.prop('"+ch+"')")
+                if np.ndim(feat_to_plot)==1:
+                    ax.plot(t0.T, stats.zscore(feat_to_plot,nan_policy='omit'),'--', color=attr_cmap[f_choices.index(ch)],alpha=0.33)
+                else:
+                    mini_cmap = plt.cm.get_cmap('jet',np.shape(feat_to_plot)[1])
+                    for dim in np.arange(np.shape(feat_to_plot)[1]):
+                        ax.plot(t0.T, stats.zscore(feat_to_plot[:,dim],nan_policy='omit'),'--', color=mini_cmap(dim), alpha=0.33)
+                        #ax.plot(t0.T, feat_to_plot[:,dim],'--', color=mini_cmap(dim), alpha=0.25)
+                        
+                    
             ax.legend(channels + features)
             fc.draw()
 
@@ -341,11 +355,12 @@ class results(object):
             widget.track_id.choices = []
             widget.track_id.choices = J
             #update keep_btn value
-            keep_btn.value= widget.track_id.value in PosLbl.track_to_use
+            #keep_btn.value= widget.track_id.value in PosLbl.track_to_use
 
 
         @widget.track_id.changed.connect
         def _on_track_changed(new_track: int):
+            PosLbl = R.PosLbls[widget.position.value]
             viewer.layers.clear()
             keep_btn.value= widget.track_id.value in PosLbl.track_to_use
             #print("you cahnged to ", new_track)
@@ -373,7 +388,7 @@ class results(object):
             choices = widget.track_id.choices
             current_index = choices.index(widget.track_id.value)
             widget.track_id.value = choices[(current_index + 1) % (len(choices))]
-
+            
 
         PosLbl = R.PosLbls[widget.position.value]
         try:

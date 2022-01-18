@@ -827,7 +827,7 @@ class PosLbl(object):
         viewer = get_or_create_viewer() 
         trackmat, J = self._tracksmat(J=J)
         inds_to_include = self.trackinds[J]!=None
-        track_props = {'cell_id' :list(zip(np.where(inds_to_include)[1], self.trackinds[J][np.where(inds_to_include)]))}
+        track_props = {'cell_id' :list( self.trackinds[J][np.where(inds_to_include)]), 'cell_T' : np.where(inds_to_include)[1],}
         
         tracklayer = viewer.add_tracks(trackmat,blending='additive', scale=[self.PixelSize, self.PixelSize],properties=track_props)
         tracklayer.display_id=True
