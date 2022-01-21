@@ -9,7 +9,7 @@ import pandas as pd
 import numpy as np
 from skimage import measure
 from oyLabImaging import Metadata
-import torch.multiprocessing as mp #import Pool, set_start_method
+import multiprocess as mp #import Pool, set_start_method
 mp.set_start_method('spawn',force=True)
 from functools import partial
 from oyLabImaging.Processing import FrameLbl
@@ -830,7 +830,7 @@ class PosLbl(object):
         track_props = {'cell_id' :list( self.trackinds[J][np.where(inds_to_include)]), 'cell_T' : np.where(inds_to_include)[1],}
         
         tracklayer = viewer.add_tracks(trackmat,blending='additive', scale=[self.PixelSize, self.PixelSize],properties=track_props)
-        tracklayer.display_id=True
+        #tracklayer.display_id=True
         return tracklayer
         
         
