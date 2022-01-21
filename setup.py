@@ -36,7 +36,7 @@ setup(
 	'Pillow>=8.3.1',
 	'poppy>=1.0.1',
 	'pyfftw>=0.12.0',
-	'scikit_image>=0.18.1',
+	'scikit_image<0.19',
 	'scikit_learn>=0.24.2',
 	'scipy>=1.6.2',
 	'setuptools>=52.0.0',
