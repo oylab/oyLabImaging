@@ -120,8 +120,8 @@ class PosLbl(object):
 
         with mp.Pool(threads) as ppool:
             frames = list(tqdm(ppool.imap(partial(FrameLbl, MD = MD, pth = pth, Pos=Pos, NucChannel=NucChannel,register=self._registerflag, **kwargs), self.frames), total=len(self.frames)))
-            ppool.close()
-            ppool.join()
+            #ppool.close()
+            #ppool.join()
         self.framelabels = np.array(frames)
         self._calculate_pointmat()
         print('\nFinished loading and segmenting position ' + str(Pos))
