@@ -238,11 +238,11 @@ class results(object):
     
     
     
-    def save(self):
+    def save(self,fname='results.pickle'):
         """
         save results
         """
-        with open(join(self.pth,'results.pickle'), 'wb') as dbfile:
+        with open(join(self.pth,fname), 'wb') as dbfile:
             cloudpickle.dump(self, dbfile)
             print('saved results')
         

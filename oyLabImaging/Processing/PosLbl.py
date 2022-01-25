@@ -200,7 +200,9 @@ class PosLbl(object):
     def density(self):
         return np.array([r.density for r in self.framelabels])
     
-    
+    @property    
+    def prop_list(self):
+            return [f for f in list(self.framelabels[0].regionprops) if not f.startswith(('mean','median','max','min','90th','slice'))]
     
     
     def get_track(self, i=0):
@@ -251,6 +253,7 @@ class PosLbl(object):
             self.numtracks = len(outer.trackinds)
             self._outer = outer
             
+        
         
         @property
         def T(self):
@@ -307,7 +310,8 @@ class PosLbl(object):
 
         def frame(self):    
             return np.array([int(self._outer.framelabels[j].frame) for j in self.T])
-
+        
+        
                 
         
         def show_movie(self, Channel=['DeepBlue'], boxsize=50, cmaps = ['red', 'green', 'blue', 'cyan', 'magenta', 'yellow'] ,**kwargs):
@@ -424,10 +428,10 @@ class PosLbl(object):
 
                         #ii jj cc are now sparse matrix in COO format
             ampRatio=1
-            eps = 10**-16
+            eps = 10**-72
             for cp, wp in zip(Cp, Wp):
                 ints = self.ninetyint(cp)
-                ampRatio = ampRatio + wp*(np.array(np.maximum(list(ints[i][ii]), list(ints[i+1][jj])))/np.array(eps+np.minimum(list(ints[i][ii]), list(ints[i+1][jj])))-1)
+                ampRatio = ampRatio + wp*(np.array(eps+np.maximum(list(ints[i][ii]), list(ints[i+1][jj])))/np.array(eps+np.minimum(list(ints[i][ii]), list(ints[i+1][jj])))-1)
 
 
             #costs of match
@@ -543,8 +547,9 @@ class PosLbl(object):
                 dr = np.linalg.norm(cents[frame1][ind1]-cents[frame2][ind2])
                 
                 da=1
+                eps=10**-72
                 for cp, wp in zip(Cp, Wp):
-                    da = da + wp*(np.maximum(ints[cp][frame1][ind1], ints[cp][frame2][ind2])/np.minimum(ints[cp][frame1][ind1], ints[cp][frame2][ind2])-1)
+                    da = da + wp*((eps+np.maximum(ints[cp][frame1][ind1], ints[cp][frame2][ind2]))/(eps+np.minimum(ints[cp][frame1][ind1], ints[cp][frame2][ind2]))-1)
 
                 if dr <= (np.sqrt(dt)*maxStep):
                     if da<=maxAmpRatio:
@@ -860,28 +865,64 @@ class PosLbl(object):
         pointlayer = viewer.add_points(pointsmat,properties=point_props, text='ind', face_color='mean',edge_width=0, face_colormap=colormap,  size=20,blending='translucent', scale=[1, self.PixelSize, self.PixelSize])
         return pointlayer
         
+    def property_matrix(self, prop='mean', channel=None, periring=False, keep_only=False):
+        """
+        Parameters
+        ----------
+        prop : str - Property to return
+        channel : str - for intensity based properties, channel name.
+        periring : For intensity based features only. Perinuclear ring values.
+        keep_only : {[False], True} 
+        
+        Draws overlaying points colorcoded by intensity in current napari viewer
+        """
+        return self.prop_mat(prop=prop, channel=channel, periring=periring, keep_only=keep_only)
     
-    def prop_mat(self, prop='mean', channel=None, periring=False):
+    def prop_mat(self, prop='mean', channel=None, periring=False, keep_only=False):
         ch_props = ['mean', 'median', '90th','min','max']
-        props = ['area', 'convex_area','perimeter','eccentricity','solidity','inertia_tensor_eigvals', 'orientation']
+        #props = ['area', 'convex_area','perimeter','eccentricity','solidity','inertia_tensor_eigvals', 'orientation']
+        
+        props = self.prop_list
+        
+        assert prop in props+ch_props, 'unsupported property, try: '+' ,'.join(props)+', OR, '+' ,'.join(ch_props)+' and a channel name.'
+        
+        if prop in ch_props:
+            assert channel in self.channels, 'requested channel does not exist, try '+ ' ,'.join(self.channels)
         peritext=''
         if periring:
             peritext = '_periring'
+        
         ts = self.get_track
-        track_mat = np.empty((ts(0).numtracks,len(self.frames)))
-        track_mat[:]=np.NaN
-
+        
+        if keep_only:
+            J = self.track_to_use
+        else:
+            J = range(ts(0).numtracks)
+            
+        
         if prop in ch_props:
+            if ts(0).prop(prop+'_'+channel).ndim==1:
+                track_mat = np.empty((len(J),len(self.frames)))
+            elif ts(0).prop(prop+'_'+channel).ndim==2:
+                track_mat = np.empty((len(J),len(self.frames),ts(0).prop(prop+'_'+channel).shape[1]))
+
+            track_mat[:]=np.NaN
+            
             assert channel in self.channels
-            for i in range(ts(0).numtracks):
+            for i in J:
                 track_mat[i,ts(i).T] = ts(i).prop(prop+'_'+channel+peritext)
             return track_mat
         elif prop in props:
-            for i in range(ts(0).numtracks):
+            if ts(0).prop(prop).ndim==1:
+                track_mat = np.empty((len(J),len(self.frames)))
+            elif ts(0).prop(prop).ndim==2:
+                track_mat = np.empty((len(J),len(self.frames),ts(0).prop(prop).shape[1]))
+
+            track_mat[:]=np.NaN
+            for i in J:
                 track_mat[i,ts(i).T] = ts(i).prop(prop)
             return track_mat
-        else:
-            print('unsupported property, try: '+','.join(props)+','+','.join(ch_props))
+        
 
     
 def prepare_sparse_cost(shape, cc, ii, jj, cost_limit):
