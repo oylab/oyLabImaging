@@ -919,8 +919,8 @@ class PosLbl(object):
                 track_mat = np.empty((len(J),len(self.frames),ts(0).prop(prop).shape[1]))
 
             track_mat[:]=np.NaN
-            for i in J:
-                track_mat[i,ts(i).T] = ts(i).prop(prop)
+            for i,j in enumerate(J):
+                track_mat[i,ts(j).T] = ts(j).prop(prop)
             return track_mat
         
 
