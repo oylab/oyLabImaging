@@ -874,11 +874,24 @@ class PosLbl(object):
         periring : For intensity based features only. Perinuclear ring values.
         keep_only : {[False], True} 
         
-        Draws overlaying points colorcoded by intensity in current napari viewer
+        returns property prop for all tracks in matrix form [N tracks x M timepoints x L dimensions of property]
+        
         """
         return self.prop_mat(prop=prop, channel=channel, periring=periring, keep_only=keep_only)
     
     def prop_mat(self, prop='mean', channel=None, periring=False, keep_only=False):
+        """
+        Parameters
+        ----------
+        prop : str - Property to return
+        channel : str - for intensity based properties, channel name.
+        periring : For intensity based features only. Perinuclear ring values.
+        keep_only : {[False], True} 
+        
+        returns property prop for all tracks in matrix form [N tracks x M timepoints x L dimensions of property]
+
+        
+        """
         ch_props = ['mean', 'median', '90th','min','max']
         #props = ['area', 'convex_area','perimeter','eccentricity','solidity','inertia_tensor_eigvals', 'orientation']
         

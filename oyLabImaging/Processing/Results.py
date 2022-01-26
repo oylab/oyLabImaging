@@ -259,9 +259,52 @@ class results(object):
     
     
     
+
     
     
     
+    def property_matrix(self,Position=None,prop='area', channel=None, periring=False, keep_only=False):
+        """
+        Parameters
+        ----------
+        pos : str - Position
+        prop : str - Property to return
+        channel : str - for intensity based properties, channel name.
+        periring : For intensity based features only. Perinuclear ring values.
+        keep_only : {[False], True} 
+        
+        wrapper for PosLbls.property_matrix property prop for all tracks in csv form with coma delimiter [N tracks x M timepoints x L dimensions of property]
+        """
+        return self.PosLbls[Position].property_matrix(prop=prop,channel=channel,periring=periring,keep_only=keep_only)
+        
+    
+    
+    def prop_to_csv(self,Position=None,prop='area', channel=None, periring=False, keep_only=False):
+        """
+        Parameters
+        ----------
+        pos : str - Position
+        prop : str - Property to return
+        channel : str - for intensity based properties, channel name.
+        periring : For intensity based features only. Perinuclear ring values.
+        keep_only : {[False], True} 
+        
+        saves property prop for all tracks in csv form with coma delimiter [[N tracks*L dimensions of property] x M timepoints ]
+        """
+        import os
+        from numpy import savetxt
+
+        csvfolder = os.path.join(self.pth, 'csvs'+os.path.sep)
+        if not os.path.exists(csvfolder):
+            os.makedirs(csvfolder)
+        if channel==None:
+            filename = os.path.join(csvfolder,'prop_'+prop+'_pos_'+Position+'.csv')
+        else:
+            filename = os.path.join(csvfolder,'prop_'+prop+'_ch_'+channel+'_pos_'+Position+'.csv')
+
+        A = self.property_matrix(Position=Position, prop=prop,channel=channel ,periring=periring,keep_only=keep_only)
+        A = np.reshape(A, newshape=(-1, A.shape[1]))
+        savetxt(filename, A, delimiter=",")
     
     
     def track_explorer(R,keep_only=False):
