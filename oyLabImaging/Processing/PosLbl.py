@@ -204,6 +204,13 @@ class PosLbl(object):
     def prop_list(self):
             return [f for f in list(self.framelabels[0].regionprops) if not f.startswith(('mean','median','max','min','90th','slice'))]
     
+    @property
+    def numtracks(self):
+        try:
+            return self.get_track(0).numtracks
+        except ValueError:
+            print('Position not tracked')
+    
     
     def get_track(self, i=0):
         """

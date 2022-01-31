@@ -233,8 +233,24 @@ class results(object):
         self.PosLbls[pos].plot_images(Channel=Channel,**kwargs)
     
     
-    
-    
+    def numtracks(self, Position=None):
+        """
+        Wrapper for PosLbl.numtracks
+        Parameters
+        ----------
+        pos : str / [str] position name
+        
+        returns number of tracks per position
+
+        """
+        if Position==None:
+            Position = list(self.PosNames)
+        if not isinstance(Position, list):
+            Position = [Position]
+        ntracks=[]
+        for pos in Position:
+            ntracks.append(self.PosLbls[pos].numtracks)
+        return ntracks
     
     
     
