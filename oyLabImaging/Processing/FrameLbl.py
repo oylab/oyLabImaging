@@ -72,7 +72,7 @@ class FrameLbl(object):
      'scattershow'
     
     """
-    def __init__(self, frame=None, MD=None ,pth=None, Pos=None, acq = None, Zindex=0 ,register=True ,periring=True, periringsize=5, NucChannel='DeepBlue',cytoplasm=False,CytoChannel='Yellow',zernike=False, segment_type='watershed', **kwargs):
+    def __init__(self, frame=None, MD=None ,pth=None, Pos=None, acq = None, Zindex=0 ,register=True ,periring=False, periringsize=5, NucChannel='DeepBlue',cytoplasm=False,CytoChannel='Yellow',zernike=False, segment_type='watershed', **kwargs):
 
         if pth is None and MD is not None:
             pth = MD.base_pth

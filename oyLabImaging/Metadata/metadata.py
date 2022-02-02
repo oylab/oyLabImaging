@@ -689,7 +689,9 @@ class Metadata(object):
         ----------
         framedata - pd dataframe of metadata
         """
-        self.image_table = self.image_table.append(framedata, sort=False,ignore_index=True)
+        #self.image_table = self.image_table.append(framedata, sort=False,ignore_index=True)
+        
+        self.image_table = pd.concat([self.image_table, framedata],axis=0,join='outer', sort=False,ignore_index=True)
         
         #framedata can be another MD dataframe 
         #framedata can also be a dict of column names and values: This will be handeled in scopex
@@ -768,6 +770,8 @@ class Metadata(object):
         frames : int, list(int)
         acq : str, list(str)
         """
+        
+        pd.set_option('mode.chained_assignment', None)
         
         image_subset_table = self.image_table
         # Filter images according to given criteria
