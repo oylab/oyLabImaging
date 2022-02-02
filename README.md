@@ -5,7 +5,7 @@ Code for analysis and organization of microscopy data:
 # Install 
 
 ## on Linux/Mac:
-*git clone https://github.com/alonyan/oyLabImaging*
+*git clone https://github.com/oylab/oyLabImaging*
 
 *cd oyLabImaging*
 
@@ -34,11 +34,11 @@ Code for analysis and organization of microscopy data:
 
 ## if you have cuda 11.2:
 
-*pip install git+https://github.com/alonyan/oyLabImaging.git#egg=oyLabImaging[cuda]*
+*pip install git+https://github.com/oylab/oyLabImaging.git#egg=oyLabImaging[cuda]*
 
 ### **else:**
 
-*pip install git+https://github.com/alonyan/oyLabImaging.git#egg=oyLabImaging*
+*pip install git+https://github.com/oylab/oyLabImaging.git#egg=oyLabImaging*
 
 ### **add kernel to jupyter:**
 
@@ -49,7 +49,7 @@ Code for analysis and organization of microscopy data:
 ## on Windows:
 
 
-*git clone https://github.com/alonyan/oyLabImaging*
+*git clone https://github.com/oylab/oyLabImaging*
 
 *cd oyLabImaging*
 
@@ -84,11 +84,11 @@ Code for analysis and organization of microscopy data:
 
 
 
-*pip install git+https://github.com/alonyan/oyLabImaging.git#egg=oyLabImaging[cuda]*
+*pip install git+https://github.com/oylab/oyLabImaging.git#egg=oyLabImaging[cuda]*
 
 ### **else:**
 
-*pip install git+https://github.com/alonyan/oyLabImaging.git#egg=oyLabImaging*
+*pip install git+https://github.com/oylab/oyLabImaging.git#egg=oyLabImaging*
 
 ### **add kernel to jupyter:**
 
