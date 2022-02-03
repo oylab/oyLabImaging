@@ -11,7 +11,7 @@ import pandas as pd
 import numpy as np
 import dill as pickle
 from ast import literal_eval
-import warnings 
+import warnings
 from PIL import Image
 import logging
 from natsort import natsorted
@@ -19,14 +19,14 @@ from natsort import natsorted
 md_logger = logging.getLogger(__name__)
 md_logger.setLevel(logging.DEBUG)
 
-usecolslist = ['acq',  'Position', 'frame','Channel', 'Marker', 'Fluorophore', 'group', 
+usecolslist = ['acq',  'Position', 'frame','Channel', 'Marker', 'Fluorophore', 'group',
        'XY', 'Z', 'Zindex','Exposure','PixelSize', 'PlateType', 'TimestampFrame','TimestampImage', 'filename']
 
 #usecolslist=[]
 
 from skimage import img_as_float, img_as_uint, io
 
-#Metadata stores all relevant info about an imaging experiment. 
+#Metadata stores all relevant info about an imaging experiment.
 
 class Metadata(object):
     """
@@ -34,14 +34,14 @@ class Metadata(object):
     Parameters
     ----------
     pth : str folder where metadata is stored
-    verbose : boolean 
-    
+    verbose : boolean
+
     Implemented MD types
     --------------------
     MicroManager metadata.txt
     Wollman lab Scope class Metadata.txt
     Nikon *.nd2
-    
+
     Class methods
     -------------
     'CalculateDriftCorrection',
@@ -50,11 +50,11 @@ class Metadata(object):
     'stkread',
     'unique',
     'unpickle'
-    
+
     Class properties
     ----------------
     'Zindexes',
-    'acqnames', 
+    'acqnames',
     'base_pth',
     'channels',
     'frames',
@@ -64,30 +64,30 @@ class Metadata(object):
     'type',
 
     """
-    
+
     def __init__(self, pth='', load_type='local', verbose=True):
-        
-        # get the base path (directory where it it) to the metadata file. 
+
+        # get the base path (directory where it it) to the metadata file.
         #If full path to file is given, separate out the directory
         self._md_name=''
-        
+
         if path.isdir(pth):
             self.base_pth = pth
         else:
             self.base_pth, self._md_name = path.split(pth)
-            
+
         # Init an empty md table
         self.image_table = pd.DataFrame(columns=usecolslist)
-        
+
         # Determine which type of metadata we're working with
         self.type = self._determine_metadata_type(pth)
         self._md_name = self._determine_metadata_name(pth)
-       
+
         # If it can't find a supported MD, it exits w/o doing anything
         if self.type==None:
             return
 
-        
+
         # How should metadata be read?
         if self.type=='PICKLE':
             self._load_method=self.unpickle
@@ -100,7 +100,7 @@ class Metadata(object):
         elif self.type=='TIFFS':
             self._load_method=self._load_metadata_TIF_GUI
 
-                  
+
         # With all we've learned, we can now load the metadata
         self._load_metadata(verbose=verbose)
 
@@ -110,8 +110,8 @@ class Metadata(object):
         except Exception as e:
             self.image_table['XY'] = [literal_eval(i) for i in self.image_table['XY']]
 
-            
-        # How should files be read? 
+
+        # How should files be read?
         if self.type=="ND2":
             self._open_file=self._read_nd2
         else: #Tiffs
@@ -124,8 +124,8 @@ class Metadata(object):
 
     def __call__(self):
         return self.image_table
-          
-        
+
+
     #keeping some multiples for backwards compatability
     @property
     def posnames(self):
@@ -133,7 +133,7 @@ class Metadata(object):
         Returns all unique position names
         """
         return self().Position.unique()
-    
+
     @property
     def Position(self):
         """
@@ -144,72 +144,72 @@ class Metadata(object):
     @property
     def frames(self):
         """
-        Returns all unique frames 
+        Returns all unique frames
         """
         return list(self().frame.unique())
-    
+
     @property
     def frame(self):
         """
-        Returns all unique frames 
+        Returns all unique frames
         """
         return list(self().frame.unique())
-      
+
     @property
     def channels(self):
         """
         Returns all unique channel names
         """
         return self().Channel.unique()
-    
+
     @property
     def Channel(self):
         """
         Returns all unique channel names
         """
         return self().Channel.unique()
-    
-    
+
+
     @property
     def Zindexes(self):
         """
         Returns all unique Zindexes
         """
         return self().Zindex.unique()
-    
+
     @property
     def acq(self):
         """
         Returns all unique acquisition names
         """
         return self().acq.unique()
-    
+
     @property
     def acqnames(self):
         """
         Returns all unique acquisition names
         """
         return self().acq.unique()
-    
+
     @property
     def groups(self):
         """
         Returns all unique group names
         """
         return self().group.unique()
-    
+
     def unique(self, Attr=None  , sortby='TimestampFrame',**kwargs):
         """
         Parameters
         ----------
         Attr : The desired attribute
         kwargs : Property Value pairs to subset images (see below)
-        
+
         Returns
         -------
-        list of unique values that Attr can have in the subset of images defined by kwargs. 
-        Default Attr is image size. 
-        
+        list of unique values that Attr can have in the subset of images defined by kwargs.
+        Default Attr is image size.
+
         Implemented kwargs
         ------------------
         Position : str, list(str)
@@ -227,20 +227,20 @@ class Metadata(object):
             if attr in kwargs:
                 image_subset_table = image_subset_table[image_subset_table[attr].isin(kwargs[attr])]
         image_subset_table.sort_values(sortby, inplace=True)
-        
+
         if Attr is None:
             return image_subset_table.size
-        elif Attr in image_subset_table.columns:  
+        elif Attr in image_subset_table.columns:
             return image_subset_table[Attr].unique()
         elif Attr=='index':
             return image_subset_table.index
         else:
-            return None 
-                     
+            return None
 
-        
-        
-    
+
+
+
+
     def _convert_data(self, column, dtype, isnan=np.nan):
         """
         Helper function to convert text lists to lists of numbers
@@ -256,7 +256,7 @@ class Metadata(object):
         self.image_table[column] = converted
 
 
-        
+
     def _determine_metadata_type(self, pth):
         """
         Helper function to determine metadata type
@@ -269,9 +269,9 @@ class Metadata(object):
         fname, fext = path.splitext(pth)
         if path.isdir(pth):
             for subdir, curdir, filez in walk(pth):
-                
+
                 assert len([f for f in filez if f.endswith('.nd2')])<2, "directory had multiple nd2 files. Either specify a direct path or (preferably) organize your data so that every nd2 file is in a separate folder"
-                        
+
                 for f in filez:
                     fname, fext = path.splitext(f)
                     if f=='metadata.pickle':
@@ -302,7 +302,7 @@ class Metadata(object):
                 print('Manual loading from tiffs')
                 return 'TIFFS'
         return None
-    
+
     def _determine_metadata_name(self, pth):
         """
         Helper function to determine metadata name
@@ -310,7 +310,7 @@ class Metadata(object):
         -------
         str - MD name
         """
-        
+
         from os import path, walk
         import os
         fname, fext = path.splitext(pth)
@@ -337,26 +337,26 @@ class Metadata(object):
                 if fname=='metadata':
                     return str.split(pth,os.path.sep)[-1]
                 if fname=='Metadata':
-                    return str.split(pth,os.path.sep)[-1]     
+                    return str.split(pth,os.path.sep)[-1]
         return None
- 
+
 
     def _load_metadata(self, verbose=True):
         """
         Helper function to load metadata.
-        
+
         Parameters
         -------
         verbose - [True] boolean
         """
         if self.type=="TIFFS":
             self._load_method(pth=self.base_pth)
-        elif self._md_name in listdir(self.base_pth):   
+        elif self._md_name in listdir(self.base_pth):
             self.append(self._load_method(pth=self.base_pth ,fname=self._md_name))
             if verbose:
                 print('loaded ' + self.type + ' metadata from' + join(self.base_pth, self._md_name))
         else:
-            #if there is no MD in the folder, look at subfolders and append all 
+            #if there is no MD in the folder, look at subfolders and append all
             for subdir, curdir, filez in walk(self.base_pth):
                 for f in filez:
                     if f==self._md_name:
@@ -364,8 +364,8 @@ class Metadata(object):
                         if verbose:
                             print('loaded ' + self.type + ' metadata from' +join(subdir,f))
 
-        
-    
+
+
     def _load_metadata_nd(self, pth, fname='', delimiter='\t'):
         """
         Helper function to load nikon nd2 metadata.
@@ -377,8 +377,8 @@ class Metadata(object):
         import pandas as pd
         from os.path import sep
         import time
-        
-        usecolslist = ['acq',  'Position', 'frame','Channel', 'XY', 'Z', 
+
+        usecolslist = ['acq',  'Position', 'frame','Channel', 'XY', 'Z',
                        'Zindex','Exposure','PixelSize', 'TimestampFrame','TimestampImage', 'filename']
         image_table = pd.DataFrame(columns=usecolslist)
 
@@ -390,6 +390,8 @@ class Metadata(object):
 
             XY = np.column_stack((np.array(imgs.parser._raw_metadata.x_data),np.array(imgs.parser._raw_metadata.y_data)))
             Zpos = imgs.metadata['z_coordinates']
+            if not imgs.metadata['z_levels']:
+                imgs.metadata['z_levels']=[0]
             Zind = imgs.metadata['z_levels']
             pixsize = imgs.metadata['pixel_microns']
             acq = fname
@@ -403,14 +405,14 @@ class Metadata(object):
                 chan = props[1]
                 pos = props[0]
                 exptime = imgs.parser._raw_metadata.camera_exposure_time[fps]
-                framedata={'acq':acq,'Position':pos,'frame':frame,'Channel':chan,'XY':list(xy), 'Z':z, 'Zindex':zind,'Exposure':exptime,'PixelSize':pixsize,'TimestampFrame':imgs.timesteps[fps],'TimestampImage':imgs.timesteps[fps],'filename':acq}
+                framedata={'acq':acq,'Position':str(pos),'frame':frame,'Channel':str(chan),'XY':list(xy), 'Z':z, 'Zindex':zind,'Exposure':exptime,'PixelSize':pixsize,'TimestampFrame':imgs.timesteps[fps],'TimestampImage':imgs.timesteps[fps],'filename':acq}
                 image_table = image_table.append(framedata, sort=False,ignore_index=True)
             image_table['root_pth'] = image_table.filename
             image_table.filename = [join(pth, f.split(os.path.sep)[-1]) for f in image_table.filename]
             return image_table
-    
 
-    
+
+
     def _load_metadata_MM(self, pth, fname='metadata.txt', delimiter='\t'):
         """
         Helper function to load a micromanager txt metadata file.
@@ -427,9 +429,9 @@ class Metadata(object):
                 f.write("}")
             with open(join(pth,fname)) as f:
                 mddata = json.load(f)
-            
-            
-        usecolslist = ['acq',  'Position', 'frame','Channel', 'Marker', 'Fluorophore', 'group', 
+
+
+        usecolslist = ['acq',  'Position', 'frame','Channel', 'Marker', 'Fluorophore', 'group',
        'XY', 'Z', 'Zindex','Exposure','PixelSize', 'PlateType', 'TimestampFrame','TimestampImage', 'filename']
         image_table = pd.DataFrame(columns=usecolslist)
         mdsum = mddata['Summary']
@@ -440,14 +442,14 @@ class Metadata(object):
             mdsing = mddata[key]
             framedata={'acq':mdsum['Prefix'],'Position':mdsing['PositionName'],'frame':mdsing['Frame'],'Channel':mdsum['ChNames'][mdsing['ChannelIndex']],'Marker':mdsum['ChNames'][mdsing['ChannelIndex']],'Fluorophore':mdsing['XLIGHT Emission Wheel-Label'],'group':mdsing['PositionName'],'XY':[mdsing['XPositionUm'],mdsing['YPositionUm']], 'Z':mdsing['ZPositionUm'], 'Zindex':mdsing['SliceIndex'],'Exposure':mdsing['Exposure-ms'] ,'PixelSize':mdsing['PixelSizeUm'], 'PlateType':'NA','TimestampFrame':mdsing['ReceivedTime'],'TimestampImage':mdsing['ReceivedTime'],'filename':mdsing['FileName']}
             image_table = image_table.append(framedata, sort=False,ignore_index=True)
-    
+
         image_table['root_pth'] = image_table.filename
-        
-        
+
+
         image_table.filename = [join(pth, f.split('/')[-1]) for f in image_table.filename]
         return image_table
-    
-    
+
+
     def _load_metadata_txt(self, pth, fname='Metadata.txt', delimiter='\t'):
         """
         Helper function to load a text metadata file.
@@ -459,14 +461,14 @@ class Metadata(object):
         image_table['root_pth'] = image_table.filename
         image_table.filename = [join(pth, f.split(os.path.sep)[-1]) for f in image_table.filename]
         return image_table
-    
+
     #functions for generic TIF loading!
-    
+
     def _load_metadata_TIF_GUI(self,pth=''):
         GlobText = self._getPatternsFromPathGUI(pth=pth)
         box1 = self._getMappingFromGUI(GlobText)
-        
-    
+
+
     def _getPatternsFromPathGUI(self, pth=''):
         from ipywidgets import Button, Text, widgets, HBox, Layout
         from tkinter import Tk, filedialog
@@ -476,9 +478,9 @@ class Metadata(object):
         out2 = widgets.Output()
         out3 = widgets.Output()
 
-        FolderText = Text(value='',placeholder='Enter path to image files',description='Path:',layout=Layout(width='70%', height='30px'))  
-        
-        GlobText = Text(value='',placeholder='*',description='Regular expression:',layout=Layout(width='70%', height='30px'), style={'description_width': 'initial'})    
+        FolderText = Text(value='',placeholder='Enter path to image files',description='Path:',layout=Layout(width='70%', height='30px'))
+
+        GlobText = Text(value='',placeholder='*',description='Regular expression:',layout=Layout(width='70%', height='30px'), style={'description_width': 'initial'})
         GlobText.flag=0
         def select_files(b):
             with out1:
@@ -580,10 +582,10 @@ class Metadata(object):
                         key = parts[i]
                         # calculate value
                         value = [widgets.Label(parts[i]), widgets.Dropdown(options=options,value=options[i], layout=Layout(width='9%'))]
-                        dddict[key] = value 
+                        dddict[key] = value
                     key = parts[-1]
                     value = [widgets.Label(parts[-1])]
-                    dddict[key] = value 
+                    dddict[key] = value
 
                     ddlist = list(itertools.chain.from_iterable(dddict.values()))
                     box1.children = tuple(ddlist)
@@ -603,7 +605,7 @@ class Metadata(object):
         display(out3)
         if GlobText.flag:
             on_change(GlobText)
-            
+
 
         box2 = HBox([out1, buttonDone])
         display(box2)
@@ -612,7 +614,7 @@ class Metadata(object):
         buttonDone.on_click(on_click_done)
 
         return box1
-    
+
     def _load_imagetable_Tiffs(self, ordered_list_of_traits, fnames, patterns, pth):
         """
         Helper function to load minimal metadata from tiffs.
@@ -631,7 +633,7 @@ class Metadata(object):
                 value=[p[i] for p in patterns]
                 traitdict[key]=value
 
-        usecolslist = ['acq',  'Position', 'frame','Channel', 'Marker', 'Fluorophore', 'group', 
+        usecolslist = ['acq',  'Position', 'frame','Channel', 'Marker', 'Fluorophore', 'group',
         'XY', 'Z', 'Zindex','Exposure','PixelSize', 'PlateType', 'TimestampFrame','TimestampImage', 'filename']
         image_table = pd.DataFrame(columns=usecolslist)
 
@@ -648,12 +650,12 @@ class Metadata(object):
         image_table['Position']=0
         image_table['frame']=0
         image_table['PixelSize']=1
-        
-        
+
+
         #update whichever values we got from the names
         for trait in traitdict:
             image_table[trait]=traitdict[trait]
-        
+
         try:
             image_table['frame']=[int(f) for f in image_table['frame']]
         except:
@@ -663,23 +665,23 @@ class Metadata(object):
 
         image_table.filename = [join(pth, f.split(os.path.sep)[-1]) for f in image_table.filename]
         self.image_table = image_table
-        
-        
 
 
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-    #  CORE METADATA FUNCTIONS    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    #  CORE METADATA FUNCTIONS
     #
     #This is how everything gets added to a MD
     def append(self,framedata):
@@ -690,20 +692,20 @@ class Metadata(object):
         framedata - pd dataframe of metadata
         """
         #self.image_table = self.image_table.append(framedata, sort=False,ignore_index=True)
-        
+
         self.image_table = pd.concat([self.image_table, framedata],axis=0,join='outer', sort=False,ignore_index=True)
-        
-        #framedata can be another MD dataframe 
+
+        #framedata can be another MD dataframe
         #framedata can also be a dict of column names and values: This will be handeled in scopex
         # framedata = {}
         # for attr in column_names:
         #     framedata.update(attr=v)
-        
 
 
-    
-    
-    
+
+
+
+
     # Save metadata in pickle format
     def pickle(self):
         """
@@ -718,10 +720,10 @@ class Metadata(object):
             self.image_table['filename'] = tempfn
             md_logger.info('saved metadata')
 
-        
+
     def unpickle(self,pth,fname='*.pickle', delimiter='\t'):
         """
-        load metadata from pickle file. 
+        load metadata from pickle file.
         Parameters
         ----------
         pth : str - path to root folder where data is
@@ -736,24 +738,24 @@ class Metadata(object):
             self._md_name = 'metadata.pickle'
             self.type = MD.type
             return MD.image_table
-            
-         
-        
-    
+
+
+
+
     def stkread(self, groupby='Position', sortby='TimestampFrame',
                 finds_only=False, metadata=False, **kwargs):
         """
         Main interface of Metadata
-        
+
         Parameters
         ----------
         groupby : str - all images with the same groupby field with be stacked
         sortby : str, list(str) - images in stks will be ordered by this(these) fields
         finds_only : Bool (default False) - lazy loading
         metadata : Bool (default False) - whether to return metadata of images
-        
+
         kwargs : Property Value pairs to subset images (see below)
-        
+
         Returns
         -------
         stk of images if only one value of the groupby_value
@@ -761,7 +763,7 @@ class Metadata(object):
         stk/dict, metadata table if metadata=True
         finds if finds_only true
         finds, metadata table if finds_only and metadata
-        
+
         Implemented kwargs
         ------------------
         Position : str, list(str)
@@ -770,9 +772,9 @@ class Metadata(object):
         frames : int, list(int)
         acq : str, list(str)
         """
-        
+
         pd.set_option('mode.chained_assignment', None)
-        
+
         image_subset_table = self.image_table
         # Filter images according to given criteria
         for attr in image_subset_table.columns:
@@ -780,18 +782,18 @@ class Metadata(object):
                 if not isinstance(kwargs[attr], list):
                     kwargs[attr] = [kwargs[attr]]
                 image_subset_table = image_subset_table[image_subset_table[attr].isin(kwargs[attr])]
-           
+
         # Group images and sort them then extract filenames/indices of sorted images
         image_subset_table.sort_values(sortby, inplace=True)
         image_groups = image_subset_table.groupby(groupby)
-        
+
         finds_output = {}
         mdata = {}
         for posname in image_groups.groups.keys():
             finds_output[posname] = image_subset_table.loc[image_groups.groups[posname]].index.values
             mdata[posname] = image_subset_table.loc[image_groups.groups[posname]]
 
-        # Clunky block of code below allows getting filenames only, and handles returning 
+        # Clunky block of code below allows getting filenames only, and handles returning
         # dictionary if multiple groups present or ndarray only if single group
         if finds_only:
             if metadata:
@@ -808,15 +810,15 @@ class Metadata(object):
                 else:
                     return self._open_file(finds_output,**kwargs), mdata
             else:
-                stk = self._open_file(finds_output,**kwargs) 
+                stk = self._open_file(finds_output,**kwargs)
                 if len(list(stk.keys()))==1:
                     return np.squeeze(stk[posname])
                 else:
                     return stk
-                
-                
 
-                
+
+
+
 #    def save_images(self, images, fname = '/Users/robertf/Downloads/tmp_stk.tif'):
 #        with TiffWriter(fname, bigtiff=False, imagej=True) as t:
 #            if len(images.shape)>2:
@@ -826,37 +828,37 @@ class Metadata(object):
 #                t.save(img_as_uint(images))
 #        return fname
 
-     
+
     def _read_local(self, ind_dict, ffield=False,register=False, verbose=True,crop=None,**kwargs):
         """
-        Helper function to read list of files given an TIFF type metadata and an filename list 
+        Helper function to read list of files given an TIFF type metadata and an filename list
         Load images into dictionary of stks.
         TODO - add crop at load
         """
         pillow=False
-        
+
         images_dict = {}
         for key, value in ind_dict.items():
             # key is groupby property value
             # value is list of filenames of images to be loaded as a stk
-       
+
             imgs = []
-            
+
             for img_idx, find in enumerate(value):
                 fname = self.image_table.at[find,'filename']
                 # Weird print style to print on same line
                 if verbose:
                     sys.stdout.write("\r"+'opening file '+path.split(fname)[-1])
-                    sys.stdout.flush() 
+                    sys.stdout.flush()
                 #md_logger.info("\r"+'opening '+path.split(fname)[-1])
-                
+
                 #For speed: use PIL when loading a single image, imread when using stack
                 im = Image.open(join(fname))
-                #PIL crop seems like a faster option for registration, so we'll go with it! 
+                #PIL crop seems like a faster option for registration, so we'll go with it!
                 if crop==None:
                     width, height = im.size
                     crop=(0,0,width,height)
-                    
+
                 try:
                     im.seek(1)
                     img = io.imread(join(fname))
@@ -883,38 +885,38 @@ class Metadata(object):
                     img = np.array(im)
                 im.close()
 
-                
+
                 if ffield:
                     img = self._doFlatFieldCorrection(img, find)
                 if not pillow:
                     if register:
                         img = self._register(img, find)
                 #if it's a z-stack
-                if img.ndim==3: 
+                if img.ndim==3:
                     img = img.transpose((1,2,0))
-                
+
                 imgs.append(img)
-            
-            # Best performance has most frequently indexed dimension first 
-            images_dict[key] = np.array(imgs) / 2**16  
+
+            # Best performance has most frequently indexed dimension first
+            images_dict[key] = np.array(imgs) / 2**16
             if verbose:
                 print('\nLoaded group {0} of images.'.format(key))
-            
+
         return images_dict
 
-    
-    
+
+
     def _read_nd2(self, ind_dict, ffield=False,register=False, verbose=True,crop=None,**kwargs):
         """
         Helper function to read list of files given an ND type metadata and an index list.
         Load images into dictionary of stks.
         """
         pillow=False
-        
+
         import nd2reader as nd2
         from PIL import Image
         with nd2.ND2Reader(self.unique('filename')[0]) as nd2imgs:
-          
+
             images_dict = {}
             for key, value in ind_dict.items():
                 imgs = []
@@ -922,13 +924,13 @@ class Metadata(object):
                     # Weird print style to print on same line
                     if verbose:
                         sys.stdout.write("\r"+'opening index '+ str(find))
-                        sys.stdout.flush()                
+                        sys.stdout.flush()
                     im = Image.fromarray(nd2imgs.parser.get_image(find))
-                    #PIL crop seems like a faster option for registration, so we'll go with it! 
+                    #PIL crop seems like a faster option for registration, so we'll go with it!
                     if crop==None:
                         width, height = im.size
                         crop=(0,0,width,height)
-                    
+
                     if type(crop)==tuple:
                         if register:
                             pillow=True
@@ -946,8 +948,8 @@ class Metadata(object):
                             im = im.crop(crp1)
                         else:
                             im = im.crop(crop[img_idx])
-                    
-                    
+
+
                     img = np.array(im)
 
                     if ffield:
@@ -956,30 +958,30 @@ class Metadata(object):
                         if register:
                             img = self._register(img, find)
                     #if it's a z-stack
-                    if img.ndim==3: 
+                    if img.ndim==3:
                         img = img.transpose((1,2,0))
 
                     imgs.append(img)
 
-                # Best performance has most frequently indexed dimension first 
-                images_dict[key] = np.array(imgs) / 2**16  
+                # Best performance has most frequently indexed dimension first
+                images_dict[key] = np.array(imgs) / 2**16
                 if verbose:
                     print('\nLoaded group {0} of images.'.format(key))
 
             return images_dict
 
 
-        
-        
-        
-        
-        
-        
-    # Function to apply flat field correction    
+
+
+
+
+
+
+    # Function to apply flat field correction
     def _doFlatfieldCorrection(self, img, flt, **kwargs):
         """
         Perform flatfield correction.
-        
+
         Parameters
         ----------
         img : numpy.ndarray
@@ -992,7 +994,7 @@ class Metadata(object):
         bitdepth = 2.**16
         flt = flt.astype(np.float32) - cameraoffset
         flt = np.divide(flt, np.nanmean(flt.flatten()))
-        
+
         img = np.divide((img-cameraoffset).astype(np.float32), flt+cameraoffset)
         flat_img = img.flatten()
         rand_subset = np.random.randint(0, high=len(flat_img), size=10000)
@@ -1002,12 +1004,12 @@ class Metadata(object):
         np.place(img, img<0, 0)
         np.place(img, img>bitdepth, bitdepth)
         return img
-    
-    
+
+
     def _register_pil(self,im,find):
         """
         Perform image registration.
-        
+
         Parameters
         ----------
         img : numpy.ndarray
@@ -1015,8 +1017,8 @@ class Metadata(object):
         find : file identifier in metadata table
         """
         from PIL import Image
-       
-        if 'driftTform' in self().columns:    
+
+        if 'driftTform' in self().columns:
             dT = self.image_table.at[find, 'driftTform']
             if dT is None:
                 warnings.warn("No drift correction found for position")
@@ -1026,17 +1028,17 @@ class Metadata(object):
                 M = np.reshape(dT,(3,3)).transpose()
                 imreturn = im.transform(im.size,
                             Image.AFFINE, M.flatten()[0:6],
-                            resample=Image.NEAREST) 
+                            resample=Image.NEAREST)
                 return imreturn
         else:
             warnings.warn("No drift correction found for experiment")
             return im
-        
-    
+
+
     def _register(self,img,find):
         """
         Perform image registration.
-        
+
         Parameters
         ----------
         img : numpy.ndarray
@@ -1045,8 +1047,8 @@ class Metadata(object):
         """
         from skimage import transform
         import cv2
-       
-        if 'driftTform' in self().columns:    
+
+        if 'driftTform' in self().columns:
             dT = self.image_table.at[find, 'driftTform']
             if dT is None:
                 warnings.warn("No drift correction found for position")
@@ -1062,9 +1064,9 @@ class Metadata(object):
         else:
             warnings.warn("No drift correction found for experiment")
             return img
-            
 
-    # Calculate jitter/drift corrections   
+
+    # Calculate jitter/drift corrections
     def CalculateDriftCorrection(self, Position=None,frames=None, ZsToLoad=[0], Channel='DeepBlue',threads=8,chunks=20, GPU=True):
         if GPU:
             try:
@@ -1080,35 +1082,35 @@ class Metadata(object):
             self.CalculateDriftCorrectionCPU(Position=Position,frames=frames, ZsToLoad=ZsToLoad, Channel=Channel,threads=8)
 
 
-    
-    
+
+
     def CalculateDriftCorrectionCPU(self, Position=None,frames=None, ZsToLoad=[0], Channel='DeepBlue',threads=8):
         """
         Calculate image registration (jitter correction) parameters and add to metadata.
-        
+
         Parameters
         ----------
         Position : str or list of strings
         ZsToLoad : list of int - which Zs to load to calculate registration. If list, registration will be the average of the different zstack layers
         Channel : str, channel name to use for registration
-            
+
         """
-        
+
         #from scipy.signal import fftconvolve
         if Position is None:
             Position = self.posnames
         elif type(Position) is not list:
             Position = [Position]
-        
+
         if frames is None:
             frames = self.frames
         elif type(frames) is not list:
             frames = [frames]
-            
+
         assert Channel in self.channels, "%s isn't a channel, try %s" % (Channel, ', '.join(list(self.channels)))
-        
+
         for pos in Position:
-            from pyfftw.interfaces.numpy_fft import fft2, ifft2            
+            from pyfftw.interfaces.numpy_fft import fft2, ifft2
 
             DataPre = self.stkread(Position=pos, Channel=Channel, Zindex=ZsToLoad, frame=frames, register=False, verbose=False)
             print('\ncalculating drift correction for position ' + str(pos) + ' on CPU')
@@ -1123,7 +1125,7 @@ class Metadata(object):
             #calculate cross correlation
             DataPost = np.rot90(DataPost,axes=(0, 1),k=2)
 
-            # So because of dumb licensing issues, fftconvolve can't use fftw but the slower fftpack. Python is wonderful. So we'll do it all by hand like neanderthals 
+            # So because of dumb licensing issues, fftconvolve can't use fftw but the slower fftpack. Python is wonderful. So we'll do it all by hand like neanderthals
             img_fft_1 = fft2(DataPre,axes=(0,1),threads=threads)
             img_fft_2 = fft2(DataPost,axes=(0,1),threads=threads)
             imXcorr = np.abs(np.fft.ifftshift(ifft2(img_fft_1*img_fft_2,axes=(0,1),threads=threads),axes=(0,1)))
@@ -1136,7 +1138,7 @@ class Metadata(object):
 
             d = np.transpose(np.unravel_index(c, np.squeeze(imXcorrMeanZ[:,:,0]).shape))-np.array(np.squeeze(imXcorrMeanZ[:,:,0]).shape)/2 + 1 #python indexing starts at 0
             D = np.insert(np.cumsum(d, axis=0), 0, [0,0], axis=0)
-            
+
             if 'driftTform' not in self.image_table.columns:
                 self.image_table['driftTform']=None
 
@@ -1147,39 +1149,39 @@ class Metadata(object):
             print('calculated drift correction for position ' + str(pos))
         self.pickle()
 
-        
+
     def CalculateDriftCorrectionGPU(self, Position=None,frames=None, ZsToLoad=[0], Channel='DeepBlue',threads=8):
         """
         Calculate image registration (jitter correction) parameters and add to metadata.
-        
+
         Parameters
         ----------
         Position : str or list of strings
         ZsToLoad : list of int - which Zs to load to calculate registration. If list, registration will be the average of the different zstack layers
         Channel : str, channel name to use for registration
-            
+
         """
         from cupy.fft import fft2, ifft2
         from cupy import _default_memory_pool, asarray
-        
+
         #from scipy.signal import fftconvolve
         if Position is None:
             Position = self.posnames
         elif type(Position) is not list:
             Position = [Position]
-        
+
         if frames is None:
             frames = self.frames
         elif type(frames) is not list:
             frames = [frames]
-            
+
         assert Channel in self.channels, "%s isn't a channel, try %s" % (Channel, ', '.join(list(self.channels)))
-        
+
         for pos in Position:
 
             DataPre = asarray(self.stkread(Position=pos, Channel=Channel, Zindex=ZsToLoad, frame=frames, register=False,verbose=False))
             print('\ncalculating drift correction for position ' + str(pos)+ ' on GPU')
-            DataPre = self.stkread(Position=pos, Channel=Channel, Zindex=ZsToLoad, frame=fr, register=False)               
+            DataPre = self.stkread(Position=pos, Channel=Channel, Zindex=ZsToLoad, frame=fr, register=False)
             DataPre = DataPre-np.mean(DataPre,axis=(1,2),keepdims=True)
 
             DataPost = DataPre[1:,:,:].transpose((1,2,0))
@@ -1195,7 +1197,7 @@ class Metadata(object):
             DataPre = asarray(DataPre)
             DataPost = asarray(DataPost)
 
-            # So because of dumb licensing issues, fftconvolve can't use fftw but the slower fftpack. Python is wonderful. So we'll do it all by hand like neanderthals 
+            # So because of dumb licensing issues, fftconvolve can't use fftw but the slower fftpack. Python is wonderful. So we'll do it all by hand like neanderthals
             img_fft_1 = fft2(DataPre,axes=(0,1))
             del DataPre
             _default_memory_pool.free_all_blocks()
@@ -1215,10 +1217,10 @@ class Metadata(object):
                 c.append(np.squeeze(imXcorrMeanZ[:,:,i]).argmax())
 
             _default_memory_pool.free_all_blocks()
-            
+
             d = np.transpose(np.unravel_index(c, np.squeeze(imXcorrMeanZ[:,:,0]).shape))-np.array(np.squeeze(imXcorrMeanZ[:,:,0]).shape)/2 + 1 #python indexing starts at 0
             D = np.insert(np.cumsum(d, axis=0), 0, [0,0], axis=0)
-            
+
             if 'driftTform' not in self.image_table.columns:
                 self.image_table['driftTform']=None
 
@@ -1232,13 +1234,13 @@ class Metadata(object):
     def CalculateDriftCorrectionGPUChunks(self, Position=None,frames=None, ZsToLoad=[0], Channel='DeepBlue',chunks=10):
         """
         Calculate image registration (jitter correction) parameters and add to metadata.
-        
+
         Parameters
         ----------
         Position : str or list of strings
         ZsToLoad : list of int - which Zs to load to calculate registration. If list, registration will be the average of the different zstack layers
         Channel : str, channel name to use for registration
-            
+
         """
         from cupy.fft import fft2, ifft2
         from cupy import get_default_memory_pool, asarray
@@ -1248,14 +1250,14 @@ class Metadata(object):
             Position = self.posnames
         elif type(Position) is not list:
             Position = [Position]
-        
+
         if frames is None:
             frames = self.frames
         elif type(frames) is not list:
             frames = [frames]
-            
+
         assert Channel in self.channels, "%s isn't a channel, try %s" % (Channel, ', '.join(list(self.channels)))
-        
+
         def chunker_with_overlap(seq, size):
             return (seq[np.max((0,pos-1)):pos + size] for pos in range(0, len(seq), size))
 
@@ -1263,7 +1265,7 @@ class Metadata(object):
             ds = np.empty((0, 2), float)
             print('\ncalculating drift correction for position ' + str(pos)+ ' on GPU')
             for fr in chunker_with_overlap(frames,chunks):
-                DataPre = self.stkread(Position=pos, Channel=Channel, Zindex=ZsToLoad, frame=fr, register=False,verbose=False)               
+                DataPre = self.stkread(Position=pos, Channel=Channel, Zindex=ZsToLoad, frame=fr, register=False,verbose=False)
                 DataPre = DataPre-np.mean(DataPre,axis=(1,2),keepdims=True)
 
                 DataPost = DataPre[1:,:,:].transpose((1,2,0))
@@ -1275,12 +1277,12 @@ class Metadata(object):
                 #calculate cross correlation
                 DataPost = np.rot90(DataPost,axes=(0, 1),k=2)
 
-                
+
                 DataPre = asarray(DataPre)
                 DataPost = asarray(DataPost)
 
-                
-                # So because of dumb licensing issues, fftconvolve can't use fftw but the slower fftpack. Python is wonderful. So we'll do it all by hand like neanderthals 
+
+                # So because of dumb licensing issues, fftconvolve can't use fftw but the slower fftpack. Python is wonderful. So we'll do it all by hand like neanderthals
                 img_fft_1 = fft2(DataPre,axes=(0,1))
                 del DataPre
                 mempool.free_all_blocks()
@@ -1301,7 +1303,7 @@ class Metadata(object):
                 c = []
                 for i in range(imXcorrMeanZ.shape[-1]):
                     c.append(np.squeeze(imXcorrMeanZ[:,:,i]).argmax())
-                
+
                 mempool.free_all_blocks()
 
                 d = np.transpose(np.unravel_index(c, np.squeeze(imXcorrMeanZ[:,:,0]).shape))-np.array(np.squeeze(imXcorrMeanZ[:,:,0]).shape)/2 + 1 #python indexing starts at 0
@@ -1309,7 +1311,7 @@ class Metadata(object):
                 del c
                 ds = np.concatenate((ds,d))
             D = np.insert(np.cumsum(ds, axis=0), 0, [0,0], axis=0)
-        
+
             if 'driftTform' not in self.image_table.columns:
                 self.image_table['driftTform']=None
 
