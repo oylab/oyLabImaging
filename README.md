@@ -60,7 +60,7 @@ Code for analysis and organization of microscopy data:
 *conda install -c conda-forge lap*
 
 ### **if you have cuda 11.2:**
-*pip install -e .[cuda]*
+*pip install -e .[cuda-win]*
 
 ### **else:**
 
@@ -84,7 +84,7 @@ Code for analysis and organization of microscopy data:
 
 
 
-*pip install git+https://github.com/oylab/oyLabImaging.git#egg=oyLabImaging[cuda]*
+*pip install git+https://github.com/oylab/oyLabImaging.git#egg=oyLabImaging[cuda-win]*
 
 ### **else:**
 
