@@ -218,6 +218,8 @@ class Metadata(object):
         frames : int, list(int)
         acq : str, list(str)
         """
+        pd.set_option('mode.chained_assignment', None)
+
         for key, value in kwargs.items():
             if not isinstance(value, list):
                 kwargs[key] = [value]
