@@ -835,7 +835,6 @@ class Metadata(object):
         """
         Helper function to read list of files given an TIFF type metadata and an filename list
         Load images into dictionary of stks.
-        TODO - add crop at load
         """
         pillow=False
 
@@ -918,7 +917,8 @@ class Metadata(object):
         import nd2reader as nd2
         from PIL import Image
         with nd2.ND2Reader(self.unique('filename')[0]) as nd2imgs:
-
+            if not nd2imgs.metadata['z_levels']:
+                nd2imgs.metadata['z_levels']=[0]
             images_dict = {}
             for key, value in ind_dict.items():
                 imgs = []
