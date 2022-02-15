@@ -170,9 +170,9 @@ class FrameLbl(object):
 
 
         if periring:
-            from skimage.morphology import disk, dilation
-            se = disk(5)
-            Lperi = dilation(L, se)-L
+            #from skimage.morphology import disk, dilation
+            from skimage.segmentation import expand_labels
+            Lperi = expand_labels(L, distance=periringsize)-L
 
             for ch in self.channels:
                 props_channel = measure.regionprops(Lperi,intensity_image=Data[ch])
