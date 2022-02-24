@@ -275,9 +275,10 @@ class Metadata(object):
                 assert len([f for f in filez if f.endswith('.nd2')])<2, "directory had multiple nd2 files. Either specify a direct path or (preferably) organize your data so that every nd2 file is in a separate folder"
 
                 for f in filez:
-                    fname, fext = path.splitext(f)
                     if f=='metadata.pickle':
                         return 'PICKLE'
+                for f in filez:
+                    fname, fext = path.splitext(f)
                     if fext=='.nd2':
                         return 'ND2'
                     if fext=='.txt':
@@ -286,6 +287,7 @@ class Metadata(object):
                         if fname=='Metadata':
                             return 'TXT'
                 for f in filez: #if you couldn't find any others, try tiffs
+                    fname, fext = path.splitext(f)
                     if fext=='.tif' or fext=='.TIF':
                         print('Manual loading from tiffs')
                         return 'TIFFS'
@@ -319,9 +321,10 @@ class Metadata(object):
         if path.isdir(pth):
             for subdir, curdir, filez in walk(pth):
                 for f in filez:
-                    fname, fext = path.splitext(f)
                     if f=='metadata.pickle':
                         return f
+                for f in filez:
+                    fname, fext = path.splitext(f)
                     if fext=='.nd2':
                         return f
                     if fext=='.txt':
