@@ -218,12 +218,12 @@ class Metadata(object):
         frames : int, list(int)
         acq : str, list(str)
         """
-        pd.set_option('mode.chained_assignment', None)
+        #pd.set_option('mode.chained_assignment', None)
 
         for key, value in kwargs.items():
             if not isinstance(value, list):
                 kwargs[key] = [value]
-        image_subset_table = self.image_table
+        image_subset_table = self.image_table.copy()
         # Filter images according to some criteria
         for attr in image_subset_table.columns:
             if attr in kwargs:
@@ -778,9 +778,9 @@ class Metadata(object):
         acq : str, list(str)
         """
 
-        pd.set_option('mode.chained_assignment', None)
+        #pd.set_option('mode.chained_assignment', None)
 
-        image_subset_table = self.image_table
+        image_subset_table = self.image_table.copy()
         # Filter images according to given criteria
         for attr in image_subset_table.columns:
             if attr in kwargs:
@@ -789,14 +789,14 @@ class Metadata(object):
                 image_subset_table = image_subset_table[image_subset_table[attr].isin(kwargs[attr])]
 
         # Group images and sort them then extract filenames/indices of sorted images
-        image_subset_table.sort_values(sortby, inplace=True)
-        image_groups = image_subset_table.groupby(groupby)
+        image_subset_table_sorted = image_subset_table.sort_values(sortby, inplace=False)
+        image_groups = image_subset_table_sorted.groupby(groupby)
 
         finds_output = {}
         mdata = {}
         for posname in image_groups.groups.keys():
-            finds_output[posname] = image_subset_table.loc[image_groups.groups[posname]].index.values
-            mdata[posname] = image_subset_table.loc[image_groups.groups[posname]]
+            finds_output[posname] = image_subset_table_sorted.loc[image_groups.groups[posname]].index.values
+            mdata[posname] = image_subset_table_sorted.loc[image_groups.groups[posname]]
 
         # Clunky block of code below allows getting filenames only, and handles returning
         # dictionary if multiple groups present or ndarray only if single group
