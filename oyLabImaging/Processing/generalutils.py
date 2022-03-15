@@ -7,9 +7,9 @@ Created on Thu Jul 21 15:46:30 2016
 import numpy as np
 import scipy.io as sio
 
-def num2str(num, precision): 
+def num2str(num, precision):
     return "%0.*f" % (precision, num)
-    
+
 def colorcode(datax, datay):
     from scipy import interpolate
     import numpy as np
@@ -17,17 +17,17 @@ def colorcode(datax, datay):
     xedges = (xedges[:-1]+xedges[1:])/2
     yedges = (yedges[:-1]+yedges[1:])/2
     f = interpolate.RectBivariateSpline(xedges,yedges , H)
-    
+
     z = np.array([])
     for i in datax.index:
         z = np.append(z,f(datax[i],datay[i]))
-    #z=(z-min(z))/(max(z)-min(z))   
+    #z=(z-min(z))/(max(z)-min(z))
     z[z<0] = 0
     idx = z.argsort()
     return z, idx
 
 
-class kmeans:        
+class kmeans:
     def __init__(self, X, K):
         # Initialize to K random centers
         oldmu = X.sample(K).values#np.random.sample(X, K)
@@ -41,7 +41,7 @@ class kmeans:
         self.mu = mu
         self.clusters = clusters
         #return(mu, clusters)
-        
+
     def _cluster_points(X, mu):
         clusters  = {}
         for x in X:
@@ -63,8 +63,26 @@ class kmeans:
     def _has_converged(mu, oldmu):
         return (set(mu) == set(oldmu))
 
+def InAxes(ax=None):
+    # find indexes of plot points which are inside axes rectangle
+    # by default works on the current axes, otherwise give an axes handle
 
-      
+    if ax==None:
+        ax = plt.gca()
+
+    h = ax.get_children()
+
+    Xlim = ax.get_xlim();
+    Ylim = ax.get_ylim();
+    for hi in h:
+        try:
+            offs = hi.get_offsets().data
+            J = np.where((offs[:,0]>Xlim[0])*(offs[:,0]<Xlim[1])*(offs[:,1]>Ylim[0])*(offs[:,1]<Ylim[1]))
+            J = J[0]
+        except:
+            continue
+    return J
+
 def regionprops_to_df(im_props):
     """
     Read content of all attributes for every item in a list
@@ -84,7 +102,7 @@ def regionprops_to_df(im_props):
             #Attribute should not start with _ and cannot return an array
             #does not yet return tuples
             if test_attribute[:1] != '_' and not\
-                    isinstance(getattr(im_props[0], test_attribute), np.ndarray):                
+                    isinstance(getattr(im_props[0], test_attribute), np.ndarray):
                 attributes_list += [test_attribute]
 
         return attributes_list
@@ -98,7 +116,7 @@ def regionprops_to_df(im_props):
     # Put data from im_props into list of lists
     for i, _ in enumerate(im_props):
         parsed_data += [[]]
-        
+
         for j in range(len(attributes_list)):
             parsed_data[i] += [getattr(im_props[i], attributes_list[j])]
 
@@ -108,10 +126,10 @@ def regionprops_to_df(im_props):
 
 # Python 3 program to find the stem
 # of given list of words
- 
+
 # function to find the stem (longest
 # common substring) from the string array
- 
+
 def findstem(arr):
     # Determine size of the array
     n = len(arr)
@@ -130,7 +148,7 @@ def findstem(arr):
                 # Check if the generated stem is
                 # common to all words
                 if stem not in arr[k]:
-                    break               
+                    break
             # If current substring is present in
             # all strings and its length is greater
             # than current result
@@ -158,7 +176,7 @@ def findregexp(fnames):
     stars = ['*']*len(fnames[0])
     #replace all stems in the list
     for s in stems:
-        stars[fnames[0].find(s):fnames[0].find(s)+len(s)]=s 
+        stars[fnames[0].find(s):fnames[0].find(s)+len(s)]=s
     #remove repeating *s
     superStars=[]
     superStars.append(stars[0])

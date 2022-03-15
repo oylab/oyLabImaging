@@ -1,4 +1,4 @@
-# Results module for microscopy data. 
+# Results module for microscopy data.
 # Aggregates all Pos labels for a specific experiment
 
 # AOY
@@ -12,21 +12,21 @@ import cloudpickle
 
 class results(object):
     """
-    Class for experiment results (multi timepoint, multi position, single experiment, multi channel). 
+    Class for experiment results (multi timepoint, multi position, single experiment, multi channel).
     Parameters
     ----------
     MD : relevant metadata OR
     pth : str path to relevant metadata
-    
+
     Segmentation parameters
     -----------------------
     **kwargs : specific args for segmentation function, anything that goes into FrameLbl
     Threads : how many threads to use for parallel execution. Limited to ~6 for GPU based segmentation and 128 for CPU (but don't use all 128)
-    
+
     Returns
     -------
     results instance
-    
+
     Class properties
     ----------------
      'PosLbls',
@@ -37,7 +37,7 @@ class results(object):
      'groups',
      'pth',
      'tracks'
-    
+
     Class methods
     -------------
      'calculate_tracks',
@@ -50,21 +50,21 @@ class results(object):
 
     """
     def __init__(self, MD=None ,pth=None, threads=10, **kwargs):
-        
-        
+
+
         if pth is None:
             if MD is not None:
                 self.pth = MD.base_pth;
         else:
             self.pth = pth
-        
+
         pth = self.pth
-        
-        if 'results.pickle' in listdir(pth):   
+
+        if 'results.pickle' in listdir(pth):
                 r = self.load(pth ,fname='results.pickle')
                 self.PosNames = r.PosNames
-                self.channels = r.channels 
-                self.acq = r.acq 
+                self.channels = r.channels
+                self.acq = r.acq
                 self.frames = r.frames
                 self.groups = r.groups
                 self.PosLbls = r.PosLbls
@@ -74,43 +74,43 @@ class results(object):
                 MD = Metadata(pth)
 
             if MD().empty:
-                raise AssertionError('No metadata found in supplied path') 
+                raise AssertionError('No metadata found in supplied path')
 
             self.PosNames = MD.unique('Position')
-            self.channels = MD.unique('Channel') 
-            self.acq = MD.unique('acq') 
+            self.channels = MD.unique('Channel')
+            self.acq = MD.unique('acq')
             self.frames = MD.unique('frame')
             self.groups = MD.unique('group')
             self.PosLbls = {}
-      
+
     def __call__(self):
         print('Results object for path to experiment in path: \n ' + self.pth)
         print('\nAvailable channels are : ' + ', '.join(list(self.channels))+ '.')
         print('\nPositions already segmented are : ' + ', '.join(sorted([str(a) for a in self.PosLbls.keys()])))
         print('\nAvailable positions : ' + ', '.join(list([str(a) for a in self.PosNames]))+ '.')
         print('\nAvailable frames : ' + str(len(self.frames)) + '.')
-        
-        
+
+
     def setPosLbls(self, MD=None, groups=None, Position=None, **kwargs):
         """
-        function to create PosLbl instances. 
-        
+        function to create PosLbl instances.
+
         Parameters
         ----------
         Position - [All Positions] position name or list of position names
 
         """
         if MD is None:
-            MD = Metadata(self.pth)         
+            MD = Metadata(self.pth)
         if groups is not None:
             assert(np.all(np.isin(groups,self.groups))), "some provided groups don't exist, try %s"  % ', '.join(list(self.groups))
             Position = MD.unique('Position', group=groups)
         if Position is None:
             Position = self.PosNames
-            
+
         elif type(Position) is not list:
             Position = [Position]
-            
+
         for p in Position:
             print('\nProcessing position ' + str(p))
             self.PosLbls.update({p : PosLbl(MD=MD, Pos=p, pth=MD.base_pth, **kwargs)})
@@ -118,8 +118,8 @@ class results(object):
 
     def calculate_tracks(self, Position=None, NucChannel='DeepBlue',save=True, **kwargs):
         """
-        function to calculate tracks for a PosLbl instance. 
-        
+        function to calculate tracks for a PosLbl instance.
+
         Parameters
         ----------
         Position : [All Positions] position name or list of position names
@@ -127,7 +127,7 @@ class results(object):
 
         """
         pos=Position
-        
+
         if pos==None:
             pos = list(self.PosLbls.keys())
         pos = pos if isinstance(pos, list) else [pos]
@@ -137,14 +137,14 @@ class results(object):
             self.PosLbls[p].trackcells(NucChannel=NucChannel,**kwargs)
         if save:
             self.save()
-            
+
     def tracks(self, pos):
         """
         Wrapper for PosLbl.get_track
         Parameters
         ----------
         pos : position name
-        
+
         Returns
         -------
         function handle for track generator
@@ -152,14 +152,14 @@ class results(object):
         assert pos in self.PosLbls.keys(), str(pos) +' not segmented yet'
         assert self.PosLbls[pos]._tracked, str(pos) +' not tracked yet'
         return self.PosLbls[pos].get_track
-    
+
     def tracklist(self,pos=None):
         """
         Function to consolidate tracks from different positions
         Parameters
         ----------
         pos : [All positions] position name, list of position names
-        
+
         Returns
         -------
         List of tracks in pos
@@ -172,7 +172,7 @@ class results(object):
             t0 = self.tracks(p)
             ([ts.append(t0(i)) for i in np.arange(t0(0).numtracks)])
         return ts
-    
+
     def show_tracks(self, pos, J=None,**kwargs):
         """
         Wrapper for PosLbl.plot_tracks
@@ -181,29 +181,29 @@ class results(object):
         pos : position name
         J : track indices - plots all tracks if not provided
         Zindex : [0]
-        
-        
+
+
         Draws image stks with overlaying tracks in current napari viewer
- 
+
         """
 
         assert pos in self.PosLbls.keys(), str(pos) +' not segmented yet'
         tracks = self.PosLbls[pos].plot_tracks(J=J,**kwargs)
         return tracks
-    
 
-    def show_points(self, pos, J=None,Channel=None,**kwargs):
+
+    def show_points(self, pos, Channel=None,**kwargs):
         """
         Wrapper for PosLbl.plot_points
         Parameters
         ----------
         pos : position name
-        Channel : [DeepBlue] str 
+        Channel : [DeepBlue] str
         Zindex : [0]
-        
-        Draws image stks with overlaying points in current napari viewer
-        
-  
+
+        Draws cells as points in current napari viewer. Color codes for intensity
+
+
         """
         if Channel not in self.channels:
             Channel = self.channels[0]
@@ -211,7 +211,7 @@ class results(object):
         assert pos in self.PosLbls.keys(), str(pos) +' not segmented yet'
         points = self.PosLbls[pos].plot_points(Channel=Channel,**kwargs)
         return points
-    
+
     def show_images(self, pos,Channel=None,**kwargs):
         """
         Wrapper for PosLbl.plot_images
@@ -231,15 +231,15 @@ class results(object):
             Channel = [self.channels[0]]
         print('showing channel '+ str(Channel))
         self.PosLbls[pos].plot_images(Channel=Channel,**kwargs)
-    
-    
+
+
     def numtracks(self, Position=None):
         """
         Wrapper for PosLbl.numtracks
         Parameters
         ----------
         pos : str / [str] position name
-        
+
         returns number of tracks per position
 
         """
@@ -251,9 +251,9 @@ class results(object):
         for pos in Position:
             ntracks.append(self.PosLbls[pos].numtracks)
         return ntracks
-    
-    
-    
+
+
+
     def save(self,fname='results.pickle'):
         """
         save results
@@ -261,7 +261,7 @@ class results(object):
         with open(join(self.pth,fname), 'wb') as dbfile:
             cloudpickle.dump(self, dbfile)
             print('saved results')
-        
+
     def load(self,pth,fname='results.pickle'):
         """
         load results
@@ -269,16 +269,16 @@ class results(object):
         with open(join(pth,fname), 'rb') as dbfile:
             r=dill.load(dbfile)
         return r
-    
-    
-    
-    
-    
-    
 
-    
-    
-    
+
+
+
+
+
+
+
+
+
     def property_matrix(self,Position=None,prop='area', channel=None, periring=False, keep_only=False):
         """
         Parameters
@@ -287,14 +287,14 @@ class results(object):
         prop : str - Property to return
         channel : str - for intensity based properties, channel name.
         periring : For intensity based features only. Perinuclear ring values.
-        keep_only : {[False], True} 
-        
+        keep_only : {[False], True}
+
         wrapper for PosLbls.property_matrix property prop for all tracks in csv form with coma delimiter [N tracks x M timepoints x L dimensions of property]
         """
         return self.PosLbls[Position].property_matrix(prop=prop,channel=channel,periring=periring,keep_only=keep_only)
-        
-    
-    
+
+
+
     def prop_to_csv(self,Position=None,prop='area', channel=None, periring=False, keep_only=False):
         """
         Parameters
@@ -303,8 +303,8 @@ class results(object):
         prop : str - Property to return
         channel : str - for intensity based properties, channel name.
         periring : For intensity based features only. Perinuclear ring values.
-        keep_only : {[False], True} 
-        
+        keep_only : {[False], True}
+
         saves property prop for all tracks in csv form with coma delimiter [[N tracks*L dimensions of property] x M timepoints ]
         """
         import os
@@ -321,13 +321,13 @@ class results(object):
         A = self.property_matrix(Position=Position, prop=prop,channel=channel ,periring=periring,keep_only=keep_only)
         A = np.reshape(A, newshape=(-1, A.shape[1]))
         savetxt(filename, A, delimiter=",")
-    
-    
+
+
     def track_explorer(R,keep_only=False):
         """
         Track explorer app. Written using magicgui (Thanks @tlambert03!)
-        
-        Allows one to easily browse through tracks, plot the data and see the corresponding movies. Can also be used for curation and quality control. 
+
+        Allows one to easily browse through tracks, plot the data and see the corresponding movies. Can also be used for curation and quality control.
 
         Parameters:
         keep_only : [False] Bool - If true, only tracks that are in PosLbl.track_to_use will be loaded in a given position. This can be used to filter unwanted tracks before examining for quality with the explorer.
@@ -343,21 +343,21 @@ class results(object):
         from scipy import stats
         from napari import run
         from natsort import natsorted
-        
+
         cmaps=['cyan', 'magenta', 'yellow', 'red', 'green', 'blue']
         viewer = get_or_create_viewer()
 
         matplotlib.use('Agg')
         mpl_fig = plt.figure()
         ax = mpl_fig.add_subplot(111)
-        
+
         fc = FigureCanvasQTAgg(mpl_fig)
 
         #attr_list = ['area', 'convex_area','centroid','perimeter','eccentricity','solidity','inertia_tensor_eigvals', 'orientation'] #todo: derive list from F regioprops
-        
+
         position = list(natsorted(R.PosLbls.keys()))[0]
-        PosLbl0 = R.PosLbls[position] 
-        
+        PosLbl0 = R.PosLbls[position]
+
         attr_list = [f for f in list(PosLbl0.framelabels[0].regionprops) if not f.startswith(('mean','median','max','min','90th','slice'))]
         attr_cmap = plt.cm.get_cmap('tab20b',len(attr_list)).colors
 
@@ -373,13 +373,13 @@ class results(object):
             # needs... so that anytime this is called we have to graph.
             ...
             # do your graphing here
-            PosLbl = R.PosLbls[position] 
+            PosLbl = R.PosLbls[position]
             t0 = PosLbl.get_track(track_id)
             ax.cla()
             ax.set_xlabel('Timepoint')
             ax.set_ylabel('kAU')
             ch_choices = widget.channels.choices
-            for ch in channels:           
+            for ch in channels:
                 ax.plot(t0.T, stats.zscore(t0.mean(ch)), color=cmaps[ch_choices.index(ch)])
 
             f_choices = widget.features.choices
@@ -392,8 +392,8 @@ class results(object):
                     for dim in np.arange(np.shape(feat_to_plot)[1]):
                         ax.plot(t0.T, stats.zscore(feat_to_plot[:,dim],nan_policy='omit'),'--', color=mini_cmap(dim), alpha=0.33)
                         #ax.plot(t0.T, feat_to_plot[:,dim],'--', color=mini_cmap(dim), alpha=0.25)
-                        
-                    
+
+
             ax.legend(channels + features)
             fc.draw()
 
@@ -447,7 +447,7 @@ class results(object):
             choices = widget.track_id.choices
             current_index = choices.index(widget.track_id.value)
             widget.track_id.value = choices[(current_index + 1) % (len(choices))]
-            
+
 
         PosLbl = R.PosLbls[widget.position.value]
         try:
@@ -490,5 +490,3 @@ class results(object):
         viewer.window.add_dock_widget(container)
         #run()
         matplotlib.use('Qt5Agg')
-
-         
