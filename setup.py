@@ -50,7 +50,8 @@ setup(
 	'cmake',
 	'tqdm>=4.59.0',
 	'zernike>=0.0.32',
-	'multiprocess>=0.70'
+	'multiprocess>=0.70',
+	'jupyter>=1.0.0'
     ],
 	extras_require = {'cuda': cuda_deps,
 	'cuda-win': cuda_win_deps,
