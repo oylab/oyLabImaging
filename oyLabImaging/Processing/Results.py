@@ -116,15 +116,14 @@ class results(object):
             self.PosLbls.update({p : PosLbl(MD=MD, Pos=p, pth=MD.base_pth, **kwargs)})
         self.save()
 
-    def calculate_tracks(self, Position=None, NucChannel='DeepBlue',save=True, **kwargs):
+    def calculate_tracks(self, Position=None,save=True,split=True, **kwargs):
         """
         function to calculate tracks for a PosLbl instance.
 
         Parameters
         ----------
         Position : [All Positions] position name or list of position names
-        NucChannel : ['DeepBlue'] name of nuclear channel
-
+        kwargs that go into tracking helper functions: search_radius, params (list of tuples, (channel, weight)), maxStep for skip ,maxAmpRatio for skip, mintracklength
         """
         pos=Position
 
@@ -134,7 +133,7 @@ class results(object):
         assert any(elem in self.PosLbls.keys()  for elem in pos), str(pos) + ' not segmented yet'
         for p in pos:
             print('Calculating tracks for position ' + str(p))
-            self.PosLbls[p].trackcells(NucChannel=NucChannel,**kwargs)
+            self.PosLbls[p].trackcells(split=split,**kwargs)
         if save:
             self.save()
 

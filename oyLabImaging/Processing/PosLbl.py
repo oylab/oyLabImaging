@@ -727,11 +727,10 @@ class PosLbl(object):
         self.trackinds = trackbits
 
 
-
     def img(self,Channel='DeepBlue',Zindex=[0], **kwargs):
         """
         Parameters
-        ----------
+        ------
         Channel : [DeepBlue] str or list of strings
         register : {[True], False}
         Zindex=[0]
@@ -744,6 +743,8 @@ class PosLbl(object):
         pth = self.pth
         MD = Metadata(pth, verbose=False)
         return MD.stkread(Channel=Channel, Position=self.posname, register=self._registerflag,Zindex=Zindex, **kwargs)
+
+
 
 
     def _calculate_pointmat(self):

@@ -1079,10 +1079,9 @@ class Metadata(object):
 #             except:
                 print('Trying GPU calculation in chunks of '+ str(chunks))
                 self.CalculateDriftCorrectionGPUChunks(Position=Position,frames=frames, ZsToLoad=ZsToLoad, Channel=Channel,chunks=chunks)
-            finally:
+            except:
                 print('No GPU or no CuPy. If you have a GPU, try installing CuPy')
                 self.CalculateDriftCorrectionCPU(Position=Position,frames=frames, ZsToLoad=ZsToLoad, Channel=Channel,threads=threads)
-
         else:
             self.CalculateDriftCorrectionCPU(Position=Position,frames=frames, ZsToLoad=ZsToLoad, Channel=Channel,threads=8)
 
