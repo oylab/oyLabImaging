@@ -744,7 +744,12 @@ class Metadata(object):
             self.type = MD.type
             return MD.image_table
 
-
+    def export_as_text(self,fname='Metadata.txt'):
+        from pathlib import Path
+        from os.path import join
+        filepath = Path(join(self.base_pth,fname))
+        filepath.parent.mkdir(parents=True, exist_ok=True)
+        self.image_table.to_csv(filepath,sep='\t')
 
 
     def stkread(self, groupby='Position', sortby='TimestampFrame',
