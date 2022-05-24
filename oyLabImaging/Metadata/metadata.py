@@ -14,7 +14,7 @@ from ast import literal_eval
 import warnings
 from PIL import Image
 import logging
-from natsort import natsorted
+from natsort import natsorted, natsort_keygen
 
 md_logger = logging.getLogger(__name__)
 md_logger.setLevel(logging.DEBUG)
@@ -411,7 +411,8 @@ class Metadata(object):
                 pos = props[0]
                 exptime = imgs.parser._raw_metadata.camera_exposure_time[fps]
                 framedata={'acq':acq,'Position':str(pos),'frame':frame,'Channel':str(chan),'XY':list(xy), 'Z':z, 'Zindex':zind,'Exposure':exptime,'PixelSize':pixsize,'TimestampFrame':imgs.timesteps[fps],'TimestampImage':imgs.timesteps[fps],'filename':acq}
-                image_table = image_table.append(framedata, sort=False,ignore_index=True)
+                #image_table = image_table.append(framedata, sort=False,ignore_index=True)
+                image_table = pd.concat([image_table, pd.DataFrame(framedata)],axis=0,join='outer', sort=False,ignore_index=True)
             image_table['root_pth'] = image_table.filename
             image_table.filename = [join(pth, f.split(os.path.sep)[-1]) for f in image_table.filename]
             return image_table
@@ -446,7 +447,8 @@ class Metadata(object):
         for key in mdkeys:
             mdsing = mddata[key]
             framedata={'acq':mdsum['Prefix'],'Position':mdsing['PositionName'],'frame':mdsing['Frame'],'Channel':mdsum['ChNames'][mdsing['ChannelIndex']],'Marker':mdsum['ChNames'][mdsing['ChannelIndex']],'Fluorophore':mdsing['XLIGHT Emission Wheel-Label'],'group':mdsing['PositionName'],'XY':[mdsing['XPositionUm'],mdsing['YPositionUm']], 'Z':mdsing['ZPositionUm'], 'Zindex':mdsing['SliceIndex'],'Exposure':mdsing['Exposure-ms'] ,'PixelSize':mdsing['PixelSizeUm'], 'PlateType':'NA','TimestampFrame':mdsing['ReceivedTime'],'TimestampImage':mdsing['ReceivedTime'],'filename':mdsing['FileName']}
-            image_table = image_table.append(framedata, sort=False,ignore_index=True)
+            #image_table = image_table.append(framedata, sort=False,ignore_index=True)
+            image_table = pd.concat([image_table, pd.DataFrame(framedata)],axis=0,join='outer', sort=False,ignore_index=True)
 
         image_table['root_pth'] = image_table.filename
 
@@ -696,8 +698,6 @@ class Metadata(object):
         ----------
         framedata - pd dataframe of metadata
         """
-        #self.image_table = self.image_table.append(framedata, sort=False,ignore_index=True)
-
         self.image_table = pd.concat([self.image_table, framedata],axis=0,join='outer', sort=False,ignore_index=True)
 
         #framedata can be another MD dataframe
@@ -789,7 +789,7 @@ class Metadata(object):
                 image_subset_table = image_subset_table[image_subset_table[attr].isin(kwargs[attr])]
 
         # Group images and sort them then extract filenames/indices of sorted images
-        image_subset_table_sorted = image_subset_table.sort_values(sortby, inplace=False)
+        image_subset_table_sorted = image_subset_table.sort_values(by=sortby, key=natsort_keygen(), inplace=False)
         image_groups = image_subset_table_sorted.groupby(groupby)
 
         finds_output = {}
