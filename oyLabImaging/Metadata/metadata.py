@@ -228,14 +228,14 @@ class Metadata(object):
         for attr in image_subset_table.columns:
             if attr in kwargs:
                 image_subset_table = image_subset_table[image_subset_table[attr].isin(kwargs[attr])]
-        image_subset_table.sort_values(sortby, inplace=True)
+        image_subset_table_sorted = image_subset_table.sort_values(sortby, inplace=False)
 
         if Attr is None:
-            return image_subset_table.size
-        elif Attr in image_subset_table.columns:
-            return image_subset_table[Attr].unique()
+            return image_subset_table_sorted.size
+        elif Attr in image_subset_table_sorted.columns:
+            return image_subset_table_sorted[Attr].unique()
         elif Attr=='index':
-            return image_subset_table.index
+            return image_subset_table_sorted.index
         else:
             return None
 
@@ -411,8 +411,8 @@ class Metadata(object):
                 pos = props[0]
                 exptime = imgs.parser._raw_metadata.camera_exposure_time[fps]
                 framedata={'acq':acq,'Position':str(pos),'frame':frame,'Channel':str(chan),'XY':list(xy), 'Z':z, 'Zindex':zind,'Exposure':exptime,'PixelSize':pixsize,'TimestampFrame':imgs.timesteps[fps],'TimestampImage':imgs.timesteps[fps],'filename':acq}
-                #image_table = image_table.append(framedata, sort=False,ignore_index=True)
-                image_table = pd.concat([image_table, pd.DataFrame(framedata)],axis=0,join='outer', sort=False,ignore_index=True)
+                image_table = image_table.append(framedata, sort=False,ignore_index=True)
+                #image_table = pd.concat([image_table, pd.DataFrame(framedata)],axis=0,join='outer', sort=False,ignore_index=True)
             image_table['root_pth'] = image_table.filename
             image_table.filename = [join(pth, f.split(os.path.sep)[-1]) for f in image_table.filename]
             return image_table
@@ -447,8 +447,8 @@ class Metadata(object):
         for key in mdkeys:
             mdsing = mddata[key]
             framedata={'acq':mdsum['Prefix'],'Position':mdsing['PositionName'],'frame':mdsing['Frame'],'Channel':mdsum['ChNames'][mdsing['ChannelIndex']],'Marker':mdsum['ChNames'][mdsing['ChannelIndex']],'Fluorophore':mdsing['XLIGHT Emission Wheel-Label'],'group':mdsing['PositionName'],'XY':[mdsing['XPositionUm'],mdsing['YPositionUm']], 'Z':mdsing['ZPositionUm'], 'Zindex':mdsing['SliceIndex'],'Exposure':mdsing['Exposure-ms'] ,'PixelSize':mdsing['PixelSizeUm'], 'PlateType':'NA','TimestampFrame':mdsing['ReceivedTime'],'TimestampImage':mdsing['ReceivedTime'],'filename':mdsing['FileName']}
-            #image_table = image_table.append(framedata, sort=False,ignore_index=True)
-            image_table = pd.concat([image_table, pd.DataFrame(framedata)],axis=0,join='outer', sort=False,ignore_index=True)
+            image_table = image_table.append(framedata, sort=False,ignore_index=True)
+            #image_table = pd.concat([image_table, pd.DataFrame(framedata)],axis=0,join='outer', sort=False,ignore_index=True)
 
         image_table['root_pth'] = image_table.filename
 
