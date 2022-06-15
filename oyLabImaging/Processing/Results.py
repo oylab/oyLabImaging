@@ -363,7 +363,7 @@ class results(object):
         @magicgui(
             auto_call=True,
             position={"choices": natsorted([str(a) for a in R.PosLbls.keys()])},
-            track_id={"choices": range(R.PosLbls[R.PosNames[0]].get_track(0).numtracks)},
+            track_id={"choices": range(R.PosLbls[sorted([str(a) for a in R.PosLbls.keys()])[0]].get_track(0).numtracks)},
             channels={"widget_type": "Select", "choices": list(R.channels)},
             features={"widget_type": "Select", "choices": attr_list},
         )
