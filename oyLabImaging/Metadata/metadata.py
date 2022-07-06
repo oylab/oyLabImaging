@@ -119,6 +119,8 @@ class Metadata(object):
                 self._open_file=self._read_local
             elif load_type=='google_cloud':
                 raise NotImplementedError("google_cloud loading is not implemented.")
+        if self.unique('Position')=='Default':
+            self.image_table['Position']=self.image_table['acq']
 
 
 
@@ -228,14 +230,14 @@ class Metadata(object):
         for attr in image_subset_table.columns:
             if attr in kwargs:
                 image_subset_table = image_subset_table[image_subset_table[attr].isin(kwargs[attr])]
-        image_subset_table_sorted = image_subset_table.sort_values(sortby, inplace=False)
+        image_subset_table.sort_values(sortby, inplace=True)
 
         if Attr is None:
-            return image_subset_table_sorted.size
-        elif Attr in image_subset_table_sorted.columns:
-            return image_subset_table_sorted[Attr].unique()
+            return image_subset_table.size
+        elif Attr in image_subset_table.columns:
+            return image_subset_table[Attr].unique()
         elif Attr=='index':
-            return image_subset_table_sorted.index
+            return image_subset_table.index
         else:
             return None
 
@@ -412,12 +414,17 @@ class Metadata(object):
                 exptime = imgs.parser._raw_metadata.camera_exposure_time[fps]
                 framedata={'acq':acq,'Position':str(pos),'frame':frame,'Channel':str(chan),'XY':list(xy), 'Z':z, 'Zindex':zind,'Exposure':exptime,'PixelSize':pixsize,'TimestampFrame':imgs.timesteps[fps],'TimestampImage':imgs.timesteps[fps],'filename':acq}
                 image_table = image_table.append(framedata, sort=False,ignore_index=True)
-                #image_table = pd.concat([image_table, pd.DataFrame(framedata)],axis=0,join='outer', sort=False,ignore_index=True)
             image_table['root_pth'] = image_table.filename
             image_table.filename = [join(pth, f.split(os.path.sep)[-1]) for f in image_table.filename]
             return image_table
 
 
+    def export_as_text(self,fname='Metadata.txt'):
+        from pathlib import Path
+        from os.path import join
+        filepath = Path(join(self.base_pth,fname))
+        filepath.parent.mkdir(parents=True, exist_ok=True)
+        self.image_table.to_csv(filepath,sep='\t')
 
     def _load_metadata_MM(self, pth, fname='metadata.txt', delimiter='\t'):
         """
@@ -448,7 +455,6 @@ class Metadata(object):
             mdsing = mddata[key]
             framedata={'acq':mdsum['Prefix'],'Position':mdsing['PositionName'],'frame':mdsing['Frame'],'Channel':mdsum['ChNames'][mdsing['ChannelIndex']],'Marker':mdsum['ChNames'][mdsing['ChannelIndex']],'Fluorophore':mdsing['XLIGHT Emission Wheel-Label'],'group':mdsing['PositionName'],'XY':[mdsing['XPositionUm'],mdsing['YPositionUm']], 'Z':mdsing['ZPositionUm'], 'Zindex':mdsing['SliceIndex'],'Exposure':mdsing['Exposure-ms'] ,'PixelSize':mdsing['PixelSizeUm'], 'PlateType':'NA','TimestampFrame':mdsing['ReceivedTime'],'TimestampImage':mdsing['ReceivedTime'],'filename':mdsing['FileName']}
             image_table = image_table.append(framedata, sort=False,ignore_index=True)
-            #image_table = pd.concat([image_table, pd.DataFrame(framedata)],axis=0,join='outer', sort=False,ignore_index=True)
 
         image_table['root_pth'] = image_table.filename
 
@@ -698,6 +704,8 @@ class Metadata(object):
         ----------
         framedata - pd dataframe of metadata
         """
+        #self.image_table = self.image_table.append(framedata, sort=False,ignore_index=True)
+
         self.image_table = pd.concat([self.image_table, framedata],axis=0,join='outer', sort=False,ignore_index=True)
 
         #framedata can be another MD dataframe
@@ -744,12 +752,7 @@ class Metadata(object):
             self.type = MD.type
             return MD.image_table
 
-    def export_as_text(self,fname='Metadata.txt'):
-        from pathlib import Path
-        from os.path import join
-        filepath = Path(join(self.base_pth,fname))
-        filepath.parent.mkdir(parents=True, exist_ok=True)
-        self.image_table.to_csv(filepath,sep='\t')
+
 
 
     def stkread(self, groupby='Position', sortby='TimestampFrame',
