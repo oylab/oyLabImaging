@@ -654,5 +654,7 @@ def gaussian_filter(p, sigma=10):
 
 def sample_stack(img, N=1000):
     rng = np.random.default_rng()
+    if img.ndim==2:
+        img = np.expand_dims(img,2)
     ints = rng.integers([[0]]*N,img.shape)
     return img[ints[:,0],ints[:,1],ints[:,2]]
