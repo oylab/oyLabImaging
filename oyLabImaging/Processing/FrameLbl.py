@@ -140,69 +140,72 @@ class FrameLbl(object):
         props = measure.regionprops(L,intensity_image=Data[NucChannel[0]])
 
 
-
-        props_df = regionprops_to_df(props)
-        props_df.drop(['mean_intensity', 'max_intensity', 'min_intensity'], axis=1,inplace=True)
-        if zernike:
-
-            L1 = [list(Zernike.coeff_fast(stats.zscore(r.intensity_image)))[1] for r in props]
-            K1 = [list(Zernike.coeff_fast(stats.zscore(r.intensity_image)))[2] for r in props]
-            props_df['L'] = L1
-            props_df['K'] = K1
-
-        for ch in self.channels:
-            props_channel = measure.regionprops(L,intensity_image=Data[ch])
-            mean_channel = [r.mean_intensity for r in props_channel]
-            max_channel = [r.max_intensity for r in props_channel]
-            min_channel = [r.min_intensity for r in props_channel]
-            Ninty_channel = [np.percentile(r.intensity_image,90) for r in props_channel]
-            median_channel = [np.median(r.intensity_image) for r in props_channel]
-
-            props_df['mean_'+ch] = mean_channel
-            props_df['max_'+ch] = max_channel
-            props_df['min_'+ch] = min_channel
-            props_df['90th_'+ch] = Ninty_channel
-            props_df['median_'+ch] = median_channel
-
+        if len(props):
+            props_df = regionprops_to_df(props)
+            props_df.drop(['mean_intensity', 'max_intensity', 'min_intensity'], axis=1,inplace=True)
             if zernike:
-                c1 = [list(Zernike.coeff_fast(stats.zscore(r.intensity_image)))[0] for r in props_channel]
-                props_df['zernike_'+ch] = c1
 
-
-        if periring:
-            #from skimage.morphology import disk, dilation
-            from skimage.segmentation import expand_labels
-            Lperi = expand_labels(L, distance=periringsize)-L
+                L1 = [list(Zernike.coeff_fast(stats.zscore(r.intensity_image)))[1] for r in props]
+                K1 = [list(Zernike.coeff_fast(stats.zscore(r.intensity_image)))[2] for r in props]
+                props_df['L'] = L1
+                props_df['K'] = K1
 
             for ch in self.channels:
-                props_channel = measure.regionprops(Lperi,intensity_image=Data[ch])
+                props_channel = measure.regionprops(L,intensity_image=Data[ch])
                 mean_channel = [r.mean_intensity for r in props_channel]
                 max_channel = [r.max_intensity for r in props_channel]
                 min_channel = [r.min_intensity for r in props_channel]
                 Ninty_channel = [np.percentile(r.intensity_image,90) for r in props_channel]
                 median_channel = [np.median(r.intensity_image) for r in props_channel]
 
-                props_df['mean_'+ch + '_periring'] = mean_channel
-                props_df['max_'+ch + '_periring'] = max_channel
-                props_df['min_'+ch + '_periring'] = min_channel
-                props_df['90th_'+ch + '_periring'] = Ninty_channel
-                props_df['median_'+ch + '_periring'] = median_channel
+                props_df['mean_'+ch] = mean_channel
+                props_df['max_'+ch] = max_channel
+                props_df['min_'+ch] = min_channel
+                props_df['90th_'+ch] = Ninty_channel
+                props_df['median_'+ch] = median_channel
 
-        if cytoplasm:
-            pass
+                if zernike:
+                    c1 = [list(Zernike.coeff_fast(stats.zscore(r.intensity_image)))[0] for r in props_channel]
+                    props_df['zernike_'+ch] = c1
 
-        if register:
-            ind = MD.unique('index', Position=Pos, frame=frame, Channel=NucChannel)
-            Tforms = MD().at[ind[0],'driftTform']
-            if Tforms is not None:
-                for i in np.arange(props_df.index.size):
-                    props_df.at[i,'centroid'] = tuple(np.add(props_df.at[i,'centroid'],Tforms[6:8]))
-                    props_df.at[i,'weighted_centroid'] = tuple(np.add(props_df.at[i,'weighted_centroid'],Tforms[6:8]))
-                #print('\nRegistered centroids')
-            else:
-                print('No drift correction found')
 
-        self.regionprops = props_df
+            if periring:
+                #from skimage.morphology import disk, dilation
+                from skimage.segmentation import expand_labels
+                Lperi = expand_labels(L, distance=periringsize)-L
+
+                for ch in self.channels:
+                    props_channel = measure.regionprops(Lperi,intensity_image=Data[ch])
+                    mean_channel = [r.mean_intensity for r in props_channel]
+                    max_channel = [r.max_intensity for r in props_channel]
+                    min_channel = [r.min_intensity for r in props_channel]
+                    Ninty_channel = [np.percentile(r.intensity_image,90) for r in props_channel]
+                    median_channel = [np.median(r.intensity_image) for r in props_channel]
+
+                    props_df['mean_'+ch + '_periring'] = mean_channel
+                    props_df['max_'+ch + '_periring'] = max_channel
+                    props_df['min_'+ch + '_periring'] = min_channel
+                    props_df['90th_'+ch + '_periring'] = Ninty_channel
+                    props_df['median_'+ch + '_periring'] = median_channel
+
+            if cytoplasm:
+                pass
+
+            if register:
+                ind = MD.unique('index', Position=Pos, frame=frame, Channel=NucChannel)
+                Tforms = MD().at[ind[0],'driftTform']
+                if Tforms is not None:
+                    for i in np.arange(props_df.index.size):
+                        props_df.at[i,'centroid'] = tuple(np.add(props_df.at[i,'centroid'],Tforms[6:8]))
+                        props_df.at[i,'weighted_centroid'] = tuple(np.add(props_df.at[i,'weighted_centroid'],Tforms[6:8]))
+                    #print('\nRegistered centroids')
+                else:
+                    print('No drift correction found')
+
+            self.regionprops = props_df
+        else:
+            self.regionprops = pd.DataFrame(columns=list(measure._regionprops.PROPS.values()))
+
 
 
     def __call__(self):
