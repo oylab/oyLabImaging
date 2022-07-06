@@ -119,7 +119,7 @@ class Metadata(object):
                 self._open_file=self._read_local
             elif load_type=='google_cloud':
                 raise NotImplementedError("google_cloud loading is not implemented.")
-        if self.unique('Position')=='Default':
+        if np.all(self.unique('Position')=='Default'):
             self.image_table['Position']=self.image_table['acq']
 
 
