@@ -66,7 +66,8 @@ class kmeans:
 def InAxes(ax=None):
     # find indexes of plot points which are inside axes rectangle
     # by default works on the current axes, otherwise give an axes handle
-
+    import matplotlib.pyplot as plt
+    
     if ax==None:
         ax = plt.gca()
 
