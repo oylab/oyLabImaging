@@ -127,7 +127,7 @@ class results(object):
         """
         pos=Position
 
-        if pos==None:
+        if np.all(pos==None):
             pos = list(self.PosLbls.keys())
         pos = pos if isinstance(pos, list) else [pos]
         assert any(elem in self.PosLbls.keys()  for elem in pos), str(pos) + ' not segmented yet'
