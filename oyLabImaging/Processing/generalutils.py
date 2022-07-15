@@ -19,8 +19,8 @@ def colorcode(datax, datay):
     f = interpolate.RectBivariateSpline(xedges,yedges , H)
 
     z = np.array([])
-    for i in datax.index:
-        z = np.append(z,f(datax[i],datay[i]))
+    for ix,iy in zip(datax,datay):
+        z = np.append(z,f(ix,iy))
     #z=(z-min(z))/(max(z)-min(z))
     z[z<0] = 0
     idx = z.argsort()
@@ -67,7 +67,7 @@ def InAxes(ax=None):
     # find indexes of plot points which are inside axes rectangle
     # by default works on the current axes, otherwise give an axes handle
     import matplotlib.pyplot as plt
-    
+
     if ax==None:
         ax = plt.gca()
 
