@@ -134,14 +134,14 @@ class Metadata(object):
         """
         Returns all unique position names
         """
-        return self().Position.unique()
+        return natsorted(self().Position.unique())
 
     @property
     def Position(self):
         """
         Returns all unique position names
         """
-        return self().Position.unique()
+        return natsorted(self().Position.unique())
 
     @property
     def frames(self):
@@ -456,10 +456,11 @@ class Metadata(object):
             framedata={'acq':mdsum['Prefix'],'Position':mdsing['PositionName'],'frame':mdsing['Frame'],'Channel':mdsum['ChNames'][mdsing['ChannelIndex']],'Marker':mdsum['ChNames'][mdsing['ChannelIndex']],'Fluorophore':mdsing['XLIGHT Emission Wheel-Label'],'group':mdsing['PositionName'],'XY':[mdsing['XPositionUm'],mdsing['YPositionUm']], 'Z':mdsing['ZPositionUm'], 'Zindex':mdsing['SliceIndex'],'Exposure':mdsing['Exposure-ms'] ,'PixelSize':mdsing['PixelSizeUm'], 'PlateType':'NA','TimestampFrame':mdsing['ReceivedTime'],'TimestampImage':mdsing['ReceivedTime'],'filename':mdsing['FileName']}
             image_table = image_table.append(framedata, sort=False,ignore_index=True)
 
-        image_table['root_pth'] = image_table.filename
+        #image_table['root_pth'] = image_table.filename
 
 
         image_table.filename = [join(pth, f.split('/')[-1]) for f in image_table.filename]
+        image_table['root_pth'] = [f.replace(self.base_pth,'') for f in image_table.filename]
         return image_table
 
 
@@ -744,10 +745,11 @@ class Metadata(object):
         -------
         image_table - pd dataframe of metadata image table
         """
+        from os.path import join
         with open(join(pth,fname), 'rb') as dbfile:
             MD = pickle.load(dbfile)
-            MD.image_table['root_pth'] = MD.image_table.filename
-            MD.image_table.filename = [join(pth, f) for f in MD.image_table.filename]
+            MD.image_table['root_pth'] = MD.image_table['filename'].copy()
+            MD.image_table['filename'] = [MD.base_pth+ f for f in MD.image_table['filename']]
             self._md_name = 'metadata.pickle'
             self.type = MD.type
             return MD.image_table
@@ -802,7 +804,7 @@ class Metadata(object):
 
         finds_output = {}
         mdata = {}
-        for posname in image_groups.groups.keys():
+        for posname in natsorted(image_groups.groups.keys()):
             finds_output[posname] = image_subset_table_sorted.loc[image_groups.groups[posname]].index.values
             mdata[posname] = image_subset_table_sorted.loc[image_groups.groups[posname]]
 
