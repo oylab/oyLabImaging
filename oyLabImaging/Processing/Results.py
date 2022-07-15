@@ -97,8 +97,16 @@ class results(object):
 
         Parameters
         ----------
+        MD - experiment metadata
         Position - [All Positions] position name or list of position names
 
+        Segmentation parameters
+        -----------------------
+        NucChannel : ['DeepBlue'] list or str name of nuclear channel
+        CytoChannel : optional cytoplasm channel
+        segment_type : ['watershed'] function to use for segmentatiion
+        **kwargs : specific args for segmentation function, anything that goes into FrameLbl
+        Threads : how many threads to use for parallel execution. Limited to ~6 for GPU based segmentation and 128 for CPU (but don't use all 128)
         """
         if MD is None:
             MD = Metadata(self.pth)
@@ -129,7 +137,7 @@ class results(object):
 
         if np.all(pos==None):
             pos = list(self.PosLbls.keys())
-        pos = pos if isinstance(pos, list) else [pos]
+        pos = pos if isinstance(pos, list) or isinstance(pos, np.ndarray) else [pos]
         assert any(elem in self.PosLbls.keys()  for elem in pos), str(pos) + ' not segmented yet'
         for p in pos:
             print('Calculating tracks for position ' + str(p))
@@ -165,7 +173,7 @@ class results(object):
         """
         if pos==None:
             pos = list(self.PosLbls.keys())
-        pos = pos if isinstance(pos, list) else [pos]
+        pos = pos if isinstance(pos, list) or isinstance(pos, np.ndarray) else [pos]
         ts=[]
         for p in pos:
             t0 = self.tracks(p)
@@ -244,8 +252,7 @@ class results(object):
         """
         if Position==None:
             Position = list(self.PosNames)
-        if not isinstance(Position, list):
-            Position = [Position]
+        Position = Position if isinstance(Position, list) or isinstance(Position, np.ndarray) else [Position]
         ntracks=[]
         for pos in Position:
             ntracks.append(self.PosLbls[pos].numtracks)

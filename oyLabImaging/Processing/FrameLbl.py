@@ -222,11 +222,17 @@ class FrameLbl(object):
 
     @property
     def centroid(self):
-        return np.reshape(np.concatenate(self.regionprops['centroid']),(-1,2))
+        if self.num:
+            return np.reshape(np.concatenate(self.regionprops['centroid']),(-1,2))
+        else:
+            return np.array([])
 
     @property
     def weighted_centroid(self):
-        return np.reshape(np.concatenate(self.regionprops['weighted_centroid']),(-1,2))
+        if self.num:
+            return np.reshape(np.concatenate(self.regionprops['weighted_centroid']),(-1,2))
+        else:
+            return np.array([])
 
     @property
     def area(self):
@@ -238,11 +244,17 @@ class FrameLbl(object):
 
     @property
     def centroid_um(self):
-        return self.XY + self._pixelsize*self.centroid
+        if self.num:
+            return self.XY + self._pixelsize*self.centroid
+        else:
+            return np.array([])
 
     @property
     def weighted_centroid_um(self):
-        return self.XY + self._pixelsize*self.weighted_centroid
+        if self.num:
+            return self.XY + self._pixelsize*self.weighted_centroid
+        else:
+            return np.array([])
 
     @property
     def area_um2(self):
@@ -250,46 +262,64 @@ class FrameLbl(object):
 
 
     def mean(self,ch, periring=False):
-        assert ch in self.channels, "%s isn't a channel, try %s" % (ch, ', '.join(list(self.channels)))
-        if periring:
-            return self.regionprops['mean_' + ch + '_periring']
+        if self.num:
+            assert ch in self.channels, "%s isn't a channel, try %s" % (ch, ', '.join(list(self.channels)))
+            if periring:
+                return self.regionprops['mean_' + ch + '_periring']
+            else:
+                return self.regionprops['mean_' + ch]
         else:
-            return self.regionprops['mean_' + ch]
+            return np.array([])
 
     def median(self,ch, periring=False):
-        assert ch in self.channels, "%s isn't a channel, try %s" % (ch, ', '.join(list(self.channels)))
-        if periring:
-            return self.regionprops['median_' + ch + '_periring']
+        if self.num:
+            assert ch in self.channels, "%s isn't a channel, try %s" % (ch, ', '.join(list(self.channels)))
+            if periring:
+                return self.regionprops['median_' + ch + '_periring']
+            else:
+                return self.regionprops['median_' + ch]
         else:
-            return self.regionprops['median_' + ch]
+            return np.array([])
 
     def minint(self,ch, periring=False):
-        assert ch in self.channels, "%s isn't a channel, try %s" % (ch, ', '.join(list(self.channels)))
-        if periring:
-            return self.regionprops['min_' + ch + '_periring']
+        if self.num:
+            assert ch in self.channels, "%s isn't a channel, try %s" % (ch, ', '.join(list(self.channels)))
+            if periring:
+                return self.regionprops['min_' + ch + '_periring']
+            else:
+                return self.regionprops['min_' + ch]
         else:
-            return self.regionprops['min_' + ch]
+            return np.array([])
 
     def maxint(self,ch, periring=False):
-        assert ch in self.channels, "%s isn't a channel, try %s" % (ch, ', '.join(list(self.channels)))
-        if periring:
-            return self.regionprops['max_' + ch + '_periring']
+        if self.num:
+            assert ch in self.channels, "%s isn't a channel, try %s" % (ch, ', '.join(list(self.channels)))
+            if periring:
+                return self.regionprops['max_' + ch + '_periring']
+            else:
+                return self.regionprops['max_' + ch]
         else:
-            return self.regionprops['max_' + ch]
+            return np.array([])
 
     def ninetyint(self,ch, periring=False):
-        assert ch in self.channels, "%s isn't a channel, try %s" % (ch, ', '.join(list(self.channels)))
-        if periring:
-            return self.regionprops['90th_' + ch + '_periring']
+        if self.num:
+            assert ch in self.channels, "%s isn't a channel, try %s" % (ch, ', '.join(list(self.channels)))
+            if periring:
+                return self.regionprops['90th_' + ch + '_periring']
+            else:
+                return self.regionprops['90th_' + ch]
         else:
-            return self.regionprops['90th_' + ch]
+            return np.array([])
 
     @property
     def density(self):
-        from sklearn.neighbors import NearestNeighbors
-        nbrs = NearestNeighbors(n_neighbors=11, algorithm='ball_tree').fit(self.weighted_centroid)
-        distances,_   = nbrs.kneighbors(self.weighted_centroid)
-        return 1./np.mean(distances[:,1:],axis=1)
+        if self.num>2:
+            from sklearn.neighbors import NearestNeighbors
+            nbrs = NearestNeighbors(n_neighbors=11, algorithm='ball_tree').fit(self.weighted_centroid)
+            distances,_   = nbrs.kneighbors(self.weighted_centroid)
+            return 1./np.mean(distances[:,1:],axis=1)
+        else:
+            return np.array([])
 
 
 

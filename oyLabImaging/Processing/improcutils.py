@@ -405,7 +405,7 @@ class segmentation(object):
         Areas>10000;
         BG = [i for i, val in enumerate(Areas>10000) if val]
 
-        if any(BG):
+        if BG:
             for i in np.arange(len(BG)):
                 L[L==BG[i]+1]=0
 

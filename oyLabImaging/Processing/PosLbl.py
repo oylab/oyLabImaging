@@ -207,7 +207,7 @@ class PosLbl(object):
     @property
     def numtracks(self):
         try:
-            return self.get_track(0).numtracks
+            return self.trackinds.shape[0]
         except ValueError:
             print('Position not tracked')
 
@@ -315,6 +315,7 @@ class PosLbl(object):
         def prop(self, prop='area'):
             return np.array([self._outer.framelabels[j].regionprops[prop][self.trackinds[j]] for j in self.T])
 
+        @property
         def frame(self):
             return np.array([int(self._outer.framelabels[j].frame) for j in self.T])
 
@@ -410,52 +411,53 @@ class PosLbl(object):
             Wp=[]
 
         for i in np.arange(nums.shape[0]-1):
-
             sys.stdout.write("\r"+'linking frame '+ str(i))
             sys.stdout.flush()
+            if nums[i+1]>0:
+                T = KDTree(cents[i+1])
+                #We calculate points in centroid(n+1) that are less than distance_upper_bound from points in centroid(n)
+                dists, idx = T.query(cents[i], k=12, distance_upper_bound=search_radius)
 
-            T = KDTree(cents[i+1])
-            #We calculate points in centroid(n+1) that are less than distance_upper_bound from points in centroid(n)
-            dists, idx = T.query(cents[i], k=12, distance_upper_bound=search_radius)
+                dists = [r[r<1E308] for r in dists]
 
-            dists = [r[r<1E308] for r in dists]
+                idx = [r[r<cents[i+1].shape[0]] for r in idx]
 
-            idx = [r[r<cents[i+1].shape[0]] for r in idx]
+                #possible matches in n+1
+                jj = np.concatenate(idx)
 
-            #possible matches in n+1
-            jj = np.concatenate(idx)
+                #possible correspondence in n
+                j=0
+                ii=[]
+                for r in idx:
+                    ii.append(j*np.ones_like(r))
+                    j+=1
+                ii = np.concatenate(ii)
 
-            #possible correspondence in n
-            j=0
-            ii=[]
-            for r in idx:
-                ii.append(j*np.ones_like(r))
-                j+=1
-            ii = np.concatenate(ii)
-
-                        #ii jj cc are now sparse matrix in COO format
-            ampRatio=1
-            eps = 10**-72
-            for cp, wp in zip(Cp, Wp):
-                ints = self.ninetyint(cp)
-                ampRatio = ampRatio + wp*(np.array(eps+np.maximum(list(ints[i][ii]), list(ints[i+1][jj])))/np.array(eps+np.minimum(list(ints[i][ii]), list(ints[i+1][jj])))-1)
+                            #ii jj cc are now sparse matrix in COO format
+                ampRatio=1
+                eps = 10**-72
+                for cp, wp in zip(Cp, Wp):
+                    ints = self.ninetyint(cp)
+                    ampRatio = ampRatio + wp*(np.array(eps+np.maximum(list(ints[i][ii]), list(ints[i+1][jj])))/np.array(eps+np.minimum(list(ints[i][ii]), list(ints[i+1][jj])))-1)
 
 
-            #costs of match
-            cc = np.concatenate(dists)*ampRatio
-            cc[cc>1000000]=999999
+                #costs of match
+                cc = np.concatenate(dists)*ampRatio
+                cc[cc>1000000]=999999
 
-            shape = (nums[i], nums[i+1])
+                shape = (nums[i], nums[i+1])
 
-            cc, ii, kk = prepare_sparse_cost(shape, cc, ii, jj, cost_limit=300)
-            ind1, ind0 = lap.lapmod(len(ii)-1, cc, ii, kk, return_cost=False)
-            ind1[ind1 >= shape[1]] = -1
-            ind0[ind0 >= shape[0]] = -1
-            #inds in n+1 that match inds (1:N) in n
-            ind1 = ind1[:shape[0]]
-            #inds in n that match inds (1:N) in n+1
-            ind0 = ind0[:shape[1]]
-            self.framelabels[i].link1in2 = ind1
+                cc, ii, kk = prepare_sparse_cost(shape, cc, ii, jj, cost_limit=300)
+                ind1, ind0 = lap.lapmod(len(ii)-1, cc, ii, kk, return_cost=False)
+                ind1[ind1 >= shape[1]] = -1
+                ind0[ind0 >= shape[0]] = -1
+                #inds in n+1 that match inds (1:N) in n
+                ind1 = ind1[:shape[0]]
+                #inds in n that match inds (1:N) in n+1
+                ind0 = ind0[:shape[1]]
+                self.framelabels[i].link1in2 = ind1
+            else:
+                self.framelabels[i].link1in2=np.array([])
         self.framelabels[nums.shape[0]-1].link1in2=np.array([])
 
 
@@ -466,16 +468,19 @@ class PosLbl(object):
         Helper function recursive function that gets an initial frame i and starting cell label
         l and returns all labels
         '''
-        if i<len(self.frames)-1:
-            if l>-1:
-                return(np.append(l, self._getTrackLinks(i+1,self.framelabels[i].link1in2[l])))
-            else:
-                pass
-        elif i==len(self.frames)-1:
-            if l>-1:
-                return(l)
-            else:
-                pass
+        if self.num[i+1]>0:
+            if i<len(self.frames)-1:
+                if l>-1:
+                    return(np.append(l, self._getTrackLinks(i+1,self.framelabels[i].link1in2[l])))
+                else:
+                    pass
+            elif i==len(self.frames)-1:
+                if l>-1:
+                    return(l)
+                else:
+                    pass
+        else:
+            return np.array([])
 
 
     def _getAllContinuousTrackSegs(self, minseglength=4, **kwargs):
@@ -490,7 +495,7 @@ class PosLbl(object):
         '''
         trackbits = []
         for i in np.arange(len(self.frames)-1):
-            for l in np.nonzero(np.isin(np.arange(self.framelabels[i].num), np.array([r[i] for r in trackbits]), invert=True))[0]:
+            for l in np.nonzero(np.isin(np.arange(self.num[i]), np.array([r[i] for r in trackbits]), invert=True))[0]:
                 trkl = self._getTrackLinks(i=i, l=l)
                 trackbits.append(np.pad(trkl.astype('object'), (i, len(self.frames)-trkl.size-i), 'constant', constant_values=(None, None)))
         trackbits = np.array(trackbits)
@@ -678,8 +683,7 @@ class PosLbl(object):
                 ind1 = trackbits[possiblelinks[i][1]][frame1]
                 # cell label in frame 2 to link
                 ind2 = trackbits[possiblelinks[i][0]][frame2]
-
-                dr = np.linalg.norm(cents[frame1][ind1]-cents[frame2][ind2])
+                dr = np.linalg.norm(cents[frame1][int(ind1)]-cents[frame2][int(ind2)])
 
                 if dr <= search_radius:
                     da=1
@@ -752,7 +756,7 @@ class PosLbl(object):
         helper function, calculate points in a napari-friendly way
         """
         a = []
-        [a.append((np.pad(cen, ((0,0), (1,0)),constant_values=i))) for i,cen in enumerate(self.centroid)]
+        [a.append((np.pad(cen, ((0,0), (1,0)),constant_values=i))) for i,cen in enumerate(self.centroid) if np.any(cen)]
         self._pointmatrix = np.concatenate(a)
 
     def _pointmat(self,frames=None):
@@ -776,9 +780,12 @@ class PosLbl(object):
         """
         helper function, calculate tracks in a napari-friendly way
         """
-        t0 = self.get_track
-        J = np.arange(t0().numtracks)
-        self._trackmatrix=np.concatenate([[np.append([i, ind],x) for ind, x in zip(t0(i).T, t0(i).centroid)] for i in tqdm(J)])
+        if self.numtracks:
+            t0 = self.get_track
+            J = np.arange(self.numtracks)
+            self._trackmatrix=np.concatenate([[np.append([i, ind],x) for ind, x in zip(t0(i).T, t0(i).centroid)] for i in tqdm(J)])
+        else:
+            self._trackmatrix = np.array([])
 
     def _tracksmat(self, J=None):
         """
@@ -787,16 +794,17 @@ class PosLbl(object):
         ----------
         J - track indices to return
         """
-        t0 = self.get_track
-        if J is None:
-            J = np.arange(t0().numtracks)
+        if self.numtracks:
+            t0 = self.get_track
+            if J is None:
+                J = np.arange(self.numtracks)
+            else:
+                if not (isinstance(J, list) or isinstance(J, np.ndarray)):
+                    J = [J]
+                J = [j for j in J if j in np.arange(t0().numtracks)]
+            return self._trackmatrix[np.in1d(self._trackmatrix[:,0], J)], J
         else:
-            if not (isinstance(J, list) or isinstance(J, np.ndarray)):
-                J = [J]
-            J = [j for j in J if j in np.arange(t0().numtracks)]
-        return self._trackmatrix[np.in1d(self._trackmatrix[:,0], J)], J
-
-
+            return np.array([]), []
 
     def plot_images(self, Channel='DeepBlue',Zindex=[0], frames=None, cmaps = ['red', 'green', 'blue', 'cyan', 'magenta', 'yellow'], **kwargs):
         """
@@ -807,6 +815,9 @@ class PosLbl(object):
 
         Draws image stks in current napari viewer
         """
+
+        Channel = Channel if isinstance(Channel, list) or isinstance(Channel, np.ndarray) else [Channel]
+
         if len(Channel)==1:
                 cmaps = ['gray']
         if frames==None:
