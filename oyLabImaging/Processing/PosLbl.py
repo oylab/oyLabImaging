@@ -413,7 +413,7 @@ class PosLbl(object):
         for i in np.arange(nums.shape[0]-1):
             sys.stdout.write("\r"+'linking frame '+ str(i))
             sys.stdout.flush()
-            if nums[i+1]>0:
+            if nums[i+1]>0 and nums[i]>0:
                 T = KDTree(cents[i+1])
                 #We calculate points in centroid(n+1) that are less than distance_upper_bound from points in centroid(n)
                 dists, idx = T.query(cents[i], k=12, distance_upper_bound=search_radius)
@@ -469,12 +469,12 @@ class PosLbl(object):
         l and returns all labels
         '''
         if self.num[i+1]>0:
-            if i<len(self.frames)-1:
+            if i+1<len(self.frames)-1:
                 if l>-1:
                     return(np.append(l, self._getTrackLinks(i+1,self.framelabels[i].link1in2[l])))
                 else:
                     pass
-            elif i==len(self.frames)-1:
+            elif i+1==len(self.frames)-1:
                 if l>-1:
                     return(l)
                 else:
@@ -850,10 +850,11 @@ class PosLbl(object):
         from oyLabImaging.Processing.imvisutils import get_or_create_viewer
         viewer = get_or_create_viewer()
         trackmat, J = self._tracksmat(J=J)
-        inds_to_include = self.trackinds[J]!=None
-        track_props = {'cell_id' :list( self.trackinds[J][np.where(inds_to_include)]), 'cell_T' : np.where(inds_to_include)[1],}
+        #inds_to_include = self.trackinds[J]!=None
+        inds_to_include = np.array([self.trackinds[j]!=None for j in J])
+        #track_props = {'cell_id' :list( self.trackinds[J][np.where(inds_to_include)]), 'cell_T' : np.where(inds_to_include)[1],}
 
-        tracklayer = viewer.add_tracks(trackmat,blending='additive', scale=[self.PixelSize, self.PixelSize],properties=track_props)
+        tracklayer = viewer.add_tracks(trackmat,blending='additive', scale=[self.PixelSize, self.PixelSize])
         #tracklayer.display_id=True
         return tracklayer
 
