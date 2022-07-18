@@ -370,7 +370,7 @@ class results(object):
         @magicgui(
             auto_call=True,
             position={"choices": natsorted([str(a) for a in R.PosLbls.keys()])},
-            track_id={"choices": range(R.PosLbls[sorted([str(a) for a in R.PosLbls.keys()])[0]].get_track(0).numtracks)},
+            track_id={"choices": range(R.PosLbls[sorted([str(a) for a in R.PosLbls.keys()])[0]].numtracks)},
             channels={"widget_type": "Select", "choices": list(R.channels)},
             features={"widget_type": "Select", "choices": attr_list},
         )
@@ -380,24 +380,32 @@ class results(object):
             ...
             # do your graphing here
             PosLbl = R.PosLbls[position]
-            t0 = PosLbl.get_track(track_id)
+            if PosLbl.numtracks:
+                if type(track_id)!=int:
+                    if keep_only:
+                        J = PosLbl.track_to_use
+                    else:
+                        J = range(PosLbl.numtracks)
+                    track_id=J[0]
+                t0 = PosLbl.get_track(track_id)
             ax.cla()
             ax.set_xlabel('Timepoint')
             ax.set_ylabel('kAU')
             ch_choices = widget.channels.choices
-            for ch in channels:
-                ax.plot(t0.T, stats.zscore(t0.mean(ch)), color=cmaps[ch_choices.index(ch)])
+            if PosLbl.numtracks:
+                for ch in channels:
+                    ax.plot(t0.T, stats.zscore(t0.mean(ch)), color=cmaps[ch_choices.index(ch)])
 
-            f_choices = widget.features.choices
-            for ch in features:
-                feat_to_plot = eval("t0.prop('"+ch+"')")
-                if np.ndim(feat_to_plot)==1:
-                    ax.plot(t0.T, stats.zscore(feat_to_plot,nan_policy='omit'),'--', color=attr_cmap[f_choices.index(ch)],alpha=0.33)
-                else:
-                    mini_cmap = plt.cm.get_cmap('jet',np.shape(feat_to_plot)[1])
-                    for dim in np.arange(np.shape(feat_to_plot)[1]):
-                        ax.plot(t0.T, stats.zscore(feat_to_plot[:,dim],nan_policy='omit'),'--', color=mini_cmap(dim), alpha=0.33)
-                        #ax.plot(t0.T, feat_to_plot[:,dim],'--', color=mini_cmap(dim), alpha=0.25)
+                f_choices = widget.features.choices
+                for ch in features:
+                    feat_to_plot = eval("t0.prop('"+ch+"')")
+                    if np.ndim(feat_to_plot)==1:
+                        ax.plot(t0.T, stats.zscore(feat_to_plot,nan_policy='omit'),'--', color=attr_cmap[f_choices.index(ch)],alpha=0.33)
+                    else:
+                        mini_cmap = plt.cm.get_cmap('jet',np.shape(feat_to_plot)[1])
+                        for dim in np.arange(np.shape(feat_to_plot)[1]):
+                            ax.plot(t0.T, stats.zscore(feat_to_plot[:,dim],nan_policy='omit'),'--', color=mini_cmap(dim), alpha=0.33)
+                            #ax.plot(t0.T, feat_to_plot[:,dim],'--', color=mini_cmap(dim), alpha=0.25)
 
 
             ax.legend(channels + features)
@@ -416,9 +424,12 @@ class results(object):
             if keep_only:
                 J = PosLbl.track_to_use
             else:
-                J = range(PosLbl.get_track(0).numtracks)
-            widget.track_id.choices = []
+                J = range(PosLbl.numtracks)
+
+
             widget.track_id.choices = J
+            if PosLbl.numtracks:
+                widget.track_id.value = J[0]
             #update keep_btn value
             #keep_btn.value= widget.track_id.value in PosLbl.track_to_use
 
