@@ -61,13 +61,8 @@ class results(object):
         pth = self.pth
 
         if 'results.pickle' in listdir(pth):
-                r = self.load(pth ,fname='results.pickle')
-                self.PosNames = r.PosNames
-                self.channels = r.channels
-                self.acq = r.acq
-                self.frames = r.frames
-                self.groups = r.groups
-                self.PosLbls = r.PosLbls
+                r = results.load(pth ,fname='results.pickle')
+                self.__dict__.update(r.__dict__)
                 print('\nloaded results from pickle file')
         else:
             if MD is None:
@@ -137,7 +132,7 @@ class results(object):
 
         if np.all(pos==None):
             pos = list(self.PosLbls.keys())
-        pos = pos if isinstance(pos, list) or isinstance(pos, np.ndarray) else [pos]
+        pos = pos if isinstance(pos, (list, np.ndarray)) else [pos]
         assert any(elem in self.PosLbls.keys()  for elem in pos), str(pos) + ' not segmented yet'
         for p in pos:
             print('Calculating tracks for position ' + str(p))
@@ -268,7 +263,8 @@ class results(object):
             cloudpickle.dump(self, dbfile)
             print('saved results')
 
-    def load(self,pth,fname='results.pickle'):
+    @classmethod
+    def load(cls,pth,fname='results.pickle'):
         """
         load results
         """

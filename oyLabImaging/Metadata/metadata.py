@@ -85,6 +85,7 @@ class Metadata(object):
 
         # If it can't find a supported MD, it exits w/o doing anything
         if self.type==None:
+            print('Could not find supported metadata.')
             return
 
 
@@ -102,7 +103,10 @@ class Metadata(object):
 
 
         # With all we've learned, we can now load the metadata
-        self._load_metadata(verbose=verbose)
+        try:
+            self._load_metadata(verbose=verbose)
+        except:
+            print('could not load metadata, file may be corrupted.')
 
         # Handle columns that don't import from text well
         try:
@@ -223,7 +227,7 @@ class Metadata(object):
         #pd.set_option('mode.chained_assignment', None)
 
         for key, value in kwargs.items():
-            if not isinstance(value, list):
+            if not isinstance(value, (list, np.ndarray)):
                 kwargs[key] = [value]
         image_subset_table = self.image_table.copy()
         # Filter images according to some criteria
@@ -794,7 +798,7 @@ class Metadata(object):
         # Filter images according to given criteria
         for attr in image_subset_table.columns:
             if attr in kwargs:
-                if not isinstance(kwargs[attr], list):
+                if not isinstance(kwargs[attr], (list, np.ndarray)):
                     kwargs[attr] = [kwargs[attr]]
                 image_subset_table = image_subset_table[image_subset_table[attr].isin(kwargs[attr])]
 
@@ -1082,15 +1086,13 @@ class Metadata(object):
 
 
     # Calculate jitter/drift corrections
-    def CalculateDriftCorrection(self, Position=None,frames=None, ZsToLoad=[0], Channel='DeepBlue',threads=8,chunks=20, GPU=True):
+    def CalculateDriftCorrection(self, Position=None,frames=None, ZsToLoad=[0], Channel=None,threads=8,chunks=20, GPU=True):
         if GPU:
             try:
-#                 self.CalculateDriftCorrectionGPU(Position=Position,frames=frames, ZsToLoad=ZsToLoad, Channel=Channel)
-#             except:
                 print('Trying GPU calculation in chunks of '+ str(chunks))
                 self.CalculateDriftCorrectionGPUChunks(Position=Position,frames=frames, ZsToLoad=ZsToLoad, Channel=Channel,chunks=chunks)
             except:
-                print('No GPU or no CuPy. If you have a GPU, try installing CuPy')
+                print('No GPU or no CuPy. If you have a GPU, try installing CuPy, calculating on CPU')
                 self.CalculateDriftCorrectionCPU(Position=Position,frames=frames, ZsToLoad=ZsToLoad, Channel=Channel,threads=threads)
         else:
             self.CalculateDriftCorrectionCPU(Position=Position,frames=frames, ZsToLoad=ZsToLoad, Channel=Channel,threads=8)
@@ -1098,7 +1100,7 @@ class Metadata(object):
 
 
 
-    def CalculateDriftCorrectionCPU(self, Position=None,frames=None, ZsToLoad=[0], Channel='DeepBlue',threads=8):
+    def CalculateDriftCorrectionCPU(self, Position=None,frames=None, ZsToLoad=[0], Channel=None,threads=8):
         """
         Calculate image registration (jitter correction) parameters and add to metadata.
 
@@ -1113,20 +1115,25 @@ class Metadata(object):
         #from scipy.signal import fftconvolve
         if Position is None:
             Position = self.posnames
-        elif type(Position) is not list:
+        elif not isinstance(Position, (np.ndarray, list)):
             Position = [Position]
 
         if frames is None:
             frames = self.frames
-        elif type(frames) is not list:
-            frames = [frames]
+        elif not isinstance(frames, (np.ndarray, list)):
+            Position = [frames]
 
+        if Channel is None:
+            Channel = self.channels[0]
         assert Channel in self.channels, "%s isn't a channel, try %s" % (Channel, ', '.join(list(self.channels)))
-
+        print('using channel '+Channel + 'for drift correction')
         for pos in Position:
             from pyfftw.interfaces.numpy_fft import fft2, ifft2
 
             DataPre = self.stkread(Position=pos, Channel=Channel, Zindex=ZsToLoad, frame=frames, register=False, verbose=False)
+
+            assert (DataPre.ndim==3), 'Must have more than 1 timeframe for drift correction'
+
             print('\ncalculating drift correction for position ' + str(pos) + ' on CPU')
             DataPre = DataPre-np.mean(DataPre,axis=(1,2),keepdims=True)
 
@@ -1164,7 +1171,7 @@ class Metadata(object):
         self.pickle()
 
 
-    def CalculateDriftCorrectionGPU(self, Position=None,frames=None, ZsToLoad=[0], Channel='DeepBlue',threads=8):
+    def CalculateDriftCorrectionGPU(self, Position=None,frames=None, ZsToLoad=[0], Channel=None,threads=8):
         """
         Calculate image registration (jitter correction) parameters and add to metadata.
 
@@ -1181,19 +1188,24 @@ class Metadata(object):
         #from scipy.signal import fftconvolve
         if Position is None:
             Position = self.posnames
-        elif type(Position) is not list:
+        elif not isinstance(Position, (np.ndarray, list)):
             Position = [Position]
 
         if frames is None:
             frames = self.frames
-        elif type(frames) is not list:
-            frames = [frames]
+        elif not isinstance(frames, (np.ndarray, list)):
+            Position = [frames]
 
+
+        if Channel is None:
+            Channel = self.channels[0]
         assert Channel in self.channels, "%s isn't a channel, try %s" % (Channel, ', '.join(list(self.channels)))
+        print('using channel '+Channel + 'for drift correction')
 
         for pos in Position:
 
             DataPre = asarray(self.stkread(Position=pos, Channel=Channel, Zindex=ZsToLoad, frame=frames, register=False,verbose=False))
+            assert (DataPre.ndim==3), 'Must have more than 1 timeframe for drift correction'
             print('\ncalculating drift correction for position ' + str(pos)+ ' on GPU')
             DataPre = self.stkread(Position=pos, Channel=Channel, Zindex=ZsToLoad, frame=fr, register=False)
             DataPre = DataPre-np.mean(DataPre,axis=(1,2),keepdims=True)
@@ -1245,7 +1257,7 @@ class Metadata(object):
             print('calculated drift correction for position ' + str(pos))
         self.pickle()
 
-    def CalculateDriftCorrectionGPUChunks(self, Position=None,frames=None, ZsToLoad=[0], Channel='DeepBlue',chunks=10):
+    def CalculateDriftCorrectionGPUChunks(self, Position=None,frames=None, ZsToLoad=[0], Channel=None,chunks=10):
         """
         Calculate image registration (jitter correction) parameters and add to metadata.
 
@@ -1262,15 +1274,19 @@ class Metadata(object):
         #from scipy.signal import fftconvolve
         if Position is None:
             Position = self.posnames
-        elif type(Position) is not list:
+        elif not isinstance(Position, (np.ndarray, list)):
             Position = [Position]
 
         if frames is None:
             frames = self.frames
-        elif type(frames) is not list:
-            frames = [frames]
+        elif not isinstance(frames, (np.ndarray, list)):
+            Position = [frames]
 
+
+        if Channel is None:
+            Channel = self.channels[0]
         assert Channel in self.channels, "%s isn't a channel, try %s" % (Channel, ', '.join(list(self.channels)))
+        print('using channel '+Channel + 'for drift correction')
 
         def chunker_with_overlap(seq, size):
             return (seq[np.max((0,pos-1)):pos + size] for pos in range(0, len(seq), size))
@@ -1280,6 +1296,7 @@ class Metadata(object):
             print('\ncalculating drift correction for position ' + str(pos)+ ' on GPU')
             for fr in chunker_with_overlap(frames,chunks):
                 DataPre = self.stkread(Position=pos, Channel=Channel, Zindex=ZsToLoad, frame=fr, register=False,verbose=False)
+                assert (DataPre.ndim==3), 'Must have more than 1 timeframe for drift correction'
                 DataPre = DataPre-np.mean(DataPre,axis=(1,2),keepdims=True)
 
                 DataPost = DataPre[1:,:,:].transpose((1,2,0))
