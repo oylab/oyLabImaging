@@ -3,10 +3,10 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.DS_Store
-vscode/
+.vscode/
 
 ### VisualStudioCode ###
-.vscode/*      # Maybe .vscode/**/* instead - see comments
+.vscode/*  
 !.vscode/settings.json
 !.vscode/tasks.json
 !.vscode/launch.json
