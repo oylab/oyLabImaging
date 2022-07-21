@@ -579,8 +579,10 @@ class Metadata(object):
         from IPython.display import display
         from ipywidgets import Button, HBox, Layout, Text, widgets
 
-        from oyLabImaging.Processing.generalutils import (extractFieldsByRegex,
-                                                          findregexp)
+        from oyLabImaging.Processing.generalutils import (
+            extractFieldsByRegex,
+            findregexp,
+        )
 
         out1 = widgets.Output()
         out2 = widgets.Output()
@@ -910,7 +912,7 @@ class Metadata(object):
         sortby : str, list(str) - images in stks will be ordered by this(these) fields
         finds_only : Bool (default False) - lazy loading
         metadata : Bool (default False) - whether to return metadata of images
-
+        register : Bool [False]
         kwargs : Property Value pairs to subset images (see below)
 
         Returns
@@ -1018,7 +1020,7 @@ class Metadata(object):
                 # For speed: use PIL when loading a single image, imread when using stack
                 im = Image.open(join(fname))
                 # PIL crop seems like a faster option for registration, so we'll go with it!
-                if crop == None:
+                if crop is None:
                     width, height = im.size
                     crop = (0, 0, width, height)
 
@@ -1031,14 +1033,19 @@ class Metadata(object):
                     if type(crop) == tuple:
                         if register:
                             pillow = True
-                            dT = self.image_table.at[find, "driftTform"][6:8]
-                            crp1 = (
-                                crop[0] - dT[1],
-                                crop[1] - dT[0],
-                                crop[2] - dT[1],
-                                crop[3] - dT[0],
-                            )
-                            im = im.crop(crp1)
+                            dT = self.image_table.at[find, "driftTform"]
+                            if dT is None:
+                                warnings.warn("No drift correction found for position")
+                                im = im.crop(crop)
+                            else:
+                                dT = dT[6:8]
+                                crp1 = (
+                                    crop[0] - dT[1],
+                                    crop[1] - dT[0],
+                                    crop[2] - dT[1],
+                                    crop[3] - dT[0],
+                                )
+                                im = im.crop(crp1)
                         else:
                             im = im.crop(crop)
                     if type(crop) == list:
@@ -1316,7 +1323,7 @@ class Metadata(object):
             Channel,
             ", ".join(list(self.channels)),
         )
-        print("using channel " + Channel + "for drift correction")
+        print("using channel " + Channel + " for drift correction")
         for pos in Position:
             from pyfftw.interfaces.numpy_fft import fft2, ifft2
 
@@ -1429,7 +1436,7 @@ class Metadata(object):
             Channel,
             ", ".join(list(self.channels)),
         )
-        print("using channel " + Channel + "for drift correction")
+        print("using channel " + Channel + " for drift correction")
 
         for pos in Position:
 
@@ -1556,7 +1563,7 @@ class Metadata(object):
             Channel,
             ", ".join(list(self.channels)),
         )
-        print("using channel " + Channel + "for drift correction")
+        print("using channel " + Channel + " for drift correction")
 
         def chunker_with_overlap(seq, size):
             return (
