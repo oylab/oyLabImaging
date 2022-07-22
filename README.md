@@ -7,7 +7,7 @@ Code for analysis and organization of microscopy data:
 ## on Linux/Mac directly from git (recommended)
 
 ```
-conda create --name oyimg python=3.8
+conda create --name oyimg python=3.8 scipy
 
 conda activate oyimg
 ```
@@ -31,7 +31,7 @@ git clone https://github.com/oylab/oyLabImaging
 
 cd oyLabImaging
 
-conda create --name oyimg python=3.8
+conda create --name oyimg python=3.8 scipy
 
 conda activate oyimg
 ```
@@ -51,7 +51,7 @@ conda activate oyimg
 ## on Windows directly from git (recommended)
 
 ```
-conda create --name oyimg python=3.8
+conda create --name oyimg python=3.8 scipy
 
 conda activate oyimg
 
@@ -78,7 +78,7 @@ git clone https://github.com/oylab/oyLabImaging
 
 cd oyLabImaging
 
-conda create --name oyimg python=3.8
+conda create --name oyimg python=3.8 scipy
 
 conda activate oyimg
 
