@@ -16,6 +16,7 @@ import pandas as pd
 from natsort import natsort_keygen, natsorted
 from PIL import Image
 from skimage import io
+from oyLabImaging.Processing.generalutils import alias
 
 md_logger = logging.getLogger(__name__)
 md_logger.setLevel(logging.DEBUG)
@@ -211,6 +212,20 @@ class Metadata(object):
         """
         return self().group.unique()
 
+    @alias(
+        {
+            "pos": "Position",
+            "Pos": "Position",
+            "position": "Position",
+            "p": "Position",
+            "frames": "frame",
+            "Frame": "frame",
+            "f": "frame",
+            "channel": "Channel",
+            "ch": "Channel",
+            "c": "Channel",
+        }
+    )
     def unique(self, Attr=None, sortby="TimestampFrame", **kwargs):
         """
         Parameters
@@ -895,6 +910,20 @@ class Metadata(object):
             self.type = MD.type
             return MD.image_table
 
+    @alias(
+        {
+            "pos": "Position",
+            "Pos": "Position",
+            "position": "Position",
+            "p": "Position",
+            "frames": "frame",
+            "Frame": "frame",
+            "f": "frame",
+            "channel": "Channel",
+            "ch": "Channel",
+            "c": "Channel",
+        }
+    )
     def stkread(
         self,
         groupby="Position",

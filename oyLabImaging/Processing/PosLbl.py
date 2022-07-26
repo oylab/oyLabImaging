@@ -898,7 +898,7 @@ class PosLbl(object):
         if frames is None:
             frames = self.frames
         else:
-            if not (isinstance(frames, list) or isinstance(frames, np.ndarray)):
+            if not isinstance(frames, (list,np.ndarray)):
                 frames = [frames]
         frames = [j for j in frames if j in self.frames]
         return self._pointmatrix[np.in1d(self._pointmatrix[:, 0], frames)]
@@ -963,8 +963,12 @@ class PosLbl(object):
 
         if len(Channel) == 1:
             cmaps = ["gray"]
-        if frames == None:
+            
+        if frames is None:
             frames = self.frames
+        else:
+            if not isinstance(frames, (list,np.ndarray)):
+                frames = [frames]
 
         from oyLabImaging.Processing.improcutils import sample_stack
         from oyLabImaging.Processing.imvisutils import get_or_create_viewer

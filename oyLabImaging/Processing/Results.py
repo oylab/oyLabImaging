@@ -11,6 +11,7 @@ import numpy as np
 # AOY
 from oyLabImaging import Metadata
 from oyLabImaging.Processing import PosLbl
+from oyLabImaging.Processing.generalutils import alias
 
 
 class results(object):
@@ -95,6 +96,17 @@ class results(object):
         )
         print("\nAvailable frames : " + str(len(self.frames)) + ".")
 
+    @alias(
+        {
+            "pos": "Position",
+            "Pos": "Position",
+            "position": "Position",
+            "p": "Position",
+            "frame": "frames",
+            "Frame": "frames",
+            "f": "frames",
+        }
+    )
     def setPosLbls(self, MD=None, groups=None, Position=None, **kwargs):
         """
         function to create PosLbl instances.
@@ -130,6 +142,14 @@ class results(object):
             self.PosLbls.update({p: PosLbl(MD=MD, Pos=p, pth=MD.base_pth, **kwargs)})
         self.save()
 
+    @alias(
+        {
+            "pos": "Position",
+            "Pos": "Position",
+            "position": "Position",
+            "p": "Position",
+        }
+    )
     def calculate_tracks(self, Position=None, save=True, split=True, **kwargs):
         """
         function to calculate tracks for a PosLbl instance.
@@ -153,6 +173,14 @@ class results(object):
         if save:
             self.save()
 
+    @alias(
+        {
+            "Position": "pos",
+            "Pos": "pos",
+            "position": "pos",
+            "p": "pos",
+        }
+    )
     def tracks(self, pos):
         """
         Wrapper for PosLbl.get_track
@@ -168,6 +196,14 @@ class results(object):
         assert self.PosLbls[pos]._tracked, str(pos) + " not tracked yet"
         return self.PosLbls[pos].get_track
 
+    @alias(
+        {
+            "Position": "pos",
+            "Pos": "pos",
+            "position": "pos",
+            "p": "pos",
+        }
+    )
     def tracklist(self, pos=None):
         """
         Function to consolidate tracks from different positions
@@ -188,6 +224,14 @@ class results(object):
             ([ts.append(t0(i)) for i in np.arange(t0(0).numtracks)])
         return ts
 
+    @alias(
+        {
+            "Position": "pos",
+            "Pos": "pos",
+            "position": "pos",
+            "p": "pos",
+        }
+    )
     def show_tracks(self, pos, J=None, **kwargs):
         """
         Wrapper for PosLbl.plot_tracks
@@ -206,6 +250,17 @@ class results(object):
         tracks = self.PosLbls[pos].plot_tracks(J=J, **kwargs)
         return tracks
 
+    @alias(
+        {
+            "Position": "pos",
+            "Pos": "pos",
+            "position": "pos",
+            "p": "pos",
+            "channel": "Channel",
+            "ch": "Channel",
+            "c": "Channel",
+        }
+    )
     def show_points(self, pos, Channel=None, **kwargs):
         """
         Wrapper for PosLbl.plot_points
@@ -226,6 +281,20 @@ class results(object):
         points = self.PosLbls[pos].plot_points(Channel=Channel, **kwargs)
         return points
 
+    @alias(
+        {
+            "Position": "pos",
+            "Pos": "pos",
+            "position": "pos",
+            "p": "pos",
+            "frame": "frames",
+            "Frame": "frames",
+            "f": "frames",
+            "channel": "Channel",
+            "ch": "Channel",
+            "c": "Channel",
+        }
+    )
     def show_images(self, pos, Channel=None, **kwargs):
         """
         Wrapper for PosLbl.plot_images
@@ -246,6 +315,14 @@ class results(object):
         print("showing channel " + str(Channel))
         self.PosLbls[pos].plot_images(Channel=Channel, **kwargs)
 
+    @alias(
+        {
+            "pos": "Position",
+            "Pos": "Position",
+            "position": "Position",
+            "p": "Position",
+        }
+    )
     def numtracks(self, Position=None):
         """
         Wrapper for PosLbl.numtracks
@@ -285,6 +362,17 @@ class results(object):
             r = dill.load(dbfile)
         return r
 
+    @alias(
+        {
+            "pos": "Position",
+            "Pos": "Position",
+            "position": "Position",
+            "p": "Position",
+            "Channel": "channel",
+            "ch": "channel",
+            "c": "channel",
+        }
+    )
     def property_matrix(
         self, Position=None, prop="area", channel=None, periring=False, keep_only=False
     ):
@@ -303,6 +391,17 @@ class results(object):
             prop=prop, channel=channel, periring=periring, keep_only=keep_only
         )
 
+    @alias(
+        {
+            "pos": "Position",
+            "Pos": "Position",
+            "position": "Position",
+            "p": "Position",
+            "Channel": "channel",
+            "ch": "channel",
+            "c": "channel",
+        }
+    )
     def prop_to_csv(
         self, Position=None, prop="area", channel=None, periring=False, keep_only=False
     ):

@@ -168,8 +168,8 @@ def findstem(arr):
             # If current substring is present in
             # all strings and its length is greater
             # than current result
-            if k + 1 == n and len(res) < len(stem):
-                res = stem
+                if k + 1 == n and len(res) < len(stem):
+                    res = stem
     return res
 
 
@@ -220,3 +220,42 @@ def extractFieldsByRegex(globExp, fnames):
             break
         matches.append(match[0])
     return matches
+
+
+def alias(aliases):
+    import functools
+
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            for alias, name in aliases.items():
+                if name not in kwargs and alias in kwargs:
+                    kwargs[name] = kwargs[alias]
+                    del kwargs[alias]
+            return func(*args, **kwargs)
+
+        return wrapper
+
+    return decorator
+
+
+
+# import functools
+# from typing import Callable, Dict, TypeVar
+
+# T = TypeVar("T", bound=Callable)
+
+# def alias(aliases: Dict[str, str]) -> Callable[[T], T]:
+#     print('1')
+#     def decorator(func: T) -> T:
+
+#         @functools.wraps(func)
+#         def wrapper(*args, **kwargs):
+#             for alias, name in aliases.items():
+#                 if val := kwargs.pop(alias, None):
+#                     kwargs.setdefault(name, val)
+#             return func(*args, **kwargs)
+
+#         return wrapper
+
+#     return decorator
