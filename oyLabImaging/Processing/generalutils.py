@@ -218,6 +218,8 @@ def extractFieldsByRegex(globExp, fnames):
         if not len(match) == 1:
             print("Non unique matches from regexp")
             break
+        if type(match[0]) is not tuple:
+            match[0] = (match[0],)
         matches.append(match[0])
     return matches
 
