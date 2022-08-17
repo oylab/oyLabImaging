@@ -476,14 +476,18 @@ class Metadata(object):
                     "PixelSize": pixsize,
                     "TimestampFrame": imgs.timesteps[fps],
                     "TimestampImage": imgs.timesteps[fps],
-                    "filename": acq,
+                    "root_pth": acq,
                 }
-                image_table = image_table.append(
-                    framedata, sort=False, ignore_index=True
+                # image_table = image_table.append(
+                #    framedata, sort=False, ignore_index=True
+                # )
+                image_table = pd.concat(
+                    [image_table, pd.DataFrame([framedata])],
+                    sort=False,
+                    ignore_index=True,
                 )
-            image_table["root_pth"] = image_table.filename
-            image_table.filename = [
-                join(pth, f.split(os.path.sep)[-1]) for f in image_table.filename
+            image_table["filename"] = [
+                f.replace(self.base_pth, "") for f in image_table.root_pth
             ]
             return image_table
 
@@ -554,17 +558,20 @@ class Metadata(object):
                 "PlateType": "NA",
                 "TimestampFrame": mdsing["ReceivedTime"],
                 "TimestampImage": mdsing["ReceivedTime"],
-                "filename": mdsing["FileName"],
+                "root_pth": mdsing["FileName"],
             }
-            image_table = image_table.append(framedata, sort=False, ignore_index=True)
+            #image_table = image_table.append(framedata, sort=False, ignore_index=True)
+            image_table = pd.concat(
+                [image_table, pd.DataFrame([framedata])],
+                sort=False,
+                ignore_index=True,
+            )            
 
-        # image_table['root_pth'] = image_table.filename
-
-        image_table.filename = [
-            join(pth, f.split("/")[-1]) for f in image_table.filename
+        image_table.root_pth = [
+            join(pth, f.split("/")[-1]) for f in image_table.root_pth
         ]
-        image_table["root_pth"] = [
-            f.replace(self.base_pth, "") for f in image_table.filename
+        image_table["filename"] = [
+            f.replace(self.base_pth, "") for f in image_table.root_pth
         ]
         return image_table
 
@@ -576,9 +583,11 @@ class Metadata(object):
         image_table - pd dataframe of metadata image table
         """
         image_table = pd.read_csv(join(pth, fname), delimiter=delimiter)
+
         image_table["root_pth"] = image_table.filename
-        image_table.filename = [
-            join(pth, f.split(os.path.sep)[-1]) for f in image_table.filename
+
+        image_table["filename"] = [
+            f.replace(self.base_pth, "") for f in image_table.filename
         ]
         return image_table
 
@@ -820,8 +829,7 @@ class Metadata(object):
         ]
         image_table = pd.DataFrame(columns=usecolslist)
 
-        image_table["filename"] = fnames
-        image_table["root_pth"] = image_table.filename
+        image_table["root_pth"] = fnames
 
         # Default values
         image_table["acq"] = pth
@@ -843,8 +851,8 @@ class Metadata(object):
             pass
             # todo : convert numerical strings to numbers
 
-        image_table.filename = [
-            join(pth, f.split(os.path.sep)[-1]) for f in image_table.filename
+        image_table["filename"] = [
+            f.replace(self.base_pth, "") for f in image_table.root_pth
         ]
         self.image_table = image_table
 
@@ -880,12 +888,10 @@ class Metadata(object):
         save metadata as a pickle file. Saves as 'metadata.pickle' in the metadata root path.
         """
         with open(join(self.base_pth, "metadata.pickle"), "wb") as dbfile:
-            tempfn = self.image_table["filename"].copy()
-            self.image_table["filename"] = self.image_table["root_pth"]
+            tempfn = self.image_table["root_pth"].copy()
             del self.image_table["root_pth"]
             pickle.dump(self, dbfile)
-            self.image_table["root_pth"] = self.image_table["filename"]
-            self.image_table["filename"] = tempfn
+            self.image_table["root_pth"] = tempfn
             md_logger.info("saved metadata")
 
     def unpickle(self, pth, fname="*.pickle", delimiter="\t"):
@@ -903,8 +909,8 @@ class Metadata(object):
         with open(join(pth, fname), "rb") as dbfile:
             MD = pickle.load(dbfile)
             MD.image_table["root_pth"] = MD.image_table["filename"].copy()
-            MD.image_table["filename"] = [
-                MD.base_pth + f for f in MD.image_table["filename"]
+            MD.image_table.root_pth = [
+                MD.base_pth + f for f in MD.image_table["root_pth"]
             ]
             self._md_name = "metadata.pickle"
             self.type = MD.type
@@ -1039,7 +1045,7 @@ class Metadata(object):
             imgs = []
 
             for img_idx, find in enumerate(value):
-                fname = self.image_table.at[find, "filename"]
+                fname = self.image_table.at[find, "root_pth"]
                 # Weird print style to print on same line
                 if verbose:
                     sys.stdout.write("\r" + "opening file " + path.split(fname)[-1])
@@ -1126,7 +1132,7 @@ class Metadata(object):
         import nd2reader as nd2
         from PIL import Image
 
-        with nd2.ND2Reader(self.unique("filename")[0]) as nd2imgs:
+        with nd2.ND2Reader(self.unique("root_pth")[0]) as nd2imgs:
             if not nd2imgs.metadata["z_levels"]:
                 nd2imgs.metadata["z_levels"] = [0]
             images_dict = {}
