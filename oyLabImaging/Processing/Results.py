@@ -67,6 +67,9 @@ class results(object):
         if "results.pickle" in listdir(pth):
             r = results.load(pth, fname="results.pickle")
             self.__dict__.update(r.__dict__)
+            self.pth = pth
+            for p in self.PosLbls.values():
+                p.pth = pth
             print("\nloaded results from pickle file")
         else:
             if MD is None:
@@ -75,11 +78,11 @@ class results(object):
             if MD().empty:
                 raise AssertionError("No metadata found in supplied path")
 
-            self.PosNames = MD.unique("Position")
+            self.PosNames = natsorted(MD.unique("Position"))
             self.channels = MD.unique("Channel")
             self.acq = MD.unique("acq")
-            self.frames = MD.unique("frame")
-            self.groups = MD.unique("group")
+            self.frames = natsorted(MD.unique("frame"))
+            self.groups = natsorted(MD.unique("group"))
             self.PosLbls = {}
 
     def __call__(self):
@@ -443,6 +446,7 @@ class results(object):
         A = np.reshape(A, newshape=(-1, A.shape[1]))
         savetxt(filename, A, delimiter=",")
 
+
     def track_explorer(R, keep_only=False):
         """
         Track explorer app. Written using magicgui (Thanks @tlambert03!)
@@ -644,3 +648,117 @@ class results(object):
         viewer.window.add_dock_widget(container)
         # run()
         matplotlib.use("Qt5Agg")
+
+
+class frameData(object):
+    @alias(
+        {
+            "pos": "Position",
+            "Pos": "Position",
+            "position": "Position",
+            "p": "Position",
+            "frames": "frame",
+            "Frame": "frame",
+            "f": "frame",
+        }
+    )
+    def __init__(self, outer, frame=0, Position=None):
+        assert frame in outer.frames, "Available frames are " + ", ".join(
+            [str(f) for f in outer.frames]
+        )
+        if Position is None:
+            self.Position = outer.PosNames
+        else:
+            self.Position = Position
+        self.frame = frame
+        self._outer = outer
+
+    @property
+    def centroid_um(self):
+        frame = self.frame
+        a = [
+            self._outer.PosLbls[pn].centroid_um[frame]
+            for pn in self.Position
+            if self._outer.PosLbls[pn].centroid_um[frame].ndim == 2
+        ]
+        a = np.concatenate(a)
+        return a
+
+    @property
+    def weighted_centroid_um(self):
+        frame = self.frame
+        a = [
+            self._outer.PosLbls[pn].weighted_centroid_um[frame]
+            for pn in self.Position
+            if self._outer.PosLbls[pn].weighted_centroid_um[frame].ndim == 2
+        ]
+        a = np.concatenate(a)
+        return a
+
+    @property
+    def area(self):
+        frame = self.frame
+        a = [self._outer.PosLbls[pn].area[frame] for pn in self.Position]
+        a = np.concatenate(a)
+        return a
+
+    def mean(self, ch, periring=False):
+        frame = self.frame
+        a = [
+            self._outer.PosLbls[pn].mean(ch, periring=periring)[frame]
+            for pn in self.Position
+        ]
+        a = np.concatenate(a)
+        return a
+
+    def median(self, ch, periring=False):
+        frame = self.frame
+        a = [
+            self._outer.PosLbls[pn].median(ch, periring=periring)[frame]
+            for pn in self.Position
+        ]
+        a = np.concatenate(a)
+        return a
+
+    def minint(self, ch, periring=False):
+        frame = self.frame
+        a = [
+            self._outer.PosLbls[pn].minint(ch, periring=periring)[frame]
+            for pn in self.Position
+        ]
+        a = np.concatenate(a)
+        return a
+
+    def maxint(self, ch, periring=False):
+        frame = self.frame
+        a = [
+            self._outer.PosLbls[pn].maxint(ch, periring=periring)[frame]
+            for pn in self.Position
+        ]
+        a = np.concatenate(a)
+        return a
+
+    def ninetyint(self, ch, periring=False):
+        frame = self.frame
+        a = [
+            self._outer.PosLbls[pn].ninetyint(ch, periring=periring)[frame]
+            for pn in self.Position
+        ]
+        a = np.concatenate(a)
+        return a
+
+    def _calculate_pointmat_worldunits(self):
+        """
+        helper function, calculate points in a napari-friendly way
+        """
+        a = []
+        [
+            a.append((np.pad(cen, ((0, 0), (1, 0)), constant_values=i)))
+            for i, cen in enumerate(self.centroid_um)
+            if np.any(cen)
+        ]
+        try:
+            _pointmatrix = np.concatenate(a)
+        except:
+            _pointmatrix = []
+        return _pointmatrix

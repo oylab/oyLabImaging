@@ -161,7 +161,7 @@ class FrameLbl(object):
         except:
             imgCyto = ""
 
-        imgNuc = np.sum([Data[ch] for ch in NucChannel], axis=0)
+        imgNuc = np.max([Data[ch] for ch in NucChannel], axis=0)
 
         L = self._seg_fun(img=imgNuc, imgCyto=imgCyto, **kwargs)
 

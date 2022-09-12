@@ -458,7 +458,6 @@ class PosLbl(object):
         search_radius : [25]
         """
 
-        
         cents = self.centroid_um
         nums = self.num
 
@@ -603,7 +602,6 @@ class PosLbl(object):
         maxAmpRatio : [2] max allowd ratio of amplitudes for linking
         mintracklength : [30] final minimum length of a track
         """
-
 
         if params:
             Cp = [p[0] for p in params if p[0] in self.channels]
@@ -886,7 +884,26 @@ class PosLbl(object):
             for i, cen in enumerate(self.centroid)
             if np.any(cen)
         ]
-        self._pointmatrix = np.concatenate(a)
+        try:
+            self._pointmatrix = np.concatenate(a)
+        except:
+            self._pointmatrix = []
+
+    def _calculate_pointmat_worldunits(self):
+        """
+        helper function, calculate points in a napari-friendly way
+        """
+        a = []
+        [
+            a.append((np.pad(cen, ((0, 0), (1, 0)), constant_values=i)))
+            for i, cen in enumerate(self.centroid_um)
+            if np.any(cen)
+        ]
+        try:
+            _pointmatrix = np.concatenate(a)
+        except:
+            _pointmatrix = []
+        return _pointmatrix
 
     def _pointmat(self, frames=None):
         """
@@ -898,7 +915,7 @@ class PosLbl(object):
         if frames is None:
             frames = self.frames
         else:
-            if not isinstance(frames, (list,np.ndarray)):
+            if not isinstance(frames, (list, np.ndarray)):
                 frames = [frames]
         frames = [j for j in frames if j in self.frames]
         return self._pointmatrix[np.in1d(self._pointmatrix[:, 0], frames)]
@@ -963,11 +980,11 @@ class PosLbl(object):
 
         if len(Channel) == 1:
             cmaps = ["gray"]
-            
+
         if frames is None:
             frames = self.frames
         else:
-            if not isinstance(frames, (list,np.ndarray)):
+            if not isinstance(frames, (list, np.ndarray)):
                 frames = [frames]
 
         from oyLabImaging.Processing.improcutils import sample_stack
