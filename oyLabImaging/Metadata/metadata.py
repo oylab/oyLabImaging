@@ -560,12 +560,12 @@ class Metadata(object):
                 "TimestampImage": mdsing["ReceivedTime"],
                 "root_pth": mdsing["FileName"],
             }
-            #image_table = image_table.append(framedata, sort=False, ignore_index=True)
+            # image_table = image_table.append(framedata, sort=False, ignore_index=True)
             image_table = pd.concat(
                 [image_table, pd.DataFrame([framedata])],
                 sort=False,
                 ignore_index=True,
-            )            
+            )
 
         image_table.root_pth = [
             join(pth, f.split("/")[-1]) for f in image_table.root_pth
@@ -908,9 +908,15 @@ class Metadata(object):
 
         with open(join(pth, fname), "rb") as dbfile:
             MD = pickle.load(dbfile)
+
+            if path.isdir(pth):
+                MD.base_pth = pth
+            else:
+                MD.base_pth, MD._md_name = path.split(pth)
+            print(MD.base_pth)
             MD.image_table["root_pth"] = MD.image_table["filename"].copy()
             MD.image_table.root_pth = [
-                MD.base_pth + f for f in MD.image_table["root_pth"]
+                join(MD.base_pth, f) for f in MD.image_table["root_pth"]
             ]
             self._md_name = "metadata.pickle"
             self.type = MD.type
@@ -928,6 +934,7 @@ class Metadata(object):
             "channel": "Channel",
             "ch": "Channel",
             "c": "Channel",
+            "Ch": "Channel",
         }
     )
     def stkread(
