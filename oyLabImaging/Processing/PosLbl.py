@@ -91,6 +91,7 @@ class PosLbl(object):
         NucChannel=None,
         threads=10,
         register=True,
+        calculate=True,
         **kwargs
     ):
 
@@ -131,30 +132,30 @@ class PosLbl(object):
         # self.PixelSize = MD.unique('PixelSize')[0]
 
         # Create all framelabels for the different TPs. This will segment and measure stuff.
-
-        with mp.Pool(threads) as ppool:
-            frames = list(
-                tqdm(
-                    ppool.imap(
-                        partial(
-                            FrameLbl,
-                            MD=MD,
-                            pth=pth,
-                            Pos=Pos,
-                            NucChannel=NucChannel,
-                            register=self._registerflag,
-                            **kwargs
+        if calculate:
+            with mp.Pool(threads) as ppool:
+                frames = list(
+                    tqdm(
+                        ppool.imap(
+                            partial(
+                                FrameLbl,
+                                MD=MD,
+                                pth=pth,
+                                Pos=Pos,
+                                NucChannel=NucChannel,
+                                register=self._registerflag,
+                                **kwargs
+                            ),
+                            self.frames,
                         ),
-                        self.frames,
-                    ),
-                    total=len(self.frames),
+                        total=len(self.frames),
+                    )
                 )
-            )
-            # ppool.close()
-            # ppool.join()
-        self.framelabels = np.array(frames)
-        self._calculate_pointmat()
-        print("\nFinished loading and segmenting position " + str(Pos))
+                # ppool.close()
+                # ppool.join()
+            self.framelabels = np.array(frames)
+            self._calculate_pointmat()
+            print("\nFinished loading and segmenting position " + str(Pos))
 
     def __call__(self):
         print("PosLbl object for position " + str(self.posname) + ".")
@@ -364,6 +365,43 @@ class PosLbl(object):
         def frame(self):
             return np.array([int(self._outer.framelabels[j].frame) for j in self.T])
 
+        def get_movie(self,
+            Channel=["DeepBlue"],
+            boxsize=75,
+            frame=None,
+            **kwargs
+        ):
+            """
+            Function to display a close up movie of a cell being tracked.
+            Parameters
+            ----------
+            Channel : ['DeepBlue'] str or list of strs
+            boxsize : [50] num size of box around the cell
+            cmaps : order of colormaps for each channel
+            """
+            if frame is None:
+                frame = self.frame
+            else:
+                if not isinstance(frame, (list, np.ndarray)):
+                    frame = [frame]
+
+            cents = np.fliplr(self.centroid[frame])
+            crp = list(
+                map(
+                    tuple,
+                    np.ceil(
+                        np.concatenate((cents - boxsize, cents + boxsize), axis=1)
+                    ).astype(int),
+                )
+            )
+
+            
+            stk = self._outer.img(
+                    Channel, frame=frame, crop=crp, verbose=False, groupby='Channel'
+                )
+            return stk
+
+
         def show_movie(
             self,
             Channel=["DeepBlue"],
@@ -389,7 +427,7 @@ class PosLbl(object):
             viewer.scale_bar.unit = "um"
             cents = np.fliplr(self.centroid)
             # cents = self.centroid
-
+            
             crp = list(
                 map(
                     tuple,
@@ -406,7 +444,6 @@ class PosLbl(object):
                 stk = self._outer.img(
                     ch, frame=list(self.frame), crop=crp, verbose=False
                 )
-
                 stksmp = stk.flatten()  # sample_stack(stk,int(stk.size/100))
                 stksmp = stksmp[stksmp != 0]
                 viewer.add_image(
@@ -420,6 +457,7 @@ class PosLbl(object):
                     colormap=cmaps[ind % len(cmaps)],
                     scale=[self._outer.PixelSize, self._outer.PixelSize],
                 )
+            
 
     def trackcells(self, split=True, **kwargs):
         """
@@ -1005,6 +1043,7 @@ class PosLbl(object):
                 contrast_limits=[np.percentile(stksmp, 1), np.percentile(stksmp, 99.9)],
                 scale=[self.PixelSize, self.PixelSize],
                 colormap=cmaps[ind % len(cmaps)],
+                name=ch,
                 **kwargs
             )
 
@@ -1039,6 +1078,7 @@ class PosLbl(object):
         periring=False,
         colormap="plasma",
         func=lambda x: x,
+        size=20,
         **kwargs
     ):
         """
@@ -1069,11 +1109,10 @@ class PosLbl(object):
         pointlayer = viewer.add_points(
             pointsmat,
             properties=point_props,
-            text="ind",
             face_color="mean",
             edge_width=0,
             face_colormap=colormap,
-            size=20,
+            size=size,
             blending="translucent",
             scale=[1, self.PixelSize, self.PixelSize],
         )
