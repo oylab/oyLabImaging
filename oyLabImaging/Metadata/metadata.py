@@ -130,6 +130,8 @@ class Metadata(object):
         # How should files be read?
         if self.type == "ND2":
             self._open_file = self._read_nd2
+        elif self.type == "OME":
+            self._open_file = self._read_ome
         else:  # Tiffs
             if load_type == "local":
                 self._open_file = self._read_local
@@ -905,21 +907,28 @@ class Metadata(object):
         image_table - pd dataframe of metadata image table
         """
         from os.path import join
-
+        
         with open(join(pth, fname), "rb") as dbfile:
             MD = pickle.load(dbfile)
+
+            
 
             if path.isdir(pth):
                 MD.base_pth = pth
             else:
                 MD.base_pth, MD._md_name = path.split(pth)
-            print(MD.base_pth)
+            
             MD.image_table["root_pth"] = MD.image_table["filename"].copy()
             MD.image_table.root_pth = [
                 join(MD.base_pth, f) for f in MD.image_table["root_pth"]
             ]
             self._md_name = "metadata.pickle"
             self.type = MD.type
+
+            exclude_keys = ['image_table']
+            d = MD.__dict__
+            new_d = {k: d[k] for k in set(list(d.keys())) - set(exclude_keys)}
+            self.__dict__.update(new_d)
             return MD.image_table
 
     @alias(
@@ -1205,6 +1214,66 @@ class Metadata(object):
                     print("\nLoaded group {0} of images.".format(key))
 
             return images_dict
+
+    def _read_ome(
+        self, ind_dict, ffield=False, register=False, verbose=True, crop=None, **kwargs
+    ):
+        """
+        Helper function to read list of files given an OME type metadata and a index list
+        Load images into dictionary of stks.
+        """
+        from PIL import Image
+
+        Image.MAX_IMAGE_PIXELS = None
+
+        images_dict = {}
+        for key, value in ind_dict.items():
+            # key is groupby property value
+            # value is list of filenames of images to be loaded as a stk
+
+            imgs = []
+
+            for img_idx, find in enumerate(value):
+                fname = self.image_table.at[find, "root_pth"]
+                chind = self.image_table.at[find, "Marker"]
+                crop = (
+                    self.image_table.at[find, "XY"][::-1]
+                    / self.image_table.at[find, "PixelSize"]
+                )
+                crop = tuple(np.concatenate((crop, crop + self.single_image_size)))
+
+                # Weird print style to print on same line
+                if verbose:
+                    sys.stdout.write("\r" + "opening file " + path.split(fname)[-1])
+                    sys.stdout.flush()
+                # md_logger.info("\r"+'opening '+path.split(fname)[-1])
+
+                # For speed: use PIL when loading a single image, imread when using stack
+                im = Image.open(join(fname))
+                # PIL crop seems like a faster option for registration, so we'll go with it!
+                if crop is None:
+                    width, height = im.size
+                    crop = (0, 0, width, height)
+
+                im.seek(chind)
+
+                im = im.crop(crop)
+
+                img = np.array(im)
+                im.close()
+
+                # if it's a z-stack
+                if img.ndim == 3:
+                    img = img.transpose((1, 2, 0))
+
+                imgs.append(img)
+
+            # Best performance has most frequently indexed dimension first
+            images_dict[key] = np.array(imgs) / 2**16
+            if verbose:
+                print("\nLoaded group {0} of images.".format(key))
+
+        return images_dict
 
     # Function to apply flat field correction
     def _doFlatfieldCorrection(self, img, flt, **kwargs):
