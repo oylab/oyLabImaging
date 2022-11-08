@@ -12,6 +12,7 @@ import numpy as np
 from oyLabImaging import Metadata
 from oyLabImaging.Processing import PosLbl
 from oyLabImaging.Processing.generalutils import alias
+from natsort import natsorted
 
 
 class results(object):
@@ -662,12 +663,15 @@ class frameData(object):
             "f": "frame",
         }
     )
-    def __init__(self, outer, frame=0, Position=None):
+    def __init__(self, outer, frame=0, Position=None, label=None):
         assert frame in outer.frames, "Available frames are " + ", ".join(
             [str(f) for f in outer.frames]
         )
         if Position is None:
-            self.Position = outer.PosNames
+            if label:
+                self.Position = [pn for pn in outer.PosNames if label in pn]
+            else:
+                self.Position = outer.PosNames
         else:
             self.Position = Position
         self.frame = frame
@@ -701,49 +705,65 @@ class frameData(object):
         a = [self._outer.PosLbls[pn].area[frame] for pn in self.Position]
         a = np.concatenate(a)
         return a
+    
+    @property
+    def cellposition(self):
+        frame = self.frame
+        return np.concatenate([[pn]*self._outer.PosLbls[pn].num[frame] for pn in self.Position])
+    
+    @property
+    def cellperposition(self):
+        frame = self.frame
+        return [self._outer.PosLbls[pn].num[frame] for pn in self.Position]
 
     def mean(self, ch, periring=False):
+        ch = ch if isinstance(ch, (list, np.ndarray)) else [ch]
         frame = self.frame
         a = [
-            self._outer.PosLbls[pn].mean(ch, periring=periring)[frame]
-            for pn in self.Position
-        ]
+            self._outer.PosLbls[pn].framelabels[frame].regionprops[[''.join(['mean_',c, '_periring'* periring]) for c in ch]]
+            for pn in self.Position if self._outer.PosLbls[pn].num
+        ]   
         a = np.concatenate(a)
         return a
 
     def median(self, ch, periring=False):
+        ch = ch if isinstance(ch, (list, np.ndarray)) else [ch]
         frame = self.frame
         a = [
-            self._outer.PosLbls[pn].median(ch, periring=periring)[frame]
-            for pn in self.Position
-        ]
+            self._outer.PosLbls[pn].framelabels[frame].regionprops[[''.join(['median_',c, '_periring'* periring]) for c in ch]]
+            for pn in self.Position if self._outer.PosLbls[pn].num
+        ]   
         a = np.concatenate(a)
         return a
 
+
     def minint(self, ch, periring=False):
+        ch = ch if isinstance(ch, (list, np.ndarray)) else [ch]
         frame = self.frame
         a = [
-            self._outer.PosLbls[pn].minint(ch, periring=periring)[frame]
-            for pn in self.Position
-        ]
+            self._outer.PosLbls[pn].framelabels[frame].regionprops[[''.join(['min_',c, '_periring'* periring]) for c in ch]]
+            for pn in self.Position if self._outer.PosLbls[pn].num
+        ]   
         a = np.concatenate(a)
         return a
 
     def maxint(self, ch, periring=False):
+        ch = ch if isinstance(ch, (list, np.ndarray)) else [ch]
         frame = self.frame
         a = [
-            self._outer.PosLbls[pn].maxint(ch, periring=periring)[frame]
-            for pn in self.Position
-        ]
+            self._outer.PosLbls[pn].framelabels[frame].regionprops[[''.join(['max_',c, '_periring'* periring]) for c in ch]]
+            for pn in self.Position if self._outer.PosLbls[pn].num
+        ]   
         a = np.concatenate(a)
         return a
 
     def ninetyint(self, ch, periring=False):
+        ch = ch if isinstance(ch, (list, np.ndarray)) else [ch]
         frame = self.frame
         a = [
-            self._outer.PosLbls[pn].ninetyint(ch, periring=periring)[frame]
-            for pn in self.Position
-        ]
+            self._outer.PosLbls[pn].framelabels[frame].regionprops[[''.join(['90th_',c, '_periring'* periring]) for c in ch]]
+            for pn in self.Position if self._outer.PosLbls[pn].num
+        ]   
         a = np.concatenate(a)
         return a
 
