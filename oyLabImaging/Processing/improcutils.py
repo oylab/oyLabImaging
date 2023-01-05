@@ -350,7 +350,12 @@ class segmentation(object):
     import contextlib
 
     def segmentation_types():
-        return ["watershed", "cellpose_nuclei", "cellpose_cyto"]  # 'cellpose_nuc_cyto'
+        return [
+            "watershed",
+            "cellpose_nuclei",
+            "cellpose_cyto",
+            "stardist_nuclei",
+        ]  # 'cellpose_nuc_cyto'
 
     @contextlib.contextmanager
     def nostdout():
@@ -369,6 +374,8 @@ class segmentation(object):
             seg_fun = segmentation._segment_nuclei_cellpose
         elif segment_type == "cellpose_cyto":
             seg_fun = segmentation._segment_cytoplasm_cellpose
+        elif segment_type == "stardist_nuclei":
+            seg_fun = segmentation._segment_nuclei_stardist
         elif segment_type == "cellpose_nuc_cyto":
             seg_fun = segmentation._segment_nuccyto_cellpose
         return seg_fun
@@ -433,6 +440,64 @@ class segmentation(object):
                 L[L == BG[i] + 1] = 0
 
         L = measure.label(L)
+        return L
+
+    def _segment_nuclei_stardist(
+        img,
+        imgCyto=[],
+        model_name=["2D_versatile_fluo"],
+        scale=1,
+        prob_thresh=0.5,
+        nms_thresh=0.3,
+        **kwargs
+    ):
+        import logging
+        from contextlib import contextmanager
+        import sys, os
+
+        logging.getLogger("stardist").propagate = False
+        import warnings
+
+        warnings.filterwarnings("ignore")
+
+        @contextmanager
+        def suppress_stdout():
+            with open(os.devnull, "w") as devnull:
+                old_stdout = sys.stdout
+                sys.stdout = devnull
+                try:
+                    yield
+                finally:
+                    sys.stdout = old_stdout
+
+        from csbdeep.utils import normalize
+        from stardist.models import StarDist2D
+        from tensorflow import convert_to_tensor
+        import cv2
+        from cv2 import INTER_NEAREST, resize
+        from skimage.transform import rescale
+
+        cv2.setNumThreads(1)
+
+        with suppress_stdout():
+            model = StarDist2D.from_pretrained(model_name[0])
+
+        img = np.squeeze(img)
+        assert img.ndim == 2, "_segment_nuclei_stardist accepts 2D images"
+
+        img = normalize(img, 1, 99.8)
+        with suppress_stdout():
+            masks, _ = model.predict_instances(
+                rescale(convert_to_tensor(img), scale),
+                nms_thresh=nms_thresh,
+                prob_thresh=prob_thresh,
+                **kwargs
+            )
+
+        dim = (img.shape[1], img.shape[0])
+        # resize masks to original image size using nearest neighbor interpolation to preserve masks
+        L = resize(masks, dim, interpolation=INTER_NEAREST)
+
         return L
 
     def _segment_nuclei_cellpose(
@@ -573,7 +638,7 @@ class segmentation(object):
         fig.subplots_adjust(bottom=0.1)
 
         ax.imshow(
-            img, cmap="gray", vmin=np.percentile(img, 10), vmax=np.percentile(img, 99)
+            img, cmap="gray", vmin=np.percentile(img, 10), vmax=np.percentile(img, 98)
         )
         cmap = ListedColormap(np.random.rand(256, 3))
         cmap.colors[0, :] = [0, 0, 0]
