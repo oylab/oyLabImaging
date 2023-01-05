@@ -488,6 +488,9 @@ class Metadata(object):
                     sort=False,
                     ignore_index=True,
                 )
+            image_table.root_pth = [
+                join(self.base_pth, f.split("/")[-1]) for f in image_table.root_pth
+            ]
             image_table["filename"] = [
                 f.replace(self.base_pth, "") for f in image_table.root_pth
             ]
