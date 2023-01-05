@@ -391,7 +391,7 @@ class Metadata(object):
                 print(
                     "loaded "
                     + self.type
-                    + " metadata from"
+                    + " metadata from "
                     + join(self.base_pth, self._md_name)
                 )
         else:
@@ -925,7 +925,7 @@ class Metadata(object):
             self._md_name = "metadata.pickle"
             self.type = MD.type
 
-            exclude_keys = ['image_table']
+            exclude_keys = ['image_table','_load_method','_md_name']
             d = MD.__dict__
             new_d = {k: d[k] for k in set(list(d.keys())) - set(exclude_keys)}
             self.__dict__.update(new_d)
