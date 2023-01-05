@@ -1056,7 +1056,7 @@ class PosLbl(object):
 
         Draws overlaying tracks in current napari viewer
         """
-        assert self._tracked, str(pos) + " not tracked yet"
+        assert self._tracked, str(self.posname) + " not tracked yet"
 
         from oyLabImaging.Processing.imvisutils import get_or_create_viewer
 
