@@ -669,7 +669,7 @@ class frameData(object):
         )
         if Position is None:
             if label:
-                self.Position = [pn for pn in outer.PosNames if label in pn]
+                self.Position = [pn for pn in outer.PosNames if pn.startswith(label)]
             else:
                 self.Position = outer.PosNames
         else:
