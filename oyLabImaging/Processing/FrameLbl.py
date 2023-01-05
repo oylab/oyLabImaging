@@ -93,6 +93,10 @@ class FrameLbl(object):
         **kwargs
     ):
 
+        from packaging import version
+        import skimage
+        skimg_version_old = version.parse(skimage.__version__) < version.parse("0.19")
+
         if pth is None and MD is not None:
             pth = MD.base_pth
 
@@ -167,10 +171,15 @@ class FrameLbl(object):
 
         props = measure.regionprops(L, intensity_image=Data[NucChannel[0]])
 
+        
+        if skimg_version_old:
+            drops = ["mean_intensity", "max_intensity", "min_intensity"]
+        else:
+            drops = ["intensity_mean", "intensity_max", "intensity_min"]
         if len(props):
             props_df = regionprops_to_df(props)
             props_df.drop(
-                ["mean_intensity", "max_intensity", "min_intensity"],
+                drops,
                 axis=1,
                 inplace=True,
             )
@@ -189,13 +198,22 @@ class FrameLbl(object):
 
             for ch in self.channels:
                 props_channel = measure.regionprops(L, intensity_image=Data[ch])
-                mean_channel = [r.mean_intensity for r in props_channel]
-                max_channel = [r.max_intensity for r in props_channel]
-                min_channel = [r.min_intensity for r in props_channel]
-                Ninty_channel = [
-                    np.percentile(r.intensity_image, 90) for r in props_channel
-                ]
-                median_channel = [np.median(r.intensity_image) for r in props_channel]
+                if skimg_version_old:
+                    mean_channel = [r.mean_intensity for r in props_channel]
+                    max_channel = [r.max_intensity for r in props_channel]
+                    min_channel = [r.min_intensity for r in props_channel]
+                    Ninty_channel = [
+                        np.percentile(r.intensity_image, 90) for r in props_channel
+                    ]
+                    median_channel = [np.median(r.intensity_image) for r in props_channel]
+                else:
+                    mean_channel = [r.intensity_mean for r in props_channel]
+                    max_channel = [r.intensity_max for r in props_channel]
+                    min_channel = [r.intensity_min for r in props_channel]
+                    Ninty_channel = [
+                        np.percentile(r.image_intensity, 90) for r in props_channel
+                    ]
+                    median_channel = [np.median(r.image_intensity) for r in props_channel]
 
                 props_df["mean_" + ch] = mean_channel
                 props_df["max_" + ch] = max_channel
