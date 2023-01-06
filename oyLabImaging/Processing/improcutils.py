@@ -452,21 +452,22 @@ class segmentation(object):
         **kwargs
     ):
         import logging
-        logging.getLogger("tensorflow").propagate = False
-        logging.getLogger("stardist").propagate = False
-        logging.getLogger('tensorflow').setLevel(logging.FATAL)
-
         from contextlib import contextmanager
         import sys, os
-        os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-
+        # heavy guns for getting rid of retracing warnings!
+        logging.getLogger("stardist").propagate = False
+        logging.getLogger("tensorflow").setLevel(logging.CRITICAL)
+        logging.getLogger("tensorflow").propagate = False
+        logging.disable(logging.WARNING)
         import warnings
 
-        warnings.filterwarnings("ignore")
         import tensorflow as tf
 
         tf.config.threading.set_intra_op_parallelism_threads(1)
         tf.config.threading.set_inter_op_parallelism_threads(1)
+        
+        warnings.filterwarnings("ignore")
+
         @contextmanager
         def suppress_stdout():
             with open(os.devnull, "w") as devnull:
@@ -479,10 +480,7 @@ class segmentation(object):
 
         from csbdeep.utils import normalize
         from stardist.models import StarDist2D
-        with suppress_stdout():
-            from tensorflow import convert_to_tensor
-        
-        
+        from tensorflow import convert_to_tensor
         import cv2
         from cv2 import INTER_NEAREST, resize
         from skimage.transform import rescale
@@ -498,9 +496,9 @@ class segmentation(object):
         img = normalize(img, 1, 99.8)
         with suppress_stdout():
             masks, _ = model.predict_instances(
-                rescale(convert_to_tensor(img), scale),
+                rescale(img, scale),
                 nms_thresh=nms_thresh,
-                prob_thresh=prob_thresh,
+                prob_thresh=prob_thresh,verbose=False,
                 **kwargs
             )
 
@@ -627,7 +625,7 @@ class segmentation(object):
         import matplotlib.pyplot as plt
         import numpy as np
         from matplotlib.colors import ListedColormap
-
+        
         if segfun is None:
             segfun = segmentation.segtype_to_segfun(segment_type)
             print("\nusing " + segfun.__name__)

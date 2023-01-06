@@ -365,12 +365,7 @@ class PosLbl(object):
         def frame(self):
             return np.array([int(self._outer.framelabels[j].frame) for j in self.T])
 
-        def get_movie(self,
-            Channel=["DeepBlue"],
-            boxsize=75,
-            frame=None,
-            **kwargs
-        ):
+        def get_movie(self, Channel=["DeepBlue"], boxsize=75, frame=None, **kwargs):
             """
             Function to display a close up movie of a cell being tracked.
             Parameters
@@ -395,12 +390,10 @@ class PosLbl(object):
                 )
             )
 
-            
             stk = self._outer.img(
-                    Channel, frame=frame, crop=crp, verbose=False, groupby='Channel'
-                )
+                Channel, frame=frame, crop=crp, verbose=False, groupby="Channel"
+            )
             return stk
-
 
         def show_movie(
             self,
@@ -427,7 +420,7 @@ class PosLbl(object):
             viewer.scale_bar.unit = "um"
             cents = np.fliplr(self.centroid)
             # cents = self.centroid
-            
+
             crp = list(
                 map(
                     tuple,
@@ -457,7 +450,6 @@ class PosLbl(object):
                     colormap=cmaps[ind % len(cmaps)],
                     scale=[self._outer.PixelSize, self._outer.PixelSize],
                 )
-            
 
     def trackcells(self, split=True, **kwargs):
         """
