@@ -56,7 +56,9 @@ setup(
         "zernike>=0.0.32",
         "multiprocess>=0.70",
         "jupyter>=1.0.0",
-		"tensorflow-cpu"
+		"tensorflow-cpu",
+		"csbdeep",
+		"stardist"
     ],
     extras_require={
         "cuda": cuda_deps,
