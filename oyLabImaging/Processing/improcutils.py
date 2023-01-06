@@ -452,14 +452,21 @@ class segmentation(object):
         **kwargs
     ):
         import logging
+        logging.getLogger("tensorflow").propagate = False
+        logging.getLogger("stardist").propagate = False
+        logging.getLogger('tensorflow').setLevel(logging.FATAL)
+
         from contextlib import contextmanager
         import sys, os
+        os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
-        logging.getLogger("stardist").propagate = False
         import warnings
 
         warnings.filterwarnings("ignore")
+        import tensorflow as tf
 
+        tf.config.threading.set_intra_op_parallelism_threads(1)
+        tf.config.threading.set_inter_op_parallelism_threads(1)
         @contextmanager
         def suppress_stdout():
             with open(os.devnull, "w") as devnull:
@@ -472,7 +479,10 @@ class segmentation(object):
 
         from csbdeep.utils import normalize
         from stardist.models import StarDist2D
-        from tensorflow import convert_to_tensor
+        with suppress_stdout():
+            from tensorflow import convert_to_tensor
+        
+        
         import cv2
         from cv2 import INTER_NEAREST, resize
         from skimage.transform import rescale

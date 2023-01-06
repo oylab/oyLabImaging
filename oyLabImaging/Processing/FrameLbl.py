@@ -9,6 +9,9 @@ from skimage import measure
 from oyLabImaging import Metadata
 from oyLabImaging.Processing.generalutils import regionprops_to_df
 from oyLabImaging.Processing.improcutils import Zernike, segmentation
+from packaging import version
+import skimage
+skimg_version_old = version.parse(skimage.__version__) < version.parse("0.19")
 
 
 class FrameLbl(object):
@@ -93,10 +96,7 @@ class FrameLbl(object):
         **kwargs
     ):
 
-        from packaging import version
-        import skimage
-        skimg_version_old = version.parse(skimage.__version__) < version.parse("0.19")
-
+        
         if pth is None and MD is not None:
             pth = MD.base_pth
 
