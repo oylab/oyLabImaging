@@ -1,3 +1,8 @@
 # __init__.py
 import oyLabImaging.Processing as Processing
 from oyLabImaging.Metadata import Metadata
+
+import os
+
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '4'
+os.environ["OMP_NUM_THREADS"] = "1"
