@@ -6,7 +6,11 @@ Created on Thu Jul 21 15:46:30 2016
 """
 
 import numpy as np
-from numba import jit
+try:
+    from numba import jit
+except ImportError:
+    def jit(obj, **k):
+        return obj
 
 
 def periodic_smooth_decomp(I: np.ndarray) -> (np.ndarray, np.ndarray):
