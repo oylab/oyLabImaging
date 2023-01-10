@@ -34,7 +34,7 @@ setup(
         "opencv-python",
         "cellpose==0.7.2",
         "cloudpickle==1.6.0",
-        "dill>=0.3.4",
+        "dill==0.3.4",
         "ipython>=7.27.0",
         "ipywidgets>=7.6.3",
         "lap==0.4.0",
@@ -63,5 +63,6 @@ setup(
     extras_require={
         "cuda": cuda_deps,
         "cuda-win": cuda_win_deps,
+		"tests": ["pytest"]
     },
 )
