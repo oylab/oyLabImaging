@@ -1071,6 +1071,7 @@ class PosLbl(object):
         colormap="plasma",
         func=lambda x: x,
         size=20,
+        face_color="mean",
         **kwargs
     ):
         """
@@ -1101,7 +1102,7 @@ class PosLbl(object):
         pointlayer = viewer.add_points(
             pointsmat,
             properties=point_props,
-            face_color="mean",
+            face_color=face_color,
             edge_width=0,
             face_colormap=colormap,
             size=size,
