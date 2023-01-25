@@ -31,12 +31,12 @@ setup(
     install_requires=[
         "PyYAML",
         "PyQt5",
-        "opencv-python",
+        "opencv-python==4.7.0.68",
         "cellpose==0.7.2",
         "cloudpickle==1.6.0",
         "dill==0.3.4",
         "ipython>=7.27.0",
-        "ipywidgets>=7.6.3",
+        "ipywidgets==7.6.5",
         "lap==0.4.0",
         "matplotlib>=3.3.4",
         "napari>=0.4.11",
@@ -47,8 +47,8 @@ setup(
         "Pillow>=8.3.1",
         "poppy>=1.0.1",
         "pyfftw>=0.12.0",
-        "scikit_image",
-        "scikit_learn>=0.24.2",
+        "scikit_image<=0.18.3",
+        "scikit_learn==0.24.2",
         "scipy>=1.6.2",
         "setuptools>=52.0.0",
         "cmake",
@@ -57,8 +57,8 @@ setup(
         "multiprocess>=0.70",
         "jupyter>=1.0.0",
 		"tensorflow-cpu",
-		"csbdeep",
-		"stardist"
+		"csbdeep==0.7.0",
+		"stardist==0.8.3"
     ],
     extras_require={
         "cuda": cuda_deps,
