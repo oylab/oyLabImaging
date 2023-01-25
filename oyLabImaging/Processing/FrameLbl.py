@@ -174,8 +174,10 @@ class FrameLbl(object):
         
         if skimg_version_old:
             drops = ["mean_intensity", "max_intensity", "min_intensity"]
+            w_cent_nm = 'weighted_centroid'
         else:
             drops = ["intensity_mean", "intensity_max", "intensity_min"]
+            w_cent_nm = 'centroid_weighted'
         if len(props):
             props_df = regionprops_to_df(props)
             props_df.drop(
@@ -263,8 +265,8 @@ class FrameLbl(object):
                         props_df.at[i, "centroid"] = tuple(
                             np.add(props_df.at[i, "centroid"], Tforms[6:8])
                         )
-                        props_df.at[i, "weighted_centroid"] = tuple(
-                            np.add(props_df.at[i, "weighted_centroid"], Tforms[6:8])
+                        props_df.at[i, w_cent_nm] = tuple(
+                            np.add(props_df.at[i, w_cent_nm], Tforms[6:8])
                         )
                     # print('\nRegistered centroids')
                 else:
