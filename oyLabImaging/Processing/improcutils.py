@@ -453,6 +453,8 @@ class segmentation(object):
         scale=1,
         prob_thresh=0.5,
         nms_thresh=0.3,
+        vmin=1,
+        vmax=98,
         **kwargs
     ):
         import logging
@@ -497,7 +499,7 @@ class segmentation(object):
         img = np.squeeze(img)
         assert img.ndim == 2, "_segment_nuclei_stardist accepts 2D images"
 
-        img = normalize(img, 1, 99.8)
+        img = normalize(img, vmin, vmax)
         with suppress_stdout():
             masks, _ = model.predict_instances(
                 rescale(img, scale),
@@ -650,7 +652,7 @@ class segmentation(object):
         fig.subplots_adjust(bottom=0.1)
 
         ax.imshow(
-            img, cmap="gray", vmin=np.percentile(img, 10), vmax=np.percentile(img, 98)
+            img, cmap="gray", vmin=np.percentile(img, 10), vmax=np.percentile(img, 95)
         )
         cmap = ListedColormap(np.random.rand(256, 3))
         cmap.colors[0, :] = [0, 0, 0]
