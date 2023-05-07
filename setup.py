@@ -39,7 +39,7 @@ setup(
         "ipywidgets==7.6.5",
         "lap==0.4.0",
         "matplotlib>=3.3.4",
-        "napari>=0.4.11",
+        "napari==0.4.14",
         "nd2reader==3.3.0",
         "numba>=0.53.1",
         "numpy>=1.20.1",
