@@ -1070,7 +1070,7 @@ class PosLbl(object):
         periring=False,
         colormap="plasma",
         func=lambda x: x,
-        size=20,
+        size=8,
         face_color="mean",
         **kwargs
     ):
@@ -1099,10 +1099,17 @@ class PosLbl(object):
             "mean": func(np.concatenate(self.mean(Channel, periring=periring))),
             "ind": np.concatenate(self.index),
         }
+
+        text = {
+            'string': '{ind:.2f}',
+            'size': 10,
+            'color': 'white',
+            'translation': np.array([0, 0]),
+            }
         pointlayer = viewer.add_points(
             pointsmat,
             properties=point_props,
-            text = [str(a) for a in np.concatenate(self.index)],
+            text = 'ind',#[str(a) for a in np.concatenate(self.index)],
             face_color=face_color,
             edge_width=0,
             face_colormap=colormap,
