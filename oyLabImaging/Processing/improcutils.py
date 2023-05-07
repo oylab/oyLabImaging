@@ -460,6 +460,11 @@ class segmentation(object):
         import logging
         from contextlib import contextmanager
         import sys, os
+        from pathlib import Path
+        
+        
+
+
         # heavy guns for getting rid of retracing warnings!
         logging.getLogger("stardist").propagate = False
         logging.getLogger("tensorflow").setLevel(logging.CRITICAL)
@@ -483,6 +488,32 @@ class segmentation(object):
                     yield
                 finally:
                     sys.stdout = old_stdout
+
+
+        # Patch for csbdeep.models.pretrained not being parallel friendly.
+        # The problem comes from calling the function get_file (og from keras) at every model run. 
+        # This leads to a new attempt at extracting the model files. When multiple workers try this 
+        # it the same time this breaks. The patch is to first check if the file is already there, and 
+        # to skip extracting if it is.
+
+        from csbdeep.models import pretrained
+
+        def my_get_folder(cls, key_or_alias):
+            key, alias, m = pretrained.get_model_details(cls, key_or_alias)
+            cache_dir = os.path.join(os.path.expanduser("~"), ".keras")
+            target = str(Path('models') / cls.__name__ / key)
+
+            model_path = Path(cache_dir,target,key+'.zip')
+
+            if os.path.isfile(model_path):
+                return model_path.parent
+            else:
+                path = Path(pretrained.get_file(fname=key+'.zip', origin=m['url'], file_hash=m['hash'],
+                                                                    cache_subdir=target, extract=True))
+                assert path.exists() and path.parent.exists()
+                return path.parent
+
+        pretrained.get_model_folder = my_get_folder
 
         from csbdeep.utils import normalize
         from stardist.models import StarDist2D
