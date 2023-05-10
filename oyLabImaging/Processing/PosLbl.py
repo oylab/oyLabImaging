@@ -378,9 +378,10 @@ class PosLbl(object):
                 frame = self.frame
             else:
                 if not isinstance(frame, (list, np.ndarray)):
-                    frame = [frame]
+                    frame = np.array([frame])
 
-            cents = np.fliplr(self.centroid[frame])
+            f_ind = [np.where(self.frame==f)[0][0] for f in frame]
+            cents = np.fliplr(self.centroid[f_ind])
             crp = list(
                 map(
                     tuple,
@@ -389,7 +390,7 @@ class PosLbl(object):
                     ).astype(int),
                 )
             )
-
+            
             stk = self._outer.img(
                 Channel, frame=frame, crop=crp, verbose=False, groupby="Channel"
             )
@@ -458,7 +459,6 @@ class PosLbl(object):
 
         TODO: try Viterbi algo for tracking
         TODO: add mitosis detector: https://academic.oup.com/bioinformatics/article/35/15/2644/5259190
-        TODO: add support for splitting cells
 
         Parameters
         ----------
@@ -490,7 +490,12 @@ class PosLbl(object):
 
         cents = self.centroid_um
         nums = self.num
-
+        if 'adaptive_radius' in kwargs:
+            adaptive=True
+            sr_factor = np.sqrt(self.num/self.num[0])
+        else:
+            adaptive=False
+            
         if params:
             Cp = [p[0] for p in params if p[0] in self.channels]
             Wp = [p[1] for p in params if p[0] in self.channels]
@@ -505,7 +510,12 @@ class PosLbl(object):
             if nums[i + 1] > 0 and nums[i] > 0:
                 T = KDTree(cents[i + 1])
                 # We calculate points in centroid(n+1) that are less than distance_upper_bound from points in centroid(n)
-                dists, idx = T.query(cents[i], k=12, distance_upper_bound=search_radius)
+                if adaptive:
+                    sr = search_radius/np.sqrt(self.num[i]/self.num[0])
+                else:
+                    sr = search_radius
+
+                dists, idx = T.query(cents[i], k=12, distance_upper_bound=sr)
 
                 dists = [r[r < 1e308] for r in dists]
 
@@ -791,16 +801,6 @@ class PosLbl(object):
             trackends = np.array(
                 [np.where(~np.isnan(r.astype("float")))[0] for r in trackbits]
             )
-
-            #             dtmat = np.expand_dims(trackstarts,1)-np.expand_dims(trackends,0)
-            #             dt1array = np.zeros_like(dtmat)
-            #             for (x, y), element in np.ndenumerate(dtmat):
-            #                 try:
-            #                     dt1array[x,y] = np.nonzero(element==1)[0][0]
-            #                 except:
-            #                     dt1array[x,y] = None
-
-            #             possiblelinks = np.transpose(np.where(dt1array!=None))
 
             possiblelinks = np.empty((0, 2), int)
             for J in np.unique(trackstarts):
