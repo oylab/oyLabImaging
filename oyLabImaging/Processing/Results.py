@@ -111,6 +111,7 @@ class results(object):
             "f": "frames",
         }
     )
+    
     def setPosLbls(self, MD=None, groups=None, Position=None, **kwargs):
         """
         function to create PosLbl instances.
@@ -154,6 +155,10 @@ class results(object):
             "p": "Position",
         }
     )
+
+    def segment_and_extract_features(self, MD=None, groups=None, Position=None, **kwargs):
+        return self.setPosLbls(MD=MD, groups=groups, Position=Position, **kwargs)
+    
     def calculate_tracks(self, Position=None, save=True, split=True, **kwargs):
         """
         function to calculate tracks for a PosLbl instance.
@@ -493,10 +498,10 @@ class results(object):
 
         @magicgui(
             auto_call=True,
-            position={"choices": natsorted([str(a) for a in R.PosLbls.keys()])},
+            position={"choices": natsorted([a for a in R.PosLbls.keys()])},
             track_id={
                 "choices": range(
-                    R.PosLbls[sorted([str(a) for a in R.PosLbls.keys()])[0]].numtracks
+                    R.PosLbls[natsorted([a for a in R.PosLbls.keys()])[0]].numtracks
                 )
             },
             channels={"widget_type": "Select", "choices": list(R.channels)},
