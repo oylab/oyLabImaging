@@ -744,7 +744,7 @@ class Metadata(object):
                     )
 
                     parts = GlobText.globExp.split("*")
-                    options = ["Channel", "Position", "frame", "Zindex", "IGNORE"]
+                    options = ["Channel", "Position", "frame", "Zindex", "acq", "IGNORE"]
                     layout = widgets.Layout(
                         width="auto", height="40px"
                     )  # set width and height
