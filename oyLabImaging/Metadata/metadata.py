@@ -81,7 +81,6 @@ class Metadata(object):
     """
 
     def __init__(self, pth="", load_type="local", verbose=True):
-
         # get the base path (directory where it it) to the metadata file.
         # If full path to file is given, separate out the directory
         self._md_name = ""
@@ -298,7 +297,6 @@ class Metadata(object):
         fname, fext = path.splitext(pth)
         if path.isdir(pth):
             for subdir, curdir, filez in walk(pth):
-
                 assert (
                     len([f for f in filez if f.endswith(".nd2")]) < 2
                 ), "directory had multiple nd2 files. Either specify a direct path or (preferably) organize your data so that every nd2 file is in a separate folder"
@@ -457,9 +455,7 @@ class Metadata(object):
             for i in np.arange(Ninds):
                 fps = int(i / len(imgs.metadata["channels"]))
                 frame = int(i / imgsPerFrame)
-                xy = XY[
-                    fps,
-                ]
+                xy = XY[fps,]
                 z = Zpos[fps]
                 props = imgs.parser.calculate_image_properties(i)
                 zind = props[2]
@@ -744,7 +740,14 @@ class Metadata(object):
                     )
 
                     parts = GlobText.globExp.split("*")
-                    options = ["Channel", "Position", "frame", "Zindex", "acq", "IGNORE"]
+                    options = [
+                        "Channel",
+                        "Position",
+                        "frame",
+                        "Zindex",
+                        "acq",
+                        "IGNORE",
+                    ]
                     layout = widgets.Layout(
                         width="auto", height="40px"
                     )  # set width and height
@@ -856,6 +859,8 @@ class Metadata(object):
             pass
             # todo : convert numerical strings to numbers
 
+        image_table["TimestampFrame"] = image_table["frame"]
+
         image_table["filename"] = [
             f.replace(self.base_pth, "") for f in image_table.root_pth
         ]
@@ -910,17 +915,15 @@ class Metadata(object):
         image_table - pd dataframe of metadata image table
         """
         from os.path import join
-        
+
         with open(join(pth, fname), "rb") as dbfile:
             MD = pickle.load(dbfile)
-
-            
 
             if path.isdir(pth):
                 MD.base_pth = pth
             else:
                 MD.base_pth, MD._md_name = path.split(pth)
-            
+
             MD.image_table["root_pth"] = MD.image_table["filename"].copy()
             MD.image_table.root_pth = [
                 join(MD.base_pth, f) for f in MD.image_table["root_pth"]
@@ -928,7 +931,7 @@ class Metadata(object):
             self._md_name = "metadata.pickle"
             self.type = MD.type
 
-            exclude_keys = ['image_table','_load_method','_md_name']
+            exclude_keys = ["image_table", "_load_method", "_md_name"]
             d = MD.__dict__
             new_d = {k: d[k] for k in set(list(d.keys())) - set(exclude_keys)}
             self.__dict__.update(new_d)
@@ -1046,6 +1049,109 @@ class Metadata(object):
     #            else:
     #                t.save(img_as_uint(images))
     #        return fname
+
+    def viewer(MD):
+        '''
+        Napari viewer app for metadata. Lets you easily scroll through the dataset. Takes no parameters, returns no prisoners.
+        '''
+        from typing import List
+        import matplotlib
+        import matplotlib.pyplot as plt
+        import numpy as np
+        from magicgui import magicgui
+        from magicgui.widgets import Checkbox, Container, PushButton
+        from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
+        from natsort import natsorted
+        from scipy import stats
+
+        from oyLabImaging.Processing.imvisutils import get_or_create_viewer
+
+        cmaps = ["cyan", "magenta", "yellow", "red", "green", "blue"]
+        viewer = get_or_create_viewer()
+
+        # attr_list = ['area', 'convex_area','centroid','perimeter','eccentricity','solidity','inertia_tensor_eigvals', 'orientation'] #todo: derive list from F regioprops
+
+        Position = list(natsorted(MD.posnames))[0]
+
+        @magicgui(
+            auto_call=True,
+            Acquisition={"choices": list(natsorted(MD.acq))},
+            Position={"choices": list(natsorted(MD.posnames))},
+            Channels={"widget_type": "Select", "choices": list(MD.channels)},
+        )
+        def widget(Acquisition: List[str], Position: List[str], Channels: List[str]):
+            ch_choices = widget.Channels.choices
+
+        @widget.Position.changed.connect
+        def _on_pos_change():
+            viewer.layers.clear()
+
+        @widget.Acquisition.changed.connect
+        def _on_acq_change():
+            viewer.layers.clear()
+
+        movie_btn = PushButton(text="Movie")
+        widget.insert(1, movie_btn)
+
+        @movie_btn.clicked.connect
+        def _on_movie_clicked():
+            channels = widget.Channels.get_value()
+            viewer.layers.clear()
+            ch_choices = widget.Channels.choices
+            pixsize = MD.unique("PixelSize")[0]
+
+            cmaps = ["red", "green", "blue", "cyan", "magenta", "yellow"]
+
+            if len(channels) == 1:
+                cmaps = ["gray"]
+
+            for ind, ch in enumerate(channels):
+                # imgs = self._outer.img(ch, frame=list(self.T),verbose=False)
+                # stk = np.array([np.pad(im1, boxsize)[crp1[0]+boxsize:crp1[2]+boxsize, crp1[1]+boxsize:crp1[3]+boxsize] for im1, crp1 in zip(imgs, crp)])
+
+                stk = MD.stkread(
+                    Position=widget.Position.value,
+                    Channel=ch,
+                    frame=list(MD.frame),
+                    verbose=True,
+                    register=w2.value,
+                )
+                stksmp = stk.flatten()  # sample_stack(stk,int(stk.size/100))
+                stksmp = stksmp[stksmp != 0]
+                viewer.add_image(
+                    stk,
+                    blending="additive",
+                    contrast_limits=[
+                        np.percentile(stksmp, 1),
+                        np.percentile(stksmp, 99.9),
+                    ],
+                    name=ch,
+                    colormap=cmaps[ind % len(cmaps)],
+                    scale=[pixsize, pixsize],
+                )
+
+        btn = PushButton(text="Next Position")
+        widget.append(btn)
+
+        @btn.clicked.connect
+        def _on_next_clicked():
+            choices = widget.Position.choices
+            current_index = choices.index(widget.Position.value)
+            widget.Position.value = choices[(current_index + 1) % (len(choices))]
+
+        if "driftTform" in MD().columns:
+            w2 = Checkbox(value=False, text="Drift Correction?")
+            widget.append(w2)
+
+        container = Container(layout="horizontal")
+
+        layout = container.native.layout()
+
+        layout.addWidget(widget.native)  # adding native, because we're in Qt
+
+        viewer.window.add_dock_widget(container, name='Metadata Viewer')
+
+        matplotlib.use("Qt5Agg")
 
     def _read_local(
         self, ind_dict, ffield=False, register=False, verbose=True, crop=None, **kwargs
@@ -1553,7 +1659,6 @@ class Metadata(object):
         print("using channel " + Channel + " for drift correction")
 
         for pos in Position:
-
             DataPre = asarray(
                 self.stkread(
                     Position=pos,
