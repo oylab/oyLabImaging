@@ -42,7 +42,7 @@ setup(
         "napari==0.4.14",
         "nd2reader==3.3.0",
         "numba>=0.53.1",
-        "numpy>=1.20.1",
+        "numpy==1.23.1",
         "pandas>=1.2.4",
         "Pillow>=8.3.1",
         "poppy>=1.0.1",
