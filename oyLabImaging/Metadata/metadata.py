@@ -1076,7 +1076,7 @@ class Metadata(object):
         @magicgui(
             auto_call=True,
             Acquisition={"choices": list(natsorted(MD.acq))},
-            Position={"choices": list(natsorted(MD.posnames))},
+            Position={"choices": MD.unique('Position', acq=list(natsorted(MD.acq))[0])},
             Channels={"widget_type": "Select", "choices": list(MD.channels)},
         )
         def widget(Acquisition: List[str], Position: List[str], Channels: List[str]):
@@ -1089,6 +1089,7 @@ class Metadata(object):
         @widget.Acquisition.changed.connect
         def _on_acq_change():
             viewer.layers.clear()
+            widget.Position.choices = MD.unique('Position', acq=widget.Acquisition.value)
 
         movie_btn = PushButton(text="Movie")
         widget.insert(1, movie_btn)
@@ -1142,6 +1143,11 @@ class Metadata(object):
         if "driftTform" in MD().columns:
             w2 = Checkbox(value=False, text="Drift Correction?")
             widget.append(w2)
+        else:
+            class Object(object):
+                pass
+            w2 = Object()
+            w2.value = False
 
         container = Container(layout="horizontal")
 
