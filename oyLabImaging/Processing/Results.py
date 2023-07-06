@@ -157,6 +157,22 @@ class results(object):
     )
 
     def segment_and_extract_features(self, MD=None, groups=None, Position=None, **kwargs):
+        """
+        function to create PosLbl instances.
+
+        Parameters
+        ----------
+        MD - experiment metadata
+        Position - [All Positions] position name or list of position names
+
+        Segmentation parameters
+        -----------------------
+        NucChannel : ['DeepBlue'] list or str name of nuclear channel
+        CytoChannel : optional cytoplasm channel
+        segment_type : ['watershed'] function to use for segmentatiion
+        **kwargs : specific args for segmentation function, anything that goes into FrameLbl
+        Threads : how many threads to use for parallel execution. Limited to ~6 for GPU based segmentation and 128 for CPU (but don't use all 128)
+        """
         return self.setPosLbls(MD=MD, groups=groups, Position=Position, **kwargs)
     
     def calculate_tracks(self, Position=None, save=True, split=True, **kwargs):
