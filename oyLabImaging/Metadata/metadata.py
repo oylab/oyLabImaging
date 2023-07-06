@@ -1076,10 +1076,11 @@ class Metadata(object):
         @magicgui(
             auto_call=True,
             Acquisition={"choices": list(natsorted(MD.acq))},
-            Position={"choices": MD.unique('Position', acq=list(natsorted(MD.acq))[0])},
+            Position={"choices": list(MD.unique('Position', acq=list(natsorted(MD.acq))[0]))},
             Channels={"widget_type": "Select", "choices": list(MD.channels)},
+            Z_Index = {"choices": list(MD.Zindexes)},
         )
-        def widget(Acquisition: List[str], Position: List[str], Channels: List[str]):
+        def widget(Acquisition: List[str], Position: List[str], Channels: List[str], Z_Index: List):
             ch_choices = widget.Channels.choices
 
         @widget.Position.changed.connect
@@ -1116,6 +1117,7 @@ class Metadata(object):
                     frame=list(MD.frame),
                     verbose=True,
                     register=w2.value,
+                    Zindex=widget.Z_Index.value,
                 )
                 stksmp = stk.flatten()  # sample_stack(stk,int(stk.size/100))
                 stksmp = stksmp[stksmp != 0]
