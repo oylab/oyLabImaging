@@ -896,7 +896,7 @@ class Metadata(object):
         """
         save metadata as a pickle file. Saves as 'metadata.pickle' in the metadata root path.
         """
-        return pickle(self)
+        return self.pickle()
 
     # Save metadata in pickle format
     def pickle(self):
@@ -1081,7 +1081,7 @@ class Metadata(object):
 
         @magicgui(
             auto_call=True,
-            Acquisition={"choices": list(natsorted(MD.acq))},
+            Acquisition={"widget_type": "Select", "choices": list(natsorted(MD.acq))},
             Position={
                 "choices": list(MD.unique("Position", acq=list(natsorted(MD.acq))[0]))
             },
