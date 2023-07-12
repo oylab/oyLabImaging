@@ -352,6 +352,7 @@ class segmentation(object):
     """
 
     import contextlib
+    from cellpose import models
 
     def segmentation_types():
         return [
