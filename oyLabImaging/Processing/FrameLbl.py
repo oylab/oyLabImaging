@@ -161,7 +161,7 @@ class FrameLbl(object):
         self._seg_params = input_dict
 
         try:
-            imgCyto = np.sum([Data[ch] for ch in CytoChannel], axis=0)
+            imgCyto = np.sum([(Data[ch]-np.mean(Data[ch]))/np.std(Data[ch]) for ch in CytoChannel], axis=0)
         except:
             imgCyto = ""
 
