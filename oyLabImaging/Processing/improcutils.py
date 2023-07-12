@@ -560,9 +560,9 @@ class segmentation(object):
         from cv2 import INTER_NEAREST, resize
         from skimage.transform import rescale
 
-        cv2.setNumThreads(1)
+        cv2.setNumThreads(2)
 
-        model = models.Cellpose(gpu=GPU, model_type="nuclei", torch=GPU)
+        model = models.Cellpose(gpu=GPU, model_type='nuclei')
         img = np.squeeze(img)
         assert img.ndim == 2, "_segment_nuclei_cellpose accepts 2D images"
 
@@ -595,9 +595,9 @@ class segmentation(object):
         from cv2 import INTER_NEAREST, resize
         from skimage.transform import rescale
 
-        cv2.setNumThreads(1)
+        cv2.setNumThreads(2)
 
-        model = models.Cellpose(gpu=GPU, model_type="cyto", torch=GPU)
+        model = models.Cellpose(gpu=GPU, model_type="cyto")
 
         imgNucCyto = rescale(
             np.concatenate(
