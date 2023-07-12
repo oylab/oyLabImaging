@@ -19,7 +19,7 @@ cuda_win_deps = [
 
 setup(
     name="oyLabImaging",
-    version="0.2.4",
+    version="0.2.5",
     description="data processing code for the Oyler-Yaniv lab @HMS",
     author="Alon Oyler-Yaniv",
     url="https://github.com/alonyan/oyLabImaging",
@@ -56,7 +56,7 @@ setup(
         "zernike>=0.0.32",
         "multiprocess>=0.70",
         "jupyter>=1.0.0",
-		"tensorflow-cpu",
+		"tensorflow-cpu==2.10.0",
 		"csbdeep==0.7.0",
 		"stardist==0.8.3"
     ],
