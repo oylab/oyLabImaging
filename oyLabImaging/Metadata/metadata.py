@@ -296,7 +296,7 @@ class Metadata(object):
 
         fname, fext = path.splitext(pth)
         if path.isdir(pth):
-            for subdir, curdir, filez in walk(pth):
+            for subdir, curdir, filez in walk(pth,followlinks=True):
                 assert (
                     len([f for f in filez if f.endswith(".nd2")]) < 2
                 ), "directory had multiple nd2 files. Either specify a direct path or (preferably) organize your data so that every nd2 file is in a separate folder"
@@ -347,7 +347,7 @@ class Metadata(object):
 
         fname, fext = path.splitext(pth)
         if path.isdir(pth):
-            for subdir, curdir, filez in walk(pth):
+            for subdir, curdir, filez in walk(pth,followlinks=True):
                 for f in filez:
                     if f == "metadata.pickle":
                         return f
@@ -394,7 +394,7 @@ class Metadata(object):
                 )
         else:
             # if there is no MD in the folder, look at subfolders and append all
-            for subdir, curdir, filez in walk(self.base_pth):
+            for subdir, curdir, filez in walk(self.base_pth,followlinks=True):
                 for f in filez:
                     if f == self._md_name:
                         self.append(self._load_method(pth=join(subdir), fname=f))
@@ -1106,6 +1106,9 @@ class Metadata(object):
             widget.Position.choices = MD.unique(
                 "Position", acq=widget.Acquisition.value
             )
+            widget.Channels.choices = MD.unique(
+                "Channel", acq=widget.Acquisition.value
+            )
 
         movie_btn = PushButton(text="Movie")
         widget.insert(1, movie_btn)
@@ -1130,6 +1133,7 @@ class Metadata(object):
                     Position=widget.Position.value,
                     Channel=ch,
                     frame=list(MD.frame),
+                    acq = widget.Acquisition.value,
                     verbose=True,
                     register=w2.value,
                     Zindex=widget.Z_Index.value,
