@@ -892,6 +892,12 @@ class Metadata(object):
         # for attr in column_names:
         #     framedata.update(attr=v)
 
+    def save(self):
+        """
+        save metadata as a pickle file. Saves as 'metadata.pickle' in the metadata root path.
+        """
+        return pickle(self)
+
     # Save metadata in pickle format
     def pickle(self):
         """
@@ -1051,9 +1057,9 @@ class Metadata(object):
     #        return fname
 
     def viewer(MD):
-        '''
+        """
         Napari viewer app for metadata. Lets you easily scroll through the dataset. Takes no parameters, returns no prisoners.
-        '''
+        """
         from typing import List
         import matplotlib
         import matplotlib.pyplot as plt
@@ -1076,11 +1082,18 @@ class Metadata(object):
         @magicgui(
             auto_call=True,
             Acquisition={"choices": list(natsorted(MD.acq))},
-            Position={"choices": list(MD.unique('Position', acq=list(natsorted(MD.acq))[0]))},
+            Position={
+                "choices": list(MD.unique("Position", acq=list(natsorted(MD.acq))[0]))
+            },
             Channels={"widget_type": "Select", "choices": list(MD.channels)},
-            Z_Index = {"choices": list(MD.Zindexes)},
+            Z_Index={"choices": list(MD.Zindexes)},
         )
-        def widget(Acquisition: List[str], Position: List[str], Channels: List[str], Z_Index: List):
+        def widget(
+            Acquisition: List[str],
+            Position: List[str],
+            Channels: List[str],
+            Z_Index: List,
+        ):
             ch_choices = widget.Channels.choices
 
         @widget.Position.changed.connect
@@ -1090,7 +1103,9 @@ class Metadata(object):
         @widget.Acquisition.changed.connect
         def _on_acq_change():
             viewer.layers.clear()
-            widget.Position.choices = MD.unique('Position', acq=widget.Acquisition.value)
+            widget.Position.choices = MD.unique(
+                "Position", acq=widget.Acquisition.value
+            )
 
         movie_btn = PushButton(text="Movie")
         widget.insert(1, movie_btn)
@@ -1146,8 +1161,10 @@ class Metadata(object):
             w2 = Checkbox(value=False, text="Drift Correction?")
             widget.append(w2)
         else:
+
             class Object(object):
                 pass
+
             w2 = Object()
             w2.value = False
 
@@ -1157,7 +1174,7 @@ class Metadata(object):
 
         layout.addWidget(widget.native)  # adding native, because we're in Qt
 
-        viewer.window.add_dock_widget(container, name='Metadata Viewer')
+        viewer.window.add_dock_widget(container, name="Metadata Viewer")
 
         matplotlib.use("Qt5Agg")
 
@@ -1888,3 +1905,227 @@ class Metadata(object):
                     ]
             print("calculated drift correction for position " + str(pos))
         self.pickle()
+
+    def try_segmentation(MD):
+        from typing import List
+        import matplotlib
+        import matplotlib.pyplot as plt
+        import numpy as np
+        from magicgui import magicgui
+        from magicgui.widgets import Checkbox, Container, PushButton, LineEdit
+        from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
+        from natsort import natsorted
+        from cellpose import models
+        from scipy import stats
+        from oyLabImaging.Processing.improcutils import segmentation
+
+        from oyLabImaging.Processing.imvisutils import get_or_create_viewer
+
+        cmaps = ["cyan", "magenta", "yellow", "red", "green", "blue"]
+        viewer = get_or_create_viewer()
+
+        Position = list(natsorted(MD.posnames))[0]
+
+        @magicgui(
+            auto_call=False,
+            Acquisition={"choices": list(natsorted(MD.acq))},
+            Position={"choices": list(natsorted(MD.Position))},
+            NucChannels={"widget_type": "Select", "choices": list(MD.channels)},
+            CytoChannels={"widget_type": "Select", "choices": list(MD.channels)},
+            Frame={"choices": list(MD.frame)},
+            Z_Index={"choices": list(MD.Zindexes)},
+            SegmentationFunction={"choices": segmentation.segmentation_types()},
+        )
+        def widget(
+            Acquisition: List[str],
+            Position: List[str],
+            NucChannels: List[str],
+            CytoChannels: List[str],
+            Frame: List[int],
+            Z_Index: List,
+            SegmentationFunction: List[str],
+        ):
+            ch_choices = widget.NucChannels.choices
+            segfun = segmentation.segtype_to_segfun(widget.SegmentationFunction.value)
+            print("blabla")
+
+        widget.tblist = []
+        widget.input_dict = {}
+
+        def _update_list(input_dict):
+            # global tblist
+            for arg, de in input_dict.items():
+                btn = LineEdit(label=arg, value=de, name=arg)
+                widget.insert(-1, btn)
+                widget.tblist.append(arg)
+
+        @widget.SegmentationFunction.changed.connect
+        def _on_seg_func_change():
+            [widget.remove(s) for s in widget.tblist]
+            widget.tblist = []
+            segfun = segmentation.segtype_to_segfun(widget.SegmentationFunction.value)
+            nargs = segfun.__code__.co_argcount
+            defaults = list(segfun.__defaults__)
+            # ndefault = len(defaults)
+            nimgs = 2  # nargs-ndefault
+            args = [segfun.__code__.co_varnames[i] for i in range(nimgs, nargs)]
+            widget.input_dict = {args[i]: defaults[i + 1] for i in range(len(args))}
+            widget.input_dict = {**widget.input_dict}
+            _update_list(widget.input_dict)
+
+        @widget.Z_Index.changed.connect
+        def _on_Z_change():
+            viewer.layers.clear()
+            _on_movie_clicked()
+
+        @widget.NucChannels.changed.connect
+        def _on_nch_change():
+            viewer.layers.clear()
+            _on_movie_clicked()
+
+        @widget.CytoChannels.changed.connect
+        def _on_cch_change():
+            viewer.layers.clear()
+            _on_movie_clicked()
+
+        @widget.Frame.changed.connect
+        def _on_frame_change():
+            viewer.layers.clear()
+            _on_movie_clicked()
+
+        @widget.Position.changed.connect
+        def _on_pos_change():
+            viewer.layers.clear()
+            _on_movie_clicked()
+
+        @widget.Acquisition.changed.connect
+        def _on_acq_change():
+            viewer.layers.clear()
+            widget.Position.choices = MD.unique(
+                "Position", acq=widget.Acquisition.value
+            )
+            _on_movie_clicked()
+
+        movie_btn = PushButton(text="Image")
+        widget.insert(1, movie_btn)
+        pixsize = MD.unique("PixelSize")[0]
+
+        @movie_btn.clicked.connect
+        def _on_movie_clicked():
+            channels = widget.NucChannels.get_value() + widget.CytoChannels.get_value()
+            viewer.layers.clear()
+            ch_choices = widget.NucChannels.choices
+
+            cmaps = ["red", "green", "blue", "cyan", "magenta", "yellow"]
+
+            if len(channels) == 1:
+                cmaps = ["gray"]
+
+            for ind, ch in enumerate(channels):
+                stk = MD.stkread(
+                    Position=widget.Position.value,
+                    frame=widget.Frame.value,
+                    Channel=ch,
+                    verbose=False,
+                    register=False,
+                )
+                stksmp = stk.flatten()  # sample_stack(stk,int(stk.size/100))
+                stksmp = stksmp[stksmp != 0]
+                viewer.add_image(
+                    stk,
+                    blending="additive",
+                    contrast_limits=[
+                        np.percentile(stksmp, 1),
+                        np.percentile(stksmp, 99.9),
+                    ],
+                    name=ch,
+                    colormap=cmaps[ind % len(cmaps)],
+                    scale=[pixsize, pixsize],
+                )
+
+        btn = PushButton(text="Try segmentation")
+        widget.append(btn)
+
+        def clean_dict(d):
+            result = {}
+            for key, value in d.items():
+                if not value.isnumeric():
+                    value = eval(value)
+                else:
+                    value = float(value)
+                result[key] = value
+            return result
+
+        @btn.clicked.connect
+        def _on_try_clicked():
+            assert (
+                len(widget.NucChannels.get_value()) > 0
+            ), "You must pick at least a single nuclear channel"
+
+            NucChannel = widget.NucChannels.get_value()
+            CytoChannel = widget.CytoChannels.get_value()
+
+            Pos = widget.Position.value
+            frame = widget.Frame.value
+            Zindex = widget.Z_Index.value
+
+            segfun = segmentation.segtype_to_segfun(widget.SegmentationFunction.value)
+
+            Data = {}
+            for ch in NucChannel + CytoChannel:
+                Data[ch] = np.squeeze(
+                    MD.stkread(
+                        Channel=ch,
+                        frame=frame,
+                        Position=Pos,
+                        Zindex=Zindex,
+                        verbose=False,
+                    )
+                )
+                assert (
+                    Data[ch].ndim == 2
+                ), "channel/position/frame/Zindex did not return unique result"
+
+            imagedims = np.shape(Data[NucChannel[0]])
+
+            try:
+                imgCyto = np.sum(
+                    [
+                        (Data[ch] - np.mean(Data[ch])) / np.std(Data[ch])
+                        for ch in CytoChannel
+                    ],
+                    axis=0,
+                )
+            except:
+                imgCyto = ""
+
+            # imgNuc = np.max([Data[ch] for ch in NucChannel], axis=0)
+            imgNuc = np.sum(
+                [
+                    (Data[ch] - np.mean(Data[ch])) / np.std(Data[ch])
+                    for ch in NucChannel
+                ],
+                axis=0,
+            )
+
+            widget.input_dict = {t: widget.asdict()[t] for t in widget.tblist}
+            widget.input_dict = clean_dict(widget.input_dict)
+
+            L = segfun(img=imgNuc, imgCyto=imgCyto, **widget.input_dict)
+            viewer.add_labels(L, scale=[pixsize, pixsize])
+
+        container = Container(layout="horizontal")
+        container.max_width=400
+        container.max_height=700
+        
+        layout = container.native.layout()
+
+        layout.addWidget(widget.native)  # adding native, because we're in Qt
+        dock = viewer.window.add_dock_widget(container, name="Segmentation Attempts")
+
+        matplotlib.use("Qt5Agg")
+
+        widget.call_button.visible = False
+        movie_btn.visible = False
+        _on_seg_func_change()
+        return widget
