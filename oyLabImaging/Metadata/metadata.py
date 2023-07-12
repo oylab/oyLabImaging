@@ -2025,6 +2025,7 @@ class Metadata(object):
                 stk = MD.stkread(
                     Position=widget.Position.value,
                     frame=widget.Frame.value,
+                    Zindex = widget.Z_Index.value,
                     Channel=ch,
                     verbose=False,
                     register=False,
@@ -2117,7 +2118,7 @@ class Metadata(object):
         container = Container(layout="horizontal")
         container.max_width=400
         container.max_height=700
-        
+
         layout = container.native.layout()
 
         layout.addWidget(widget.native)  # adding native, because we're in Qt
