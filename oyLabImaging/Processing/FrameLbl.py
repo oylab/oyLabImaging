@@ -122,7 +122,10 @@ class FrameLbl(object):
         self._seg_fun = segmentation.segtype_to_segfun(segment_type)
 
         self.channels = MD.unique("Channel", Position=Pos, frame=frame)
-        self.acq = MD.unique("acq", Position=Pos, frame=frame)
+        if acq is None:
+            self.acq = MD.unique("acq", Position=Pos, frame=frame)
+        else:
+            self.acq = acq
 
         self.XY = MD().at[MD.unique("index", Position=Pos, frame=frame)[0], "XY"]
         self._pixelsize = MD()["PixelSize"][0]
@@ -138,7 +141,7 @@ class FrameLbl(object):
         for ch in self.channels:
             Data[ch] = np.squeeze(
                 MD.stkread(
-                    Channel=ch, frame=frame, Position=Pos, Zindex=Zindex, verbose=False
+                    Channel=ch, frame=frame, Position=Pos,acq=self.acq, Zindex=Zindex, verbose=False
                 )
             )
             assert (

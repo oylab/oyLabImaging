@@ -352,6 +352,8 @@ class segmentation(object):
     """
 
     import contextlib
+    import logging
+    logging.getLogger("cellpose").propagate = False    
     from cellpose import models
 
     def segmentation_types():
@@ -550,7 +552,6 @@ class segmentation(object):
         img, imgCyto=[], diameter=50, scale=0.5, GPU=True, **kwargs
     ):
         import logging
-
         logging.getLogger("cellpose").propagate = False
         import warnings
 

@@ -115,7 +115,11 @@ class PosLbl(object):
         self.posname = Pos
 
         self.channels = MD.unique("Channel", Position=Pos)
-        self.acq = MD.unique("acq", Position=Pos)
+        
+        if acq is None:
+            self.acq = MD.unique("acq", Position=Pos)
+        else:
+            self.acq = acq
 
         if frames is None:
             self.frames = MD.unique("frame", Position=Pos)
@@ -142,6 +146,7 @@ class PosLbl(object):
                                 MD=MD,
                                 pth=pth,
                                 Pos=Pos,
+                                acq=self.acq,
                                 NucChannel=NucChannel,
                                 register=self._registerflag,
                                 **kwargs
