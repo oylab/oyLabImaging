@@ -11,6 +11,8 @@ from oyLabImaging.Processing.generalutils import regionprops_to_df
 from oyLabImaging.Processing.improcutils import Zernike, segmentation
 from packaging import version
 import skimage
+import cv2
+
 skimg_version_old = version.parse(skimage.__version__) < version.parse("0.19")
 
 
@@ -95,8 +97,6 @@ class FrameLbl(object):
         segment_type="watershed",
         **kwargs
     ):
-
-        
         if pth is None and MD is not None:
             pth = MD.base_pth
 
@@ -134,19 +134,49 @@ class FrameLbl(object):
             NucChannel = self.channels[0]
             print("using " + NucChannel + " for nuclear channel")
 
-        NucChannel = NucChannel if isinstance(NucChannel, (list, np.ndarray)) else [NucChannel]
-        CytoChannel = CytoChannel if isinstance(CytoChannel, (list, np.ndarray)) else [CytoChannel]
+        NucChannel = (
+            NucChannel if isinstance(NucChannel, (list, np.ndarray)) else [NucChannel]
+        )
+        CytoChannel = (
+            CytoChannel
+            if isinstance(CytoChannel, (list, np.ndarray))
+            else [CytoChannel]
+        )
 
         Data = {}
+
         for ch in self.channels:
             Data[ch] = np.squeeze(
                 MD.stkread(
-                    Channel=ch, frame=frame, Position=Pos,acq=self.acq, Zindex=Zindex, verbose=False
+                    Channel=ch,
+                    frame=frame,
+                    Position=Pos,
+                    acq=self.acq,
+                    Zindex=Zindex,
+                    verbose=False,
                 )
             )
+
             assert (
                 Data[ch].ndim == 2
             ), "channel/position/frame/Zindex did not return unique result"
+        # align to nucchannel
+
+        if "driftTform" in MD().columns:
+            ind = MD.unique("index", Position=Pos, frame=frame, Channel=NucChannel)
+            Tforms_Nuc = MD().at[ind[0], "driftTform"]
+            Tforms_Nuc_inv = np.linalg.pinv(np.reshape(Tforms_Nuc, (3, 3)))
+            for ch in MD.channels:
+                ind = MD.unique("index", Position=Pos, frame=frame, Channel=ch)
+                Tforms_ch = np.reshape(MD().at[ind[0], "driftTform"], (3, 3))
+                
+                M = np.dot(Tforms_Nuc_inv,Tforms_ch).transpose()
+                M[0, 2], M[1, 2] = M[1, 2], M[0, 2]
+                imreturn = cv2.warpAffine(
+                    (Data[ch] * 2**16).astype("float64"), M[:2], Data[ch].shape[::-1]
+                )
+                Data[ch] = imreturn / 2**16
+
 
         self.imagedims = np.shape(Data[NucChannel[0]])
 
@@ -164,25 +194,32 @@ class FrameLbl(object):
         self._seg_params = input_dict
 
         try:
-            imgCyto = np.sum([(Data[ch]-np.mean(Data[ch]))/np.std(Data[ch]) for ch in CytoChannel], axis=0)
+            imgCyto = np.sum(
+                [
+                    (Data[ch] - np.mean(Data[ch])) / np.std(Data[ch])
+                    for ch in CytoChannel
+                ],
+                axis=0,
+            )
         except:
             imgCyto = ""
 
         # imgNuc = np.max([Data[ch] for ch in NucChannel], axis=0)
-        imgNuc = np.sum([(Data[ch]-np.mean(Data[ch]))/np.std(Data[ch]) for ch in NucChannel], axis=0)
-
+        imgNuc = np.sum(
+            [(Data[ch] - np.mean(Data[ch])) / np.std(Data[ch]) for ch in NucChannel],
+            axis=0,
+        )
 
         L = self._seg_fun(img=imgNuc, imgCyto=imgCyto, **kwargs)
 
         props = measure.regionprops(L, intensity_image=Data[NucChannel[0]])
 
-        
         if skimg_version_old:
             drops = ["mean_intensity", "max_intensity", "min_intensity"]
-            w_cent_nm = 'weighted_centroid'
+            w_cent_nm = "weighted_centroid"
         else:
             drops = ["intensity_mean", "intensity_max", "intensity_min"]
-            w_cent_nm = 'centroid_weighted'
+            w_cent_nm = "centroid_weighted"
         if len(props):
             props_df = regionprops_to_df(props)
             props_df.drop(
@@ -191,7 +228,6 @@ class FrameLbl(object):
                 inplace=True,
             )
             if zernike:
-
                 L1 = [
                     list(Zernike.coeff_fast(stats.zscore(r.intensity_image)))[1]
                     for r in props
@@ -212,7 +248,9 @@ class FrameLbl(object):
                     Ninty_channel = [
                         np.percentile(r.intensity_image, 90) for r in props_channel
                     ]
-                    median_channel = [np.median(r.intensity_image) for r in props_channel]
+                    median_channel = [
+                        np.median(r.intensity_image) for r in props_channel
+                    ]
                 else:
                     mean_channel = [r.intensity_mean for r in props_channel]
                     max_channel = [r.intensity_max for r in props_channel]
@@ -220,7 +258,9 @@ class FrameLbl(object):
                     Ninty_channel = [
                         np.percentile(r.image_intensity, 90) for r in props_channel
                     ]
-                    median_channel = [np.median(r.image_intensity) for r in props_channel]
+                    median_channel = [
+                        np.median(r.image_intensity) for r in props_channel
+                    ]
 
                 props_df["mean_" + ch] = mean_channel
                 props_df["max_" + ch] = max_channel
