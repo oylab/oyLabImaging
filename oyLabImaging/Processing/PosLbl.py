@@ -90,7 +90,7 @@ class PosLbl(object):
         frames=None,
         NucChannel=None,
         threads=10,
-        register=True,
+        register=False,
         calculate=True,
         **kwargs
     ):
@@ -128,8 +128,6 @@ class PosLbl(object):
         else:
             self.frames = frames
 
-        if len(self.frames) == 1:
-            register = False
         self._registerflag = register
         self._tracked = False
         self._splitflag = False
