@@ -396,6 +396,7 @@ class results(object):
             "Channel": "channel",
             "ch": "channel",
             "c": "channel",
+            "Ch": "channel",
         }
     )
     def property_matrix(
@@ -524,7 +525,7 @@ class results(object):
             features={"widget_type": "Select", "choices": attr_list},
         )
         def widget(
-            position: List[str], track_id: int, channels: List[str], features: List[str]
+            position: List[str], track_id: int, channels: List[str], features: List
         ):
             # preserving these parameters for things that the graphing function
             # needs... so that anytime this is called we have to graph.
