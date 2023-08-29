@@ -296,7 +296,7 @@ class Metadata(object):
 
         fname, fext = path.splitext(pth)
         if path.isdir(pth):
-            for subdir, curdir, filez in walk(pth,followlinks=True):
+            for subdir, curdir, filez in walk(pth, followlinks=True):
                 assert (
                     len([f for f in filez if f.endswith(".nd2")]) < 2
                 ), "directory had multiple nd2 files. Either specify a direct path or (preferably) organize your data so that every nd2 file is in a separate folder"
@@ -347,7 +347,7 @@ class Metadata(object):
 
         fname, fext = path.splitext(pth)
         if path.isdir(pth):
-            for subdir, curdir, filez in walk(pth,followlinks=True):
+            for subdir, curdir, filez in walk(pth, followlinks=True):
                 for f in filez:
                     if f == "metadata.pickle":
                         return f
@@ -394,7 +394,7 @@ class Metadata(object):
                 )
         else:
             # if there is no MD in the folder, look at subfolders and append all
-            for subdir, curdir, filez in walk(self.base_pth,followlinks=True):
+            for subdir, curdir, filez in walk(self.base_pth, followlinks=True):
                 for f in filez:
                     if f == self._md_name:
                         self.append(self._load_method(pth=join(subdir), fname=f))
@@ -1106,9 +1106,7 @@ class Metadata(object):
             widget.Position.choices = MD.unique(
                 "Position", acq=widget.Acquisition.value
             )
-            widget.Channels.choices = MD.unique(
-                "Channel", acq=widget.Acquisition.value
-            )
+            widget.Channels.choices = MD.unique("Channel", acq=widget.Acquisition.value)
 
         movie_btn = PushButton(text="Movie")
         widget.insert(1, movie_btn)
@@ -1133,7 +1131,7 @@ class Metadata(object):
                     Position=widget.Position.value,
                     Channel=ch,
                     frame=list(MD.frame),
-                    acq = widget.Acquisition.value,
+                    acq=widget.Acquisition.value,
                     verbose=True,
                     register=w2.value,
                     Zindex=widget.Z_Index.value,
@@ -2027,9 +2025,10 @@ class Metadata(object):
 
             for ind, ch in enumerate(channels):
                 stk = MD.stkread(
+                    acq = widget.Acquisition.value,
                     Position=widget.Position.value,
                     frame=widget.Frame.value,
-                    Zindex = widget.Z_Index.value,
+                    Zindex=widget.Z_Index.value,
                     Channel=ch,
                     verbose=False,
                     register=False,
@@ -2073,13 +2072,14 @@ class Metadata(object):
             Pos = widget.Position.value
             frame = widget.Frame.value
             Zindex = widget.Z_Index.value
-
+            acq = widget.Acquisition.value
             segfun = segmentation.segtype_to_segfun(widget.SegmentationFunction.value)
 
             Data = {}
             for ch in NucChannel + CytoChannel:
                 Data[ch] = np.squeeze(
                     MD.stkread(
+                        acq = acq,
                         Channel=ch,
                         frame=frame,
                         Position=Pos,
@@ -2120,8 +2120,8 @@ class Metadata(object):
             viewer.add_labels(L, scale=[pixsize, pixsize])
 
         container = Container(layout="horizontal")
-        container.max_width=400
-        container.max_height=700
+        container.max_width = 400
+        container.max_height = 700
 
         layout = container.native.layout()
 
