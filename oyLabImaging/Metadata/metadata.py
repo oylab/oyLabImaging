@@ -1234,7 +1234,7 @@ class Metadata(object):
         import nd2
         from PIL import Image
 
-        with nd2.ND2File(self.unique("root_pth")[0]) as f:
+        with nd2.ND2File(self.unique("root_pth")[0]) as nd2imgs:
             images_dict = {}
             for key, value in ind_dict.items():
                 imgs = []
@@ -1246,9 +1246,9 @@ class Metadata(object):
                     # here we have to undo the channel count multiplication
                     # to get at the actual nd2 frame index
                     # NOTE: also: private _get_frame usage... may fail in the future.
-                    frame = f._get_frame(find // f.attributes.channelCount)
+                    frame = nd2imgs._get_frame(find // nd2imgs.attributes.channelCount)
                     # then we index into the frame to get the actual channel
-                    im = Image.fromarray(frame[find % f.attributes.channelCount])
+                    im = Image.fromarray(frame[find % nd2imgs.attributes.channelCount])
                     # PIL crop seems like a faster option for registration, so we'll go with it!
                     if crop is None:
                         width, height = im.size
