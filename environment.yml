@@ -20,7 +20,7 @@ dependencies:
   - numba
   - dill
   - cmake
-  - nd2reader
+  - nd2>=0.7.2
   - napari=0.4.11
   - pyfftw
   - h5py

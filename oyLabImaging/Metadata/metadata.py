@@ -16,10 +16,29 @@ import pandas as pd
 from natsort import natsort_keygen, natsorted
 from PIL import Image
 from skimage import io
-from oyLabImaging.Processing.generalutils import alias
+
+# from oyLabImaging.Processing.generalutils import alias
 
 md_logger = logging.getLogger(__name__)
 md_logger.setLevel(logging.DEBUG)
+
+
+def alias(aliases):
+    import functools
+
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            for alias, name in aliases.items():
+                if name not in kwargs and alias in kwargs:
+                    kwargs[name] = kwargs[alias]
+                    del kwargs[alias]
+            return func(*args, **kwargs)
+
+        return wrapper
+
+    return decorator
+
 
 usecolslist = [
     "acq",
@@ -98,7 +117,7 @@ class Metadata(object):
         self._md_name = self._determine_metadata_name(pth)
 
         # If it can't find a supported MD, it exits w/o doing anything
-        if self.type == None:
+        if self.type is None:
             print("Could not find supported metadata.")
             return
 
@@ -118,12 +137,12 @@ class Metadata(object):
         try:
             self._load_metadata(verbose=verbose)
         except Exception as e:
-            print("could not load metadata, file may be corrupted.")
+            print(f"could not load metadata, file may be corrupted. {e}")
 
         # Handle columns that don't import from text well
         try:
             self._convert_data("XY", float)
-        except Exception as e:
+        except Exception:
             self.image_table["XY"] = [literal_eval(i) for i in self.image_table["XY"]]
 
         # How should files be read?
@@ -406,6 +425,92 @@ class Metadata(object):
                                 + join(subdir, f)
                             )
 
+    # def _load_metadata_nd(self, pth, fname="", delimiter="\t"):
+    #     """
+    #     Helper function to load nikon nd2 metadata.
+    #     Returns
+    #     -------
+    #     image_table - pd dataframe of metadata image table
+    #     """
+
+    #     import nd2reader as nd2
+    #     import pandas as pd
+
+    #     usecolslist = [
+    #         "acq",
+    #         "Position",
+    #         "frame",
+    #         "Channel",
+    #         "XY",
+    #         "Z",
+    #         "Zindex",
+    #         "Exposure",
+    #         "PixelSize",
+    #         "TimestampFrame",
+    #         "TimestampImage",
+    #         "filename",
+    #     ]
+    #     image_table = pd.DataFrame(columns=usecolslist)
+
+    #     acq = fname
+    #     with nd2.ND2Reader(join(self.base_pth, fname)) as imgs:
+    #         Ninds = imgs.metadata["total_images_per_channel"] * len(
+    #             imgs.metadata["channels"]
+    #         )
+    #         frames = imgs.metadata["frames"]
+    #         imgsPerFrame = Ninds / len(frames)
+
+    #         XY = np.column_stack(
+    #             (
+    #                 np.array(imgs.parser._raw_metadata.x_data),
+    #                 np.array(imgs.parser._raw_metadata.y_data),
+    #             )
+    #         )
+    #         Zpos = imgs.metadata["z_coordinates"]
+    #         if not imgs.metadata["z_levels"]:
+    #             imgs.metadata["z_levels"] = [0]
+    #         pixsize = imgs.metadata["pixel_microns"]
+    #         acq = fname
+    #         for i in np.arange(Ninds):
+    #             fps = int(i / len(imgs.metadata["channels"]))
+    #             frame = int(i / imgsPerFrame)
+    #             xy = XY[fps,]
+    #             z = Zpos[fps]
+    #             props = imgs.parser.calculate_image_properties(i)
+    #             zind = props[2]
+    #             chan = props[1]
+    #             pos = props[0]
+    #             exptime = imgs.parser._raw_metadata.camera_exposure_time[fps]
+    #             framedata = {
+    #                 "acq": acq,
+    #                 "Position": str(pos),
+    #                 "frame": frame,
+    #                 "Channel": str(chan),
+    #                 "XY": list(xy),
+    #                 "Z": z,
+    #                 "Zindex": zind,
+    #                 "Exposure": exptime,
+    #                 "PixelSize": pixsize,
+    #                 "TimestampFrame": imgs.timesteps[fps],
+    #                 "TimestampImage": imgs.timesteps[fps],
+    #                 "root_pth": acq,
+    #             }
+    #             # image_table = image_table.append(
+    #             #    framedata, sort=False, ignore_index=True
+    #             # )
+    #             image_table = pd.concat(
+    #                 [image_table, pd.DataFrame([framedata])],
+    #                 sort=False,
+    #                 ignore_index=True,
+    #             )
+    #         image_table.root_pth = [
+    #             join(self.base_pth, f.split("/")[-1]) for f in image_table.root_pth
+    #         ]
+    #         image_table["filename"] = [
+    #             f.replace(self.base_pth, "") for f in image_table.root_pth
+    #         ]
+    #         return image_table
+
     def _load_metadata_nd(self, pth, fname="", delimiter="\t"):
         """
         Helper function to load nikon nd2 metadata.
@@ -414,83 +519,33 @@ class Metadata(object):
         image_table - pd dataframe of metadata image table
         """
 
-        import nd2reader as nd2
+        import nd2
         import pandas as pd
 
-        usecolslist = [
-            "acq",
-            "Position",
-            "frame",
-            "Channel",
-            "XY",
-            "Z",
-            "Zindex",
-            "Exposure",
-            "PixelSize",
-            "TimestampFrame",
-            "TimestampImage",
-            "filename",
-        ]
-        image_table = pd.DataFrame(columns=usecolslist)
-
-        acq = fname
-        with nd2.ND2Reader(join(self.base_pth, fname)) as imgs:
-            Ninds = imgs.metadata["total_images_per_channel"] * len(
-                imgs.metadata["channels"]
-            )
-            frames = imgs.metadata["frames"]
-            imgsPerFrame = Ninds / len(frames)
-
-            XY = np.column_stack(
-                (
-                    np.array(imgs.parser._raw_metadata.x_data),
-                    np.array(imgs.parser._raw_metadata.y_data),
-                )
-            )
-            Zpos = imgs.metadata["z_coordinates"]
-            if not imgs.metadata["z_levels"]:
-                imgs.metadata["z_levels"] = [0]
-            pixsize = imgs.metadata["pixel_microns"]
-            acq = fname
-            for i in np.arange(Ninds):
-                fps = int(i / len(imgs.metadata["channels"]))
-                frame = int(i / imgsPerFrame)
-                xy = XY[fps,]
-                z = Zpos[fps]
-                props = imgs.parser.calculate_image_properties(i)
-                zind = props[2]
-                chan = props[1]
-                pos = props[0]
-                exptime = imgs.parser._raw_metadata.camera_exposure_time[fps]
+        data = []
+        with nd2.ND2File(join(self.base_pth, fname)) as f:
+            pixsize = f.voxel_size().x
+            for event in f.events():
+                if "Index" not in event:  # non image event
+                    continue
                 framedata = {
-                    "acq": acq,
-                    "Position": str(pos),
-                    "frame": frame,
-                    "Channel": str(chan),
-                    "XY": list(xy),
-                    "Z": z,
-                    "Zindex": zind,
-                    "Exposure": exptime,
+                    "acq": fname,
+                    "Position": event.get("Position Name") or event.get("P Index", ""),
+                    "frame": event.get("Index"),
+                    "XY": [event.get("X Coord [µm]"), event.get("Y Coord [µm]")],
+                    "Z": event.get("Z Coord [µm]"),
+                    "Zindex": event.get("Z Index"),
+                    "Exposure": event.get("Exposure Time [ms]"),
                     "PixelSize": pixsize,
-                    "TimestampFrame": imgs.timesteps[fps],
-                    "TimestampImage": imgs.timesteps[fps],
-                    "root_pth": acq,
+                    "TimestampFrame": event.get("Time [s]") * 1000,
+                    "TimestampImage": event.get("Time [s]") * 1000,
+                    "filename": fname.replace(self.base_pth, ""),
+                    "root_pth": join(self.base_pth, fname.split("/")[-1]),
                 }
-                # image_table = image_table.append(
-                #    framedata, sort=False, ignore_index=True
-                # )
-                image_table = pd.concat(
-                    [image_table, pd.DataFrame([framedata])],
-                    sort=False,
-                    ignore_index=True,
-                )
-            image_table.root_pth = [
-                join(self.base_pth, f.split("/")[-1]) for f in image_table.root_pth
-            ]
-            image_table["filename"] = [
-                f.replace(self.base_pth, "") for f in image_table.root_pth
-            ]
-            return image_table
+                for channel in f.metadata.channels:
+                    data.append({**framedata, "Channel": channel.channel.name})
+
+        return pd.DataFrame(data)
 
     def export_as_text(self, fname="Metadata.txt"):
         from os.path import join
@@ -596,7 +651,7 @@ class Metadata(object):
 
     def _load_metadata_TIF_GUI(self, pth=""):
         GlobText = self._getPatternsFromPathGUI(pth=pth)
-        box1 = self._getMappingFromGUI(GlobText)
+        self._getMappingFromGUI(GlobText)
 
     def _getPatternsFromPathGUI(self, pth=""):
         from tkinter import Tk, filedialog
@@ -748,9 +803,7 @@ class Metadata(object):
                         "acq",
                         "IGNORE",
                     ]
-                    layout = widgets.Layout(
-                        width="auto", height="40px"
-                    )  # set width and height
+                    widgets.Layout(width="auto", height="40px")  # set width and height
 
                     dddict = {}
                     for i in range(len(parts) - 1):
@@ -806,7 +859,6 @@ class Metadata(object):
         -------
         image_table - pd dataframe of metadata image table
         """
-        from os.path import join
 
         import pandas as pd
 
@@ -964,7 +1016,7 @@ class Metadata(object):
         sortby="TimestampFrame",
         finds_only=False,
         metadata=False,
-        **kwargs
+        **kwargs,
     ):
         """
         Main interface of Metadata
@@ -1061,23 +1113,20 @@ class Metadata(object):
         Napari viewer app for metadata. Lets you easily scroll through the dataset. Takes no parameters, returns no prisoners.
         """
         from typing import List
+
         import matplotlib
-        import matplotlib.pyplot as plt
         import numpy as np
         from magicgui import magicgui
         from magicgui.widgets import Checkbox, Container, PushButton
-        from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
         from natsort import natsorted
-        from scipy import stats
 
         from oyLabImaging.Processing.imvisutils import get_or_create_viewer
 
-        cmaps = ["cyan", "magenta", "yellow", "red", "green", "blue"]
         viewer = get_or_create_viewer()
 
         # attr_list = ['area', 'convex_area','centroid','perimeter','eccentricity','solidity','inertia_tensor_eigvals', 'orientation'] #todo: derive list from F regioprops
 
-        Position = list(natsorted(MD.posnames))[0]
+        list(natsorted(MD.posnames))[0]
 
         @magicgui(
             auto_call=True,
@@ -1094,7 +1143,7 @@ class Metadata(object):
             Channels: List[str],
             Z_Index: List,
         ):
-            ch_choices = widget.Channels.choices
+            pass
 
         @widget.Position.changed.connect
         def _on_pos_change():
@@ -1115,7 +1164,6 @@ class Metadata(object):
         def _on_movie_clicked():
             channels = widget.Channels.get_value()
             viewer.layers.clear()
-            ch_choices = widget.Channels.choices
             pixsize = MD.unique("PixelSize")[0]
 
             cmaps = ["red", "green", "blue", "cyan", "magenta", "yellow"]
@@ -1910,23 +1958,19 @@ class Metadata(object):
 
     def try_segmentation(MD):
         from typing import List
+
         import matplotlib
-        import matplotlib.pyplot as plt
         import numpy as np
         from magicgui import magicgui
-        from magicgui.widgets import Checkbox, Container, PushButton, LineEdit
-        from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
+        from magicgui.widgets import Container, LineEdit, PushButton
         from natsort import natsorted
-        from cellpose import models
-        from scipy import stats
-        from oyLabImaging.Processing.improcutils import segmentation
 
+        from oyLabImaging.Processing.improcutils import segmentation
         from oyLabImaging.Processing.imvisutils import get_or_create_viewer
 
-        cmaps = ["cyan", "magenta", "yellow", "red", "green", "blue"]
         viewer = get_or_create_viewer()
 
-        Position = list(natsorted(MD.posnames))[0]
+        list(natsorted(MD.posnames))[0]
 
         @magicgui(
             auto_call=False,
@@ -1947,8 +1991,7 @@ class Metadata(object):
             Z_Index: List,
             SegmentationFunction: List[str],
         ):
-            ch_choices = widget.NucChannels.choices
-            segfun = segmentation.segtype_to_segfun(widget.SegmentationFunction.value)
+            segmentation.segtype_to_segfun(widget.SegmentationFunction.value)
             print("blabla")
 
         widget.tblist = []
@@ -2016,7 +2059,6 @@ class Metadata(object):
         def _on_movie_clicked():
             channels = widget.NucChannels.get_value() + widget.CytoChannels.get_value()
             viewer.layers.clear()
-            ch_choices = widget.NucChannels.choices
 
             cmaps = ["red", "green", "blue", "cyan", "magenta", "yellow"]
 
@@ -2025,7 +2067,7 @@ class Metadata(object):
 
             for ind, ch in enumerate(channels):
                 stk = MD.stkread(
-                    acq = widget.Acquisition.value,
+                    acq=widget.Acquisition.value,
                     Position=widget.Position.value,
                     frame=widget.Frame.value,
                     Zindex=widget.Z_Index.value,
@@ -2079,7 +2121,7 @@ class Metadata(object):
             for ch in NucChannel + CytoChannel:
                 Data[ch] = np.squeeze(
                     MD.stkread(
-                        acq = acq,
+                        acq=acq,
                         Channel=ch,
                         frame=frame,
                         Position=Pos,
@@ -2091,7 +2133,7 @@ class Metadata(object):
                     Data[ch].ndim == 2
                 ), "channel/position/frame/Zindex did not return unique result"
 
-            imagedims = np.shape(Data[NucChannel[0]])
+            np.shape(Data[NucChannel[0]])
 
             try:
                 imgCyto = np.sum(
@@ -2126,7 +2168,7 @@ class Metadata(object):
         layout = container.native.layout()
 
         layout.addWidget(widget.native)  # adding native, because we're in Qt
-        dock = viewer.window.add_dock_widget(container, name="Segmentation Attempts")
+        viewer.window.add_dock_widget(container, name="Segmentation Attempts")
 
         matplotlib.use("Qt5Agg")
 
