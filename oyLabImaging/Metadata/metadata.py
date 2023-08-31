@@ -16,29 +16,10 @@ import pandas as pd
 from natsort import natsort_keygen, natsorted
 from PIL import Image
 from skimage import io
-
-# from oyLabImaging.Processing.generalutils import alias
+from oyLabImaging.Processing.generalutils import alias
 
 md_logger = logging.getLogger(__name__)
 md_logger.setLevel(logging.DEBUG)
-
-
-def alias(aliases):
-    import functools
-
-    def decorator(func):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            for alias, name in aliases.items():
-                if name not in kwargs and alias in kwargs:
-                    kwargs[name] = kwargs[alias]
-                    del kwargs[alias]
-            return func(*args, **kwargs)
-
-        return wrapper
-
-    return decorator
-
 
 usecolslist = [
     "acq",
@@ -117,7 +98,7 @@ class Metadata(object):
         self._md_name = self._determine_metadata_name(pth)
 
         # If it can't find a supported MD, it exits w/o doing anything
-        if self.type is None:
+        if self.type == None:
             print("Could not find supported metadata.")
             return
 
@@ -137,12 +118,12 @@ class Metadata(object):
         try:
             self._load_metadata(verbose=verbose)
         except Exception as e:
-            print(f"could not load metadata, file may be corrupted. {e}")
+            print("could not load metadata, file may be corrupted.")
 
         # Handle columns that don't import from text well
         try:
             self._convert_data("XY", float)
-        except Exception:
+        except Exception as e:
             self.image_table["XY"] = [literal_eval(i) for i in self.image_table["XY"]]
 
         # How should files be read?
@@ -565,7 +546,7 @@ class Metadata(object):
 
     def _load_metadata_TIF_GUI(self, pth=""):
         GlobText = self._getPatternsFromPathGUI(pth=pth)
-        self._getMappingFromGUI(GlobText)
+        box1 = self._getMappingFromGUI(GlobText)
 
     def _getPatternsFromPathGUI(self, pth=""):
         from tkinter import Tk, filedialog
@@ -717,7 +698,9 @@ class Metadata(object):
                         "acq",
                         "IGNORE",
                     ]
-                    widgets.Layout(width="auto", height="40px")  # set width and height
+                    layout = widgets.Layout(
+                        width="auto", height="40px"
+                    )  # set width and height
 
                     dddict = {}
                     for i in range(len(parts) - 1):
@@ -773,6 +756,7 @@ class Metadata(object):
         -------
         image_table - pd dataframe of metadata image table
         """
+        from os.path import join
 
         import pandas as pd
 
@@ -930,7 +914,7 @@ class Metadata(object):
         sortby="TimestampFrame",
         finds_only=False,
         metadata=False,
-        **kwargs,
+        **kwargs
     ):
         """
         Main interface of Metadata
@@ -1027,20 +1011,23 @@ class Metadata(object):
         Napari viewer app for metadata. Lets you easily scroll through the dataset. Takes no parameters, returns no prisoners.
         """
         from typing import List
-
         import matplotlib
+        import matplotlib.pyplot as plt
         import numpy as np
         from magicgui import magicgui
         from magicgui.widgets import Checkbox, Container, PushButton
+        from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
         from natsort import natsorted
+        from scipy import stats
 
         from oyLabImaging.Processing.imvisutils import get_or_create_viewer
 
+        cmaps = ["cyan", "magenta", "yellow", "red", "green", "blue"]
         viewer = get_or_create_viewer()
 
         # attr_list = ['area', 'convex_area','centroid','perimeter','eccentricity','solidity','inertia_tensor_eigvals', 'orientation'] #todo: derive list from F regioprops
 
-        list(natsorted(MD.posnames))[0]
+        Position = list(natsorted(MD.posnames))[0]
 
         @magicgui(
             auto_call=True,
@@ -1057,7 +1044,7 @@ class Metadata(object):
             Channels: List[str],
             Z_Index: List,
         ):
-            pass
+            ch_choices = widget.Channels.choices
 
         @widget.Position.changed.connect
         def _on_pos_change():
@@ -1078,6 +1065,7 @@ class Metadata(object):
         def _on_movie_clicked():
             channels = widget.Channels.get_value()
             viewer.layers.clear()
+            ch_choices = widget.Channels.choices
             pixsize = MD.unique("PixelSize")[0]
 
             cmaps = ["red", "green", "blue", "cyan", "magenta", "yellow"]
@@ -1875,19 +1863,23 @@ class Metadata(object):
 
     def try_segmentation(MD):
         from typing import List
-
         import matplotlib
+        import matplotlib.pyplot as plt
         import numpy as np
         from magicgui import magicgui
-        from magicgui.widgets import Container, LineEdit, PushButton
+        from magicgui.widgets import Checkbox, Container, PushButton, LineEdit
+        from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
         from natsort import natsorted
-
+        from cellpose import models
+        from scipy import stats
         from oyLabImaging.Processing.improcutils import segmentation
+
         from oyLabImaging.Processing.imvisutils import get_or_create_viewer
 
+        cmaps = ["cyan", "magenta", "yellow", "red", "green", "blue"]
         viewer = get_or_create_viewer()
 
-        list(natsorted(MD.posnames))[0]
+        Position = list(natsorted(MD.posnames))[0]
 
         @magicgui(
             auto_call=False,
@@ -1908,7 +1900,8 @@ class Metadata(object):
             Z_Index: List,
             SegmentationFunction: List[str],
         ):
-            segmentation.segtype_to_segfun(widget.SegmentationFunction.value)
+            ch_choices = widget.NucChannels.choices
+            segfun = segmentation.segtype_to_segfun(widget.SegmentationFunction.value)
             print("blabla")
 
         widget.tblist = []
@@ -1976,6 +1969,7 @@ class Metadata(object):
         def _on_movie_clicked():
             channels = widget.NucChannels.get_value() + widget.CytoChannels.get_value()
             viewer.layers.clear()
+            ch_choices = widget.NucChannels.choices
 
             cmaps = ["red", "green", "blue", "cyan", "magenta", "yellow"]
 
@@ -1984,7 +1978,7 @@ class Metadata(object):
 
             for ind, ch in enumerate(channels):
                 stk = MD.stkread(
-                    acq=widget.Acquisition.value,
+                    acq = widget.Acquisition.value,
                     Position=widget.Position.value,
                     frame=widget.Frame.value,
                     Zindex=widget.Z_Index.value,
@@ -2038,7 +2032,7 @@ class Metadata(object):
             for ch in NucChannel + CytoChannel:
                 Data[ch] = np.squeeze(
                     MD.stkread(
-                        acq=acq,
+                        acq = acq,
                         Channel=ch,
                         frame=frame,
                         Position=Pos,
@@ -2050,7 +2044,7 @@ class Metadata(object):
                     Data[ch].ndim == 2
                 ), "channel/position/frame/Zindex did not return unique result"
 
-            np.shape(Data[NucChannel[0]])
+            imagedims = np.shape(Data[NucChannel[0]])
 
             try:
                 imgCyto = np.sum(
@@ -2085,7 +2079,7 @@ class Metadata(object):
         layout = container.native.layout()
 
         layout.addWidget(widget.native)  # adding native, because we're in Qt
-        viewer.window.add_dock_widget(container, name="Segmentation Attempts")
+        dock = viewer.window.add_dock_widget(container, name="Segmentation Attempts")
 
         matplotlib.use("Qt5Agg")
 
