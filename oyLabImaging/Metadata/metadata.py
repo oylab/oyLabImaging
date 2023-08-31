@@ -1243,12 +1243,10 @@ class Metadata(object):
         """
         pillow = False
 
-        import nd2reader as nd2
+        import nd2
         from PIL import Image
 
-        with nd2.ND2Reader(self.unique("root_pth")[0]) as nd2imgs:
-            if not nd2imgs.metadata["z_levels"]:
-                nd2imgs.metadata["z_levels"] = [0]
+        with nd2.ND2File(self.unique("root_pth")[0]) as f:
             images_dict = {}
             for key, value in ind_dict.items():
                 imgs = []
@@ -1257,7 +1255,12 @@ class Metadata(object):
                     if verbose:
                         sys.stdout.write("\r" + "opening index " + str(find))
                         sys.stdout.flush()
-                    im = Image.fromarray(nd2imgs.parser.get_image(find))
+                    # here we have to undo the channel count multiplication
+                    # to get at the actual nd2 frame index
+                    # NOTE: also: private _get_frame usage... may fail in the future.
+                    frame = f._get_frame(find // f.attributes.channelCount)
+                    # then we index into the frame to get the actual channel
+                    im = Image.fromarray(frame[find % f.attributes.channelCount])
                     # PIL crop seems like a faster option for registration, so we'll go with it!
                     if crop is None:
                         width, height = im.size
