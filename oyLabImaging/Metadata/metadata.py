@@ -1596,8 +1596,8 @@ class Metadata(object):
                         0,
                         1,
                         0,
-                        D[frmind, 0],
-                        D[frmind, 1],
+                        np.ceil(D[frmind, 0]),
+                        np.ceil(D[frmind, 1]),
                         1,
                     ]
             print("calculated drift correction for position " + str(pos))
@@ -1721,8 +1721,8 @@ class Metadata(object):
                         0,
                         1,
                         0,
-                        D[frmind, 0],
-                        D[frmind, 1],
+                        np.ceil(D[frmind, 0]),
+                        np.ceil(D[frmind, 1]),
                         1,
                     ]
             print("calculated drift correction for position " + str(pos))
@@ -1854,8 +1854,8 @@ class Metadata(object):
                         0,
                         1,
                         0,
-                        D[frmind, 0],
-                        D[frmind, 1],
+                        np.ceil(D[frmind, 0]),
+                        np.ceil(D[frmind, 1]),
                         1,
                     ]
             print("calculated drift correction for position " + str(pos))
