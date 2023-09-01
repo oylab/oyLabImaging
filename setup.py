@@ -19,7 +19,7 @@ cuda_win_deps = [
 
 setup(
     name="oyLabImaging",
-    version="0.2.5",
+    version="0.2.6",
     description="data processing code for the Oyler-Yaniv lab @HMS",
     author="Alon Oyler-Yaniv",
     url="https://github.com/alonyan/oyLabImaging",
