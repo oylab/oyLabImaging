@@ -426,10 +426,10 @@ class Metadata(object):
                 framedata = {
                     "acq": fname,
                     "Position": event.get("Position Name") or event.get("P Index", ""),
-                    "frame": event.get("Index"),
+                    "frame": event.get("Index") or 0,
                     "XY": [event.get("X Coord [µm]"), event.get("Y Coord [µm]")],
                     "Z": event.get("Z Coord [µm]"),
-                    "Zindex": event.get("Z Index"),
+                    "Zindex": event.get("Z Index") or 0,
                     "Exposure": event.get("Exposure Time [ms]"),
                     "PixelSize": pixsize,
                     "TimestampFrame": event.get("Time [s]") * 1000,
