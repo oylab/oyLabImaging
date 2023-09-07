@@ -30,13 +30,13 @@ def export_napari_to_movie(
 
     ims = []
     viewer = get_or_create_viewer()
-    fig, ax = plt.subplots(figsize=np.array(viewer.window.qt_viewer.canvas.size) / 100)
+    fig, ax = plt.subplots(figsize=np.array(viewer.window._qt_viewer.canvas.size) / 100)
     ax.axis("off")
     fig.tight_layout()
     viewer.scale_bar.unit = "um"
     for i in range(viewer.dims.range[0][1].astype(int) + 1):
         viewer.dims.current_step = [i, 0, 0]
-        im = plt.imshow(viewer.window.qt_viewer.canvas.render(), animated=True)
+        im = plt.imshow(viewer.window._qt_viewer.canvas.render(), animated=True)
         plt.gca().set_position([0, 0, 1, 1])
         if dt:
             t1 = plt.text(
