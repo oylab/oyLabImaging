@@ -425,7 +425,7 @@ class Metadata(object):
                     continue
                 framedata = {
                     "acq": fname,
-                    "Position": event.get("Position Name") or event.get("P Index", "") or 'Pos0',
+                    "Position": event.get("Position Name") or str(event.get("P Index", "")) or 'Pos0',
                     "frame": event.get("Index") or 0,
                     "XY": [event.get("X Coord [µm]"), event.get("Y Coord [µm]")],
                     "Z": event.get("Z Coord [µm]"),
@@ -794,8 +794,8 @@ class Metadata(object):
         image_table["XY"] = [[0, 0]] * len(fnames)
         image_table["Z"] = 0
         image_table["Zindex"] = 0
-        image_table["Channel"] = 0
-        image_table["Position"] = 0
+        image_table["Channel"] = 'Ch_0'
+        image_table["Position"] = 'Pos0'
         image_table["frame"] = 0
         image_table["PixelSize"] = 1
 
