@@ -425,7 +425,7 @@ class Metadata(object):
                     continue
                 framedata = {
                     "acq": fname,
-                    "Position": event.get("Position Name") or event.get("P Index", ""),
+                    "Position": event.get("Position Name") or event.get("P Index", "") or 'Pos0',
                     "frame": event.get("Index") or 0,
                     "XY": [event.get("X Coord [µm]"), event.get("Y Coord [µm]")],
                     "Z": event.get("Z Coord [µm]"),
