@@ -59,6 +59,7 @@ setup(
 		"tensorflow-cpu==2.10.0",
 		"csbdeep==0.7.0",
 		"stardist==0.8.3"
+        "pydantic<2"
     ],
     extras_require={
         "cuda": cuda_deps,
