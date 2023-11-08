@@ -1245,8 +1245,7 @@ class Metadata(object):
                         sys.stdout.flush()
                     # here we have to undo the channel count multiplication
                     # to get at the actual nd2 frame index
-                    # NOTE: also: private _get_frame usage... may fail in the future.
-                    frame = nd2imgs._get_frame(find // nd2imgs.attributes.channelCount)
+                    frame = nd2imgs.read_frame(find // nd2imgs.attributes.channelCount)
                     # then we index into the frame to get the actual channel
                     im = Image.fromarray(frame[find % nd2imgs.attributes.channelCount])
                     # PIL crop seems like a faster option for registration, so we'll go with it!
