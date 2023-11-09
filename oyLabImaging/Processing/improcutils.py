@@ -9,9 +9,8 @@ import numpy as np
 try:
     from numba import jit
 except ImportError:
-    def jit(obj, **k):
-        return obj
-
+    def jit(obj=None, **k):
+        return obj if obj else (lambda x: x)
 
 def periodic_smooth_decomp(I: np.ndarray) -> (np.ndarray, np.ndarray):
     """Performs periodic-smooth image decomposition

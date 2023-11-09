@@ -1,0 +1,43 @@
+# https://peps.python.org/pep-0517/
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "oyLabImaging/__init__.py"
+
+# https://peps.python.org/pep-0621/
+[project]
+name = "oyLabImaging"
+dynamic = ["version"]
+description = "Package description."
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+dependencies = [
+    "cellpose",
+    "cloudpickle",
+    "dill",
+    "lap",
+    "multiprocess",
+    "natsort",
+    "numpy",
+    "nd2",
+    "pandas",
+    "scikit-image",
+    "scipy",
+]
+
+# https://peps.python.org/pep-0621/#dependencies-optional-dependencies
+[project.optional-dependencies]
+viewer = ["napari[pyqt5]==0.4.14", "magicgui", "matplotlib", "pydantic<2"]
+numba = ["numba"]
+drift = ["pyfftw"]  # no arm64 support on PyPI, install from conda
+test = ["pytest"]
+
+[project.urls]
+homepage = "https://github.com/alonyan/oyLabImaging"
+repository = "https://github.com/alonyan/oyLabImaging"
+
+# [tool.pytest.ini_options]
+# filterwarnings = ["error:::oyLabImaging"]

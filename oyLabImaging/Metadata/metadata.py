@@ -118,7 +118,8 @@ class Metadata(object):
         try:
             self._load_metadata(verbose=verbose)
         except Exception as e:
-            print("could not load metadata, file may be corrupted.")
+            # question: is it still useful without metadata?  or should this raise?
+            warnings.warn(f"Could not load metadata: {e}.")
 
         # Handle columns that don't import from text well
         try:
@@ -413,7 +414,6 @@ class Metadata(object):
         -------
         image_table - pd dataframe of metadata image table
         """
-
         import nd2
         import pandas as pd
 
