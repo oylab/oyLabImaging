@@ -14,6 +14,11 @@ def test_metadata_viewer(t3c2y32x32):
     viewer.close()
 
 
+def test_try_segmentation(t3c2y32x32):
+    MD = Metadata(t3c2y32x32)
+    MD.try_segmentation()
+
+
 def test_export(t3c2y32x32, tmp_path):
     from oyLabImaging.Processing.imvisutils import export_napari_to_movie
 
@@ -23,8 +28,3 @@ def test_export(t3c2y32x32, tmp_path):
     mov = tmp_path / "napari.mp4"
     export_napari_to_movie(mov)
     assert mov.exists()
-
-
-def test_try_segmentation(t3c2y32x32):
-    MD = Metadata(t3c2y32x32)
-    MD.try_segmentation()

@@ -22,16 +22,15 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+      - uses: FedericoCarboni/setup-ffmpeg@v2
+      - uses: pyvista/setup-headless-display-action@v2
+        with:
+          qt: true
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
-
-      - uses: pyvista/setup-headless-display-action@v2
-        with:
-          qt: true
-      - uses: FedericoCarboni/setup-ffmpeg@v2
 
       - name: Install Dependencies
         run: |
