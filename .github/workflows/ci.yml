@@ -29,6 +29,8 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - uses: pyvista/setup-headless-display-action@v1
+        with:
+          qt: true
       - uses: FedericoCarboni/setup-ffmpeg@v2
 
       - name: Install Dependencies
