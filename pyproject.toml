@@ -60,7 +60,7 @@ cuda = [
     "torchaudio@https://download.pytorch.org/whl/torchaudio-0.8.1-cp38-cp38-win_amd64.whl ; platform_system == 'Windows'",
     "torchvision@https://download.pytorch.org/whl/cu111/torchvision-0.9.1%2Bcu111-cp38-cp38-win_amd64.whl ; platform_system == 'Windows'",
 ]
-viewer = ["napari[pyqt5]==0.4.14", "magicgui", "matplotlib", "pydantic<2"]
+viewer = ["napari[pyqt5]", "magicgui", "matplotlib"]
 numba = ["numba"]
 test = ["pytest", "pytest-cov"]
 
