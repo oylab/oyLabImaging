@@ -14,6 +14,7 @@ def test_drift_correction(tmp_path, t3c2y32x32):
     assert "driftTform" not in MD.image_table
     MD.CalculateDriftCorrection(Channel="Widefield Green", GPU=False)
     assert "driftTform" in MD.image_table
+    MD.save()
 
     meta_pickle = Path(MD.base_pth) / "metadata.pickle"
     assert meta_pickle.exists()
