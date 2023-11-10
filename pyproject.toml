@@ -71,3 +71,6 @@ repository = "https://github.com/oylab/oyLabImaging"
 
 # [tool.pytest.ini_options]
 # filterwarnings = ["error:::oyLabImaging"]
+
+[tool.conda-lock]
+channels = ['conda-forge']
