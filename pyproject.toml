@@ -19,16 +19,30 @@ dependencies = [
     "cellpose",
     "cloudpickle",
     "dill",
-    # "lap",        # look into laptracker
+    "ipython",
     "multiprocess",
     "natsort",
-    "numpy",
     "nd2",
-    "pyfftw",       # look into using numpy.fft instead
+    "numpy",
     "pandas",
+    "pyfftw",       # look into using numpy.fft instead
     "scikit-image",
     "scipy",
+    "tqdm",
+    # "lap",        # look into laptracker
+    # "opencv-python==4.7.0.68",
+    # "ipywidgets==7.6.5",
+    # "Pillow>=8.3.1",
+    # "poppy>=1.0.1",
+    # "pyfftw>=0.12.0",
+    # "scikit_learn==0.24.2",
+    # "zernike>=0.0.32",
+    # "jupyter>=1.0.0",
+    # "tensorflow-cpu==2.10.0",
+    # "csbdeep==0.7.0",
+    # "stardist==0.8.3",
 ]
+
 
 [tool.hatch.metadata]
 allow-direct-references = true # allow @URL in installation requirements
