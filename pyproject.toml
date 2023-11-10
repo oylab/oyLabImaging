@@ -19,12 +19,12 @@ dependencies = [
     "cellpose",
     "cloudpickle",
     "dill",
-    # "lap",
+    # "lap",        # look into laptracker
     "multiprocess",
     "natsort",
     "numpy",
     "nd2",
-    "pyfftw",       # no arm64 support on PyPI, install from conda
+    "pyfftw",       # look into using numpy.fft instead
     "pandas",
     "scikit-image",
     "scipy",

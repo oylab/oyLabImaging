@@ -26,10 +26,14 @@ def tmp_data_dir(tmp_path: Path) -> Callable[[str], str]:
     return _tmp_data_dir
 
 
-def test_metadata(tmp_path, tmp_data_dir):
+def test_metadata(tmp_data_dir):
     MD = Metadata(tmp_data_dir("sample_t3c2y32x32.nd2"))
     assert MD.type == "ND2"
     assert list(MD.channels) == ["Widefield Green", "Widefield Red"]
+
+
+def test_drift_correction(tmp_path, tmp_data_dir):
+    MD = Metadata(tmp_data_dir("sample_t3c2y32x32.nd2"))
     assert "driftTform" not in MD.image_table
     MD.CalculateDriftCorrection(Channel="Widefield Green", GPU=False)
     assert "driftTform" in MD.image_table
@@ -41,3 +45,12 @@ def test_metadata(tmp_path, tmp_data_dir):
     assert reloaded.type == "ND2"
     assert list(reloaded.channels) == ["Widefield Green", "Widefield Red"]
     assert "driftTform" in reloaded.image_table
+
+
+def test_metadata_viewer(tmp_data_dir):
+    napari = pytest.importorskip("napari")
+
+    MD = Metadata(tmp_data_dir("sample_t3c2y32x32.nd2"))
+    viewer = MD.viewer()
+    assert isinstance(viewer, napari.Viewer)
+    viewer.close()

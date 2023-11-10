@@ -1130,6 +1130,7 @@ class Metadata(object):
         viewer.window.add_dock_widget(container, name="Metadata Viewer")
 
         matplotlib.use("Qt5Agg")
+        return viewer
 
     def _read_local(
         self, ind_dict, ffield=False, register=False, verbose=True, crop=None, **kwargs
