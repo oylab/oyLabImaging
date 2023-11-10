@@ -97,4 +97,12 @@ conda install -c conda-forge lap
 `python -m ipykernel install --user --name=oyimg`
 
 
+### dev notes
 
+using conda lock to manage dependencies
+
+if you have issues running conda-lock, try updating conda/mamba
+
+```sh
+conda update -n base conda mamba
+```

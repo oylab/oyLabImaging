@@ -30,17 +30,17 @@ dependencies = [
     "scipy",
     "tqdm",
     # "lap",        # look into laptracker
-    # "opencv-python==4.7.0.68",
-    # "ipywidgets==7.6.5",
-    # "Pillow>=8.3.1",
-    # "poppy>=1.0.1",
-    # "pyfftw>=0.12.0",
-    # "scikit_learn==0.24.2",
-    # "zernike>=0.0.32",
-    # "jupyter>=1.0.0",
+    "opencv-python",
+    "ipywidgets",
+    "Pillow>=8.3.1",
+    "poppy>=1.0.1",
+    "pyfftw>=0.12.0",
+    "scikit-learn",
+    "zernike",
+    "jupyter>=1.0.0",
     # "tensorflow-cpu==2.10.0",
-    # "csbdeep==0.7.0",
-    # "stardist==0.8.3",
+    "csbdeep",
+    "stardist",
 ]
 
 
@@ -50,7 +50,7 @@ allow-direct-references = true # allow @URL in installation requirements
 # https://peps.python.org/pep-0621/#dependencies-optional-dependencies
 [project.optional-dependencies]
 cuda = [
-    "cupy-cuda112 ; platform_system != 'Darwin'",
+    "cupy-cuda11x ; platform_system != 'Darwin'",
     # Linux
     "torch@https://download.pytorch.org/whl/cu111/torch-1.8.1%2Bcu111-cp38-cp38-linux_x86_64.whl ; platform_system == 'Linux'",
     "torchaudio@https://download.pytorch.org/whl/torchaudio-0.8.1-cp38-cp38-linux_x86_64.whl ; platform_system == 'Linux'",
@@ -72,5 +72,17 @@ repository = "https://github.com/oylab/oyLabImaging"
 # [tool.pytest.ini_options]
 # filterwarnings = ["error:::oyLabImaging"]
 
+# use with `conda-lock -f pyproject.toml --with-cuda=11`
+
 [tool.conda-lock]
-channels = ['conda-forge']
+channels = ['conda-forge', 'defaults']
+platforms = [
+    "linux-64",
+    "osx-64",
+    "osx-arm64",
+    "win-64",
+    # "linux-aarch64",
+]
+
+[tool.conda-lock.dependencies]
+zernike = { source = "pypi" }
