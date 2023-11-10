@@ -19,7 +19,7 @@ dependencies = [
     "cellpose",
     "cloudpickle",
     "dill",
-    "lap",
+    # "lap",
     "multiprocess",
     "natsort",
     "numpy",

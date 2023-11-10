@@ -6,7 +6,6 @@
 import sys
 from functools import partial
 
-import lap
 import multiprocess as mp  # import Pool, set_start_method
 
 mp.set_start_method("spawn", force=True)
@@ -470,6 +469,14 @@ class PosLbl(object):
 
 
         """
+        try:
+            import lap
+
+            self._lapmod = lap.lapmod
+        except ImportError:
+            print("Please install lap package for tracking")
+            return
+
         self._link(**kwargs)
         self._closegaps(**kwargs)
         self._tracked = True
@@ -558,7 +565,7 @@ class PosLbl(object):
                 shape = (nums[i], nums[i + 1])
 
                 cc, ii, kk = prepare_sparse_cost(shape, cc, ii, jj, cost_limit=300)
-                ind1, ind0 = lap.lapmod(len(ii) - 1, cc, ii, kk, return_cost=False)
+                ind1, ind0 = self._lapmod(len(ii) - 1, cc, ii, kk, return_cost=False)
                 ind1[ind1 >= shape[1]] = -1
                 ind0[ind0 >= shape[0]] = -1
                 # inds in n+1 that match inds (1:N) in n
@@ -725,7 +732,7 @@ class PosLbl(object):
 
             shape = (len(trackbits), len(trackbits))
             cc, ii, kk = prepare_sparse_cost(shape, cc, ii, jj, 1000)
-            match1, _ = lap.lapmod(len(ii) - 1, cc, ii, kk, return_cost=False)
+            match1, _ = self._lapmod(len(ii) - 1, cc, ii, kk, return_cost=False)
             match1[match1 >= shape[1]] = -1
             # inds in n+1 that match inds (1:N) in n
             match1 = np.array(match1[: shape[0]])
@@ -857,7 +864,7 @@ class PosLbl(object):
 
             shape = (len(trackbits), len(trackbits))
             cc, ii, kk = prepare_sparse_cost(shape, cc, ii, jj, 1000)
-            match1, _ = lap.lapmod(len(ii) - 1, cc, ii, kk, return_cost=False)
+            match1, _ = self._lapmod(len(ii) - 1, cc, ii, kk, return_cost=False)
             match1[match1 >= shape[1]] = -1
             # inds in n+1 that match inds (1:N) in n
             match1 = np.array(match1[: shape[0]])
