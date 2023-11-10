@@ -10,10 +10,11 @@ path = "oyLabImaging/__init__.py"
 [project]
 name = "oyLabImaging"
 dynamic = ["version"]
-description = "Package description."
+description = "Data processing code for the Oyler-Yaniv lab @HMS."
 readme = "README.md"
 requires-python = ">=3.8"
 license = { text = "MIT" }
+authors = [{ name = "Alon Oyler-Yaniv" }]
 dependencies = [
     "cellpose",
     "cloudpickle",
@@ -23,21 +24,36 @@ dependencies = [
     "natsort",
     "numpy",
     "nd2",
+    "pyfftw",       # no arm64 support on PyPI, install from conda
     "pandas",
     "scikit-image",
     "scipy",
 ]
 
+[tool.hatch.metadata]
+allow-direct-references = true # allow @URL in installation requirements
+
 # https://peps.python.org/pep-0621/#dependencies-optional-dependencies
 [project.optional-dependencies]
+cuda = [
+    "cupy-cuda112 ; platform_system != 'Darwin'",
+    # Linux
+    "torch@https://download.pytorch.org/whl/cu111/torch-1.8.1%2Bcu111-cp38-cp38-linux_x86_64.whl ; platform_system == 'Linux'",
+    "torchaudio@https://download.pytorch.org/whl/torchaudio-0.8.1-cp38-cp38-linux_x86_64.whl ; platform_system == 'Linux'",
+    "torchvision@https://download.pytorch.org/whl/cu111/torchvision-0.9.1%2Bcu111-cp38-cp38-linux_x86_64.whl ; platform_system == 'Linux'",
+    # Windows
+    "torch@https://download.pytorch.org/whl/cu111/torch-1.8.1%2Bcu111-cp38-cp38-win_amd64.whl ; platform_system == 'Windows'",
+    "torchaudio@https://download.pytorch.org/whl/torchaudio-0.8.1-cp38-cp38-win_amd64.whl ; platform_system == 'Windows'",
+    "torchvision@https://download.pytorch.org/whl/cu111/torchvision-0.9.1%2Bcu111-cp38-cp38-win_amd64.whl ; platform_system == 'Windows'",
+]
 viewer = ["napari[pyqt5]==0.4.14", "magicgui", "matplotlib", "pydantic<2"]
 numba = ["numba"]
-drift = ["pyfftw"]  # no arm64 support on PyPI, install from conda
-test = ["pytest"]
+test = ["pytest", "pytest-cov"]
+
 
 [project.urls]
-homepage = "https://github.com/alonyan/oyLabImaging"
-repository = "https://github.com/alonyan/oyLabImaging"
+homepage = "https://github.com/oylab/oyLabImaging"
+repository = "https://github.com/oylab/oyLabImaging"
 
 # [tool.pytest.ini_options]
 # filterwarnings = ["error:::oyLabImaging"]

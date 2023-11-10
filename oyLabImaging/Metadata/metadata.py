@@ -99,6 +99,7 @@ class Metadata(object):
 
         # If it can't find a supported MD, it exits w/o doing anything
         if self.type == None:
+            # question: is it still useful without metadata?  or should this raise?
             print("Could not find supported metadata.")
             return
 

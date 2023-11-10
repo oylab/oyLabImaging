@@ -2,27 +2,27 @@ from setuptools import setup, find_packages
 from setuptools.command.install import install
 from subprocess import check_call
 
-cuda_deps = [
-    "cupy-cuda112",
-    "torch@https://download.pytorch.org/whl/cu111/torch-1.8.1%2Bcu111-cp38-cp38-linux_x86_64.whl",
-    "torchvision@https://download.pytorch.org/whl/cu111/torchvision-0.9.1%2Bcu111-cp38-cp38-linux_x86_64.whl",
-    "torchaudio@https://download.pytorch.org/whl/torchaudio-0.8.1-cp38-cp38-linux_x86_64.whl",
-]
+# cuda_deps = [
+#     "cupy-cuda112",
+#     "torch@https://download.pytorch.org/whl/cu111/torch-1.8.1%2Bcu111-cp38-cp38-linux_x86_64.whl",
+#     "torchvision@https://download.pytorch.org/whl/cu111/torchvision-0.9.1%2Bcu111-cp38-cp38-linux_x86_64.whl",
+#     "torchaudio@https://download.pytorch.org/whl/torchaudio-0.8.1-cp38-cp38-linux_x86_64.whl",
+# ]
 
-cuda_win_deps = [
-    "cupy-cuda112",
-    "torch@https://download.pytorch.org/whl/cu111/torch-1.8.1%2Bcu111-cp38-cp38-win_amd64.whl",
-    "torchvision@https://download.pytorch.org/whl/cu111/torchvision-0.9.1%2Bcu111-cp38-cp38-win_amd64.whl",
-    "torchaudio@https://download.pytorch.org/whl/torchaudio-0.8.1-cp38-cp38-win_amd64.whl",
-]
+# cuda_win_deps = [
+#     "cupy-cuda112",
+#     "torch@https://download.pytorch.org/whl/cu111/torch-1.8.1%2Bcu111-cp38-cp38-win_amd64.whl",
+#     "torchvision@https://download.pytorch.org/whl/cu111/torchvision-0.9.1%2Bcu111-cp38-cp38-win_amd64.whl",
+#     "torchaudio@https://download.pytorch.org/whl/torchaudio-0.8.1-cp38-cp38-win_amd64.whl",
+# ]
 
 
 setup(
-    name="oyLabImaging",
-    version="0.2.6",
-    description="data processing code for the Oyler-Yaniv lab @HMS",
-    author="Alon Oyler-Yaniv",
-    url="https://github.com/alonyan/oyLabImaging",
+    # name="oyLabImaging",
+    # version="0.2.6",
+    # description="data processing code for the Oyler-Yaniv lab @HMS",
+    # author="Alon Oyler-Yaniv",
+    # url="https://github.com/alonyan/oyLabImaging",
     packages=find_packages(include=["oyLabImaging", "oyLabImaging.*"]),
     python_requires=">=3.8, <3.9",
     dependency_links=[
