@@ -31,6 +31,17 @@ jobs:
       - uses: tlambert03/setup-qt-libs@v1
       - uses: FedericoCarboni/setup-ffmpeg@v2
 
+      - name: Download Mesa
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: |
+          curl.exe -L --output mesa.7z --url https://github.com/pal1000/mesa-dist-win/releases/download/23.2.1/mesa3d-23.2.1-release-msvc.7z
+          "C:\Program Files\7-Zip\7z.exe" x mesa.7z
+          del "opengl32.dll" >nul 2>&1
+          del "libglapi.dll" >nul 2>&1
+          mklink opengl32.dll "x64\opengl32.dll"
+          mklink libglapi.dll "x64\libglapi.dll"
+
       - name: Install Dependencies
         run: |
           python -m pip install -U pip
