@@ -25,7 +25,7 @@ dependencies = [
     "nd2",
     "numpy",
     "pandas",
-    "pyfftw",       # look into using numpy.fft instead
+    "pyfftw ; platform.machine != 'arm64'",       # look into using numpy.fft instead
     "scikit-image",
     "scipy",
     "tqdm",
@@ -34,7 +34,6 @@ dependencies = [
     "ipywidgets",
     "Pillow>=8.3.1",
     "poppy>=1.0.1",
-    "pyfftw>=0.12.0",
     "scikit-learn",
     "zernike",
     "jupyter>=1.0.0",
