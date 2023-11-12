@@ -34,7 +34,9 @@ jobs:
         with:
           environment-file: conda-lock.yml
           environment-name: ci
+          # category main must be included if any others are included
           create-args: >-
+            --category main
             --category dev
             --category viewer
             --category numba
