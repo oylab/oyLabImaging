@@ -34,6 +34,10 @@ jobs:
         with:
           environment-file: conda-lock.yml
           environment-name: ci
+          create-args: >-
+            --category dev
+            --category viewer
+            --category numba
 
       # - name: Set up Python ${{ matrix.python-version }}
       #   uses: actions/setup-python@v4
