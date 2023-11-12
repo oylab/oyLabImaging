@@ -37,18 +37,15 @@ jobs:
           create-args: >-
             --category dev
             --category viewer
-            --category numba
+            --category test
 
       # - name: Set up Python ${{ matrix.python-version }}
       #   uses: actions/setup-python@v4
       #   with:
       #     python-version: ${{ matrix.python-version }}
 
-      - name: Install Dependencies
-        run: |
-          python -m pip install -U pip
-          # python -m pip install .[test,viewer]
-          python -m pip install . --no-deps
+      - name: Install Self
+        run: python -m pip install . --no-deps
 
       - name: Run Tests
         uses: aganders3/headless-gui@v1.2
