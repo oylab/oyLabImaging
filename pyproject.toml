@@ -28,8 +28,8 @@ dependencies = [
     "natsort",
     "nd2",
     "numpy",
-    "pandas",
-    "pyfftw", # look into using numpy.fft instead
+    "pandas <2.1",  # need to handle change in concat behavior with empty dataframes in 2.1
+    "pyfftw",       # look into using numpy.fft instead
     "scikit-image",
     "scipy",
     "tqdm",

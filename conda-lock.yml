@@ -17,10 +17,10 @@
 version: 1
 metadata:
   content_hash:
-    linux-64: 4669cd0823c8beff0455dcb75ff289c24b4fead9bd203be2579fe8375c6bd57e
-    osx-64: 93ac82eb1650955384ea9c270d081afd5fbad780ca0758d15abb15b5fc01fe30
-    osx-arm64: d7c4cd0b12a257db4514f8eeafeaeb194f761668a30320293b92aa5ac66bfc27
-    win-64: e0d15849461d711eb6eb40f4bee44e76e93a7e67653a49a6ee194c19fce449c2
+    linux-64: 43c850daab200faa9448c47231ce8cf5c2e82a957ab2cefdf051cabdc02bc111
+    osx-64: f504dff37b52236aab66c1550ce50897f9d57fb8b7f3ac37b7b0a0c0eb058065
+    osx-arm64: e19649491d69dd910bb32fa11d21c899f31a3b006289647279e8789a637a1492
+    win-64: 0005a5de3520f2b423e112b21d253fd0d1ceededaab6129a6ddae9df97b43cd9
   channels:
   - url: conda-forge
     used_env_vars: []
@@ -5628,22 +5628,22 @@ package:
   category: main
   optional: false
 - name: pandas
-  version: 2.1.3
+  version: 2.0.3
   manager: conda
   platform: linux-64
   dependencies:
     libgcc-ng: '>=12'
     libstdcxx-ng: '>=12'
-    numpy: '>=1.22.4,<2.0a0'
+    numpy: '>=1.21.6,<2.0a0'
     python: '>=3.10,<3.11.0a0'
     python-dateutil: '>=2.8.1'
     python-tzdata: '>=2022a'
     python_abi: 3.10.*
     pytz: '>=2020.1'
-  url: https://conda.anaconda.org/conda-forge/linux-64/pandas-2.1.3-py310hcc13569_0.conda
+  url: https://conda.anaconda.org/conda-forge/linux-64/pandas-2.0.3-py310h7cbd5c2_1.conda
   hash:
-    md5: 30a39c1064e5efc578d83c2a5f7cd749
-    sha256: bb2b3e4a3f3d40b87ac214b88393a7f1ee5b2cac41d249c580d184f7edb30653
+    md5: 11e0099d4571b4974c04386e4ce679ed
+    sha256: e8937c160b6eb469c5d80971046b25ed305fd97a8b1d6880de7c4a660cd245c3
   category: main
   optional: false
 - name: platformdirs
@@ -11991,22 +11991,21 @@ package:
   category: main
   optional: false
 - name: pandas
-  version: 2.1.3
+  version: 2.0.3
   manager: conda
   platform: osx-64
   dependencies:
-    __osx: '>=10.9'
-    libcxx: '>=16.0.6'
-    numpy: '>=1.22.4,<2.0a0'
+    libcxx: '>=15.0.7'
+    numpy: '>=1.21.6,<2.0a0'
     python: '>=3.10,<3.11.0a0'
     python-dateutil: '>=2.8.1'
     python-tzdata: '>=2022a'
     python_abi: 3.10.*
     pytz: '>=2020.1'
-  url: https://conda.anaconda.org/conda-forge/osx-64/pandas-2.1.3-py310hdba192b_0.conda
+  url: https://conda.anaconda.org/conda-forge/osx-64/pandas-2.0.3-py310h5e4fcda_1.conda
   hash:
-    md5: 4265961e171fd87fbf97115dcce92300
-    sha256: afa1d2bba09799d236404244d117d105a7c39e086b917fc50667c35947cf0fb3
+    md5: 5b1a8f096180ca4c39ddea7ccdb9d4a7
+    sha256: 797be0eff944a01ec3bbac43dbe2b860e42ae530d2f4188c05409c6f95174402
   category: main
   optional: false
 - name: platformdirs
@@ -18437,22 +18436,21 @@ package:
   category: main
   optional: false
 - name: pandas
-  version: 2.1.3
+  version: 2.0.3
   manager: conda
   platform: osx-arm64
   dependencies:
-    __osx: '>=10.9'
-    libcxx: '>=16.0.6'
-    numpy: '>=1.22.4,<2.0a0'
+    libcxx: '>=15.0.7'
+    numpy: '>=1.21.6,<2.0a0'
     python: '>=3.10,<3.11.0a0'
     python-dateutil: '>=2.8.1'
     python-tzdata: '>=2022a'
     python_abi: 3.10.*
     pytz: '>=2020.1'
-  url: https://conda.anaconda.org/conda-forge/osx-arm64/pandas-2.1.3-py310h6e3cc31_0.conda
+  url: https://conda.anaconda.org/conda-forge/osx-arm64/pandas-2.0.3-py310h1cdf563_1.conda
   hash:
-    md5: 9c2bbe8f3d98c5dd217bbd4d104d2a77
-    sha256: 1a34089f42aab1408ee1587a1f89f394a85b870c6a043c764552c75c491bc3c5
+    md5: 680ece3f188b726782ef4aa84e8cca12
+    sha256: d2ac911bf24f39dd83a83ea15333291b175227961bf2d45bad31317243c4fdb1
   category: main
   optional: false
 - name: platformdirs
@@ -25664,11 +25662,11 @@ package:
   category: viewer
   optional: true
 - name: pandas
-  version: 2.1.3
+  version: 2.0.3
   manager: conda
   platform: win-64
   dependencies:
-    numpy: '>=1.22.4,<2.0a0'
+    numpy: '>=1.21.6,<2.0a0'
     python: '>=3.10,<3.11.0a0'
     python-dateutil: '>=2.8.1'
     python-tzdata: '>=2022a'
@@ -25677,10 +25675,10 @@ package:
     ucrt: '>=10.0.20348.0'
     vc: '>=14.2,<15'
     vc14_runtime: '>=14.29.30139'
-  url: https://conda.anaconda.org/conda-forge/win-64/pandas-2.1.3-py310hecd3228_0.conda
+  url: https://conda.anaconda.org/conda-forge/win-64/pandas-2.0.3-py310h1c4a608_1.conda
   hash:
-    md5: 1eb30cc30a5a6cd7f9d6de71beed7198
-    sha256: 5a6d57d43c4ebcaa42dab2f37186192964d99b6306845753b0b8681f0f59dd03
+    md5: 9fb6d4a7414daf2aa66ddfa14d568fd0
+    sha256: 2bd9ed92347d53d7ce99b3b45b832ecd6c3dd9ae68ca7153841dcab943ba6a85
   category: main
   optional: false
 - name: pyerfa
