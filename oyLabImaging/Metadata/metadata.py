@@ -1526,7 +1526,10 @@ class Metadata(object):
         )
         print("using channel " + Channel + " for drift correction")
         for pos in Position:
-            from pyfftw.interfaces.numpy_fft import fft2, ifft2
+            try:
+                from pyfftw.interfaces.numpy_fft import fft2, ifft2
+            except ImportError:
+                from numpy.fft import fft2, ifft2
 
             DataPre = self.stkread(
                 Position=pos,

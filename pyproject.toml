@@ -1,14 +1,18 @@
 # https://peps.python.org/pep-0517/
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
 
-[tool.hatch.version]
-path = "oyLabImaging/__init__.py"
+# https://setuptools.pypa.io/en/latest/userguide/pyproject_config.html
+[tool.setuptools.dynamic]
+version = { attr = "oyLabImaging.__version__" }
+
+[tool.setuptools.packages.find]
+include = ["oyLabImaging*"]
 
 # https://peps.python.org/pep-0621/
 [project]
-name = "oyLabImaging"
+name = "oylabimaging"
 dynamic = ["version"]
 description = "Data processing code for the Oyler-Yaniv lab @HMS."
 readme = "README.md"
@@ -25,48 +29,45 @@ dependencies = [
     "nd2",
     "numpy",
     "pandas",
-    "pyfftw ; platform.machine != 'arm64'",       # look into using numpy.fft instead
+    "pyfftw", # look into using numpy.fft instead
     "scikit-image",
     "scipy",
     "tqdm",
     # "lap",        # look into laptracker
-    "opencv-python",
+    # "opencv-python",
     "ipywidgets",
-    "Pillow>=8.3.1",
-    "poppy>=1.0.1",
+    "Pillow",
+    "poppy",
     "scikit-learn",
-    "zernike",
-    "jupyter>=1.0.0",
+    # "zernike",
+    "jupyter",
     # "tensorflow-cpu==2.10.0",
     "csbdeep",
     "stardist",
 ]
 
 
-[tool.hatch.metadata]
-allow-direct-references = true # allow @URL in installation requirements
-
 # https://peps.python.org/pep-0621/#dependencies-optional-dependencies
 [project.optional-dependencies]
-cuda = [
-    "cupy-cuda11x ; platform_system != 'Darwin'",
-    # Linux
-    "torch@https://download.pytorch.org/whl/cu111/torch-1.8.1%2Bcu111-cp38-cp38-linux_x86_64.whl ; platform_system == 'Linux'",
-    "torchaudio@https://download.pytorch.org/whl/torchaudio-0.8.1-cp38-cp38-linux_x86_64.whl ; platform_system == 'Linux'",
-    "torchvision@https://download.pytorch.org/whl/cu111/torchvision-0.9.1%2Bcu111-cp38-cp38-linux_x86_64.whl ; platform_system == 'Linux'",
-    # Windows
-    "torch@https://download.pytorch.org/whl/cu111/torch-1.8.1%2Bcu111-cp38-cp38-win_amd64.whl ; platform_system == 'Windows'",
-    "torchaudio@https://download.pytorch.org/whl/torchaudio-0.8.1-cp38-cp38-win_amd64.whl ; platform_system == 'Windows'",
-    "torchvision@https://download.pytorch.org/whl/cu111/torchvision-0.9.1%2Bcu111-cp38-cp38-win_amd64.whl ; platform_system == 'Windows'",
-]
-viewer = ["napari[pyqt5]", "magicgui", "matplotlib"]
+# cuda = [
+#     "cupy-cuda11x ; platform_system != 'Darwin'",
+#     # Linux
+#     "torch@https://download.pytorch.org/whl/cu111/torch-1.8.1%2Bcu111-cp38-cp38-linux_x86_64.whl ; platform_system == 'Linux'",
+#     "torchaudio@https://download.pytorch.org/whl/torchaudio-0.8.1-cp38-cp38-linux_x86_64.whl ; platform_system == 'Linux'",
+#     "torchvision@https://download.pytorch.org/whl/cu111/torchvision-0.9.1%2Bcu111-cp38-cp38-linux_x86_64.whl ; platform_system == 'Linux'",
+#     # Windows
+#     "torch@https://download.pytorch.org/whl/cu111/torch-1.8.1%2Bcu111-cp38-cp38-win_amd64.whl ; platform_system == 'Windows'",
+#     "torchaudio@https://download.pytorch.org/whl/torchaudio-0.8.1-cp38-cp38-win_amd64.whl ; platform_system == 'Windows'",
+#     "torchvision@https://download.pytorch.org/whl/cu111/torchvision-0.9.1%2Bcu111-cp38-cp38-win_amd64.whl ; platform_system == 'Windows'",
+# ]
+viewer = ["napari", "PyQt5", "magicgui", "matplotlib"]
 numba = ["numba"]
-test = ["pytest", "pytest-cov"]
+dev = ["pytest", "pytest-cov", "conda-lock"]
 
 
 [project.urls]
-homepage = "https://github.com/oylab/oyLabImaging"
-repository = "https://github.com/oylab/oyLabImaging"
+Homepage = "https://github.com/oylab/oyLabImaging"
+Repository = "https://github.com/oylab/oyLabImaging"
 
 # [tool.pytest.ini_options]
 # filterwarnings = ["error:::oyLabImaging"]
@@ -74,7 +75,7 @@ repository = "https://github.com/oylab/oyLabImaging"
 # use with `conda-lock -f pyproject.toml --with-cuda=11`
 
 [tool.conda-lock]
-channels = ['conda-forge', 'defaults']
+channels = ['conda-forge', 'pytorch']
 platforms = [
     "linux-64",
     "osx-64",
@@ -84,4 +85,6 @@ platforms = [
 ]
 
 [tool.conda-lock.dependencies]
+python = "3.10"
+pip = "*"
 zernike = { source = "pypi" }

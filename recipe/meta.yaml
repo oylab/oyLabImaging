@@ -1,0 +1,38 @@
+{% set version = '0.2.7' %}
+{% set pyproject = load_file_data('../pyproject.toml', from_recipe_dir=True) %}
+{% set project = pyproject['project'] %}
+
+package: 
+  name: {{ project['name'] }}
+  version: {{ version }}
+
+source:
+  path: ..
+
+build:
+  noarch: python
+  number: 0
+  script: "{{ PYTHON }} -m pip install . --no-deps -vv"
+
+requirements:
+  build: 
+    {% for dep in pyproject['build-system']['requires'] %}
+    - {{ dep.lower() }}
+    {% endfor %}
+  # host:
+  #   {% for dep in project['dependencies'] %}
+  #   - {{ dep.lower() }}
+  #   {% endfor %}
+  run:
+    {% for package in resolved_packages('host') %}
+    - {{ package }}
+    {% endfor %}
+
+test:
+  imports:
+    - oyLabImaging
+
+about:
+  home: {{ project['urls']['Homepage'] }}
+  license: {{ project['license'] }}
+  summary: {{ project['description'] }}
