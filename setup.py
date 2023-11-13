@@ -61,7 +61,7 @@ setup(
         "pandas>=1.2.4",
         # "Pillow>=8.3.1",
         # "poppy>=1.0.1",
-        # "pyfftw>=0.12.0 ; platform_machine!='arm64'",
+        "pyfftw>=0.12.0 ; platform_machine!='arm64'",
         "scikit-image",
         "scikit-learn",
         "scipy>=1.6.2",
