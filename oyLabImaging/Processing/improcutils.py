@@ -28,7 +28,7 @@ def periodic_smooth_decomp(I: np.ndarray) -> (np.ndarray, np.ndarray):
 
         Code from: https://github.com/jacobkimmel/ps_decomp
     """
-    from pyfftw.interfaces.numpy_fft import fft2, ifft2
+    from scipy.fft import fft2, ifft2
 
     def u2v(u: np.ndarray) -> np.ndarray:
         """Converts the image `u` into the image `v`
@@ -79,9 +79,9 @@ def periodic_smooth_decomp(I: np.ndarray) -> (np.ndarray, np.ndarray):
 
     u = I.astype(np.float64)
     v = u2v(u)
-    v_fft = fft2(v, threads=8)
+    v_fft = fft2(v)
     s = v2s(v_fft)
-    s_i = ifft2(s, threads=8)
+    s_i = ifft2(s)
     s_f = np.real(s_i)
     p = u - s_f  # u = p + s
     return np.squeeze(p), np.squeeze(s_f)
