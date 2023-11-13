@@ -62,7 +62,7 @@ setup(
         "poppy>=1.0.1",
         "pyfftw>=0.12.0 ; platform_machine!='arm64'",
         "scikit-image",
-        "scikit-learn==0.24.2",
+        "scikit-learn",
         "scipy>=1.6.2",
         "tqdm>=4.59.0",
         "zernike>=0.0.32",
