@@ -27,15 +27,6 @@ for python, cu, platform in product(
             )
         )
 
-# requirements are DEFINED in requirements.in
-# and are periodically compiled into a locked requirements.txt
-# by installing `pip-tools` and running `pip-compile requirements.in`
-install_requires = [
-    req
-    for ln in Path("requirements.txt").read_text().splitlines()
-    if (req := ln.strip()) and not req.startswith("#")
-]
-
 setup(
     name="oyLabImaging",
     version="0.2.6",
@@ -49,8 +40,36 @@ setup(
     dependency_links=[
         "https://download.pytorch.org/whl/torch_stable.html",
     ],
-    package_data={"*": ["requirements.txt"]},
-    install_requires=install_requires,
+    install_requires=[
+        "PyQt5",
+        "opencv-python==4.7.0.68",
+        "cellpose==0.7.2",
+        "cloudpickle==1.6.0",
+        "dill==0.3.4",
+        "ipython>=7.27.0",
+        "ipywidgets==7.6.5",
+        "lap==0.4.0",
+        "matplotlib>=3.3.4",
+        "napari==0.4.14",
+        "nd2>=0.8.0",
+        "numba>=0.53.1",
+        "numpy==1.23.1",
+        "pandas>=1.2.4",
+        "Pillow>=8.3.1",
+        "poppy>=1.0.1",
+        "pyfftw>=0.12.0 ; platform_machine!='arm64'",
+        "scikit-image<=0.18.3",
+        "scikit-learn==0.24.2",
+        "scipy>=1.6.2",
+        "tqdm>=4.59.0",
+        "zernike>=0.0.32",
+        "multiprocess>=0.70",
+        "jupyter>=1.0.0",
+		"tensorflow-cpu==2.10.0 ; platform_machine!='arm64'",
+		"csbdeep==0.7.0",
+		"stardist==0.8.3",
+        "pydantic<2"
+    ],
     extras_require={
         "cuda": CU111_EXTRAS,
         "test": ["pytest", "pytest-cov"],
