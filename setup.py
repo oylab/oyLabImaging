@@ -48,7 +48,7 @@ setup(
         "dill==0.3.4",
         "ipython>=7.27.0",
         "ipywidgets==7.6.5",
-        "lap==0.4.0",
+        "lap05",
         "matplotlib>=3.3.4",
         "napari==0.4.14",
         "nd2>=0.8.0",
