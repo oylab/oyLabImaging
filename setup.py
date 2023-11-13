@@ -53,7 +53,7 @@ setup(
         "ipywidgets==7.6.5",
         "lap05",
         "matplotlib>=3.3.4",
-        "napari==0.4.14",
+        "napari==0.4.18",
         "nd2>=0.8.0",
         "numba>=0.53.1",
         "numpy==1.23.1",
