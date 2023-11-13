@@ -42,6 +42,9 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
+          # cache pip downloads to speed up workflow, invalidate when setup.py changes
+          cache: 'pip'
+          cache-dependency-path: 'setup.py'
 
       # Install this package and its dependencies
       - name: Install Dependencies
