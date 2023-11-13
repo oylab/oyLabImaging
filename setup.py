@@ -44,7 +44,7 @@ setup(
         "https://download.pytorch.org/whl/torch_stable.html",
     ],
     install_requires=[
-        "opencv-python==4.7.0.68",
+        "opencv-python",
         "cellpose==0.7.2",
         "cloudpickle==1.6.0",
         "dill==0.3.4",
