@@ -27,6 +27,9 @@ for python, cu, platform in product(
             )
         )
 
+# requirements are DEFINED in requirements.in
+# and are periodically compiled into a locked requirements.txt
+# by installing `pip-tools` and running `pip-compile requirements.in`
 install_requires = [
     req
     for ln in Path("requirements.txt").read_text().splitlines()

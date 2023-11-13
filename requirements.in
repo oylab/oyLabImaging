@@ -1,20 +1,28 @@
-# this file declares only the *hard* constraints on direct dependencies
+# this file is the source of truth for dependencies of this package
+# declares only the *hard* constraints on direct dependencies
+# including *known* incompatibilities and version requirements
 # compile this file into `requirements.txt` by running:
 #
 #  pip-compile requirements.in
+# 
+# that creates a locked `requirements.txt` file, which is used
+# to populate install_requires in setup.py
 
-opencv-python
 cellpose
 cloudpickle
+csbdeep
 dill
 ipython
 ipywidgets
+jupyter
 lap05
 matplotlib
+multiprocess
 napari[all]
 nd2
 numba
 numpy
+opencv-python
 pandas
 Pillow
 poppy
@@ -22,10 +30,7 @@ pyfftw
 scikit-image<=0.19 ; platform_machine!="arm64"
 scikit-learn
 scipy
+stardist
+tensorflow-cpu ; platform_machine!="arm64"
 tqdm
 zernike
-multiprocess
-jupyter
-tensorflow-cpu ; platform_machine!="arm64"
-csbdeep
-stardist
