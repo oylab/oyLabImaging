@@ -47,8 +47,6 @@ jobs:
       - name: Install Dependencies
         run: |
           python -m pip install -U pip
-          # deal with lap installation issues
-          python -m pip install numpy cython lap --no-use-pep517
           python -m pip install .[test]
 
       # Run tests using pytest
