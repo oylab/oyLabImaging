@@ -1,0 +1,31 @@
+# this file declares only the *hard* constraints on direct dependencies
+# compile this file into `requirements.txt` by running:
+#
+#  pip-compile requirements.in
+
+opencv-python
+cellpose
+cloudpickle
+dill
+ipython
+ipywidgets
+lap05
+matplotlib
+napari[all]
+nd2
+numba
+numpy
+pandas
+Pillow
+poppy
+pyfftw
+scikit-image<=0.19 ; platform_machine!="arm64"
+scikit-learn
+scipy
+tqdm
+zernike
+multiprocess
+jupyter
+tensorflow-cpu ; platform_machine!="arm64"
+csbdeep
+stardist

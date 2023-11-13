@@ -27,6 +27,11 @@ for python, cu, platform in product(
             )
         )
 
+install_requires = [
+    req
+    for ln in Path("requirements.txt").read_text().splitlines()
+    if (req := ln.strip()) and not req.startswith("#")
+]
 
 setup(
     name="oyLabImaging",
@@ -41,38 +46,8 @@ setup(
     dependency_links=[
         "https://download.pytorch.org/whl/torch_stable.html",
     ],
-    install_requires=[
-        "PyQt5",
-        "opencv-python==4.7.0.68",
-        "cellpose==0.7.2",
-        "cloudpickle==1.6.0",
-        "dill==0.3.4",
-        "ipython>=7.27.0",
-        "ipywidgets==7.6.5",
-        "lap05==0.5.1",  # non-official build that install better 
-        "matplotlib>=3.3.4",
-        "napari==0.4.14",
-        "nd2>=0.8.0",
-        "numba>=0.53.1",
-        "numpy==1.23.1",
-        "pandas>=1.2.4",
-        "Pillow>=8.3.1",
-        "poppy>=1.0.1",
-        "pyfftw>=0.12.0",
-        "scikit_image<=0.18.3",
-        "scikit_learn==0.24.2",
-        "scipy>=1.6.2",
-        "setuptools>=52.0.0",
-        "cmake",
-        "tqdm>=4.59.0",
-        "zernike>=0.0.32",
-        "multiprocess>=0.70",
-        "jupyter>=1.0.0",
-        "tensorflow-cpu==2.10.0",
-        "csbdeep==0.7.0",
-        "stardist==0.8.3",
-        "pydantic<2",
-    ],
+    package_data={"*": ["requirements.txt"]},
+    install_requires=install_requires,
     extras_require={
         "cuda": CU111_EXTRAS,
         "test": ["pytest", "pytest-cov"],
