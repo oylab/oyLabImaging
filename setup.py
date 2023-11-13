@@ -1,20 +1,31 @@
+from itertools import product
 from setuptools import setup, find_packages
-from setuptools.command.install import install
-from subprocess import check_call
+from pathlib import Path
 
-cuda_deps = [
-    "cupy-cuda112",
-    "torch@https://download.pytorch.org/whl/cu111/torch-1.8.1%2Bcu111-cp38-cp38-linux_x86_64.whl",
-    "torchvision@https://download.pytorch.org/whl/cu111/torchvision-0.9.1%2Bcu111-cp38-cp38-linux_x86_64.whl",
-    "torchaudio@https://download.pytorch.org/whl/torchaudio-0.8.1-cp38-cp38-linux_x86_64.whl",
-]
-
-cuda_win_deps = [
-    "cupy-cuda112",
-    "torch@https://download.pytorch.org/whl/cu111/torch-1.8.1%2Bcu111-cp38-cp38-win_amd64.whl",
-    "torchvision@https://download.pytorch.org/whl/cu111/torchvision-0.9.1%2Bcu111-cp38-cp38-win_amd64.whl",
-    "torchaudio@https://download.pytorch.org/whl/torchaudio-0.8.1-cp38-cp38-win_amd64.whl",
-]
+BASE = "https://download.pytorch.org/whl"
+TORCH_CU_TEMPLATE = "{pkg}@{base}/{cu}/{pkg}-{ver}%2B{cu}-{cp}-{cp}-{platform}.whl ; platform_system=={pyplatform!r} and python_version=={python!r}"
+TORCH_TEMPLATE = "{pkg}@{base}/{pkg}-{ver}-{cp}-{cp}-{platform}.whl ; platform_system=={pyplatform!r} and python_version=={python!r}"
+CU111_EXTRAS = ["cupy-cuda111 ; platform_system!='Darwin'"]
+for python, cu, platform in product(
+    ["3.8", "3.9"], ["cu111"], ["linux_x86_64", "win_amd64"]
+):
+    for pkg, ver, TORCH_TEMPLATE in [
+        ("torch", "1.8.1", TORCH_CU_TEMPLATE),
+        ("torchvision", "0.9.1", TORCH_CU_TEMPLATE),
+        ("torchaudio", "0.8.1", TORCH_TEMPLATE),
+    ]:
+        CU111_EXTRAS.append(
+            TORCH_TEMPLATE.format(
+                base=BASE,
+                pkg=pkg,
+                ver=ver,
+                cp=f'cp{python.replace(".", "")}',
+                platform=platform,
+                cu=cu,
+                pyplatform="Linux" if platform == "linux_x86_64" else "Windows",
+                python=python,
+            )
+        )
 
 
 setup(
@@ -24,12 +35,13 @@ setup(
     author="Alon Oyler-Yaniv",
     url="https://github.com/alonyan/oyLabImaging",
     packages=find_packages(include=["oyLabImaging", "oyLabImaging.*"]),
-    python_requires=">=3.8, <3.9",
+    python_requires=">=3.8, <3.10",
+    long_description=Path("README.md").read_text(),
+    long_description_content_type="text/markdown",
     dependency_links=[
         "https://download.pytorch.org/whl/torch_stable.html",
     ],
     install_requires=[
-        "PyYAML",
         "PyQt5",
         "opencv-python==4.7.0.68",
         "cellpose==0.7.2",
@@ -56,14 +68,13 @@ setup(
         "zernike>=0.0.32",
         "multiprocess>=0.70",
         "jupyter>=1.0.0",
-		"tensorflow-cpu==2.10.0",
-		"csbdeep==0.7.0",
-		"stardist==0.8.3",
-        "pydantic<2"
+        "tensorflow-cpu==2.10.0",
+        "csbdeep==0.7.0",
+        "stardist==0.8.3",
+        "pydantic<2",
     ],
     extras_require={
-        "cuda": cuda_deps,
-        "cuda-win": cuda_win_deps,
-		"tests": ["pytest"]
+        "cuda111": CU111_EXTRAS,
+        "test": ["pytest", "pytest-cov"],
     },
 )
