@@ -5,7 +5,7 @@ from pathlib import Path
 BASE = "https://download.pytorch.org/whl"
 TORCH_CU_TEMPLATE = "{pkg}@{base}/{cu}/{pkg}-{ver}%2B{cu}-{cp}-{cp}-{platform}.whl ; platform_system=={pyplatform!r} and python_version=={python!r}"
 TORCH_TEMPLATE = "{pkg}@{base}/{pkg}-{ver}-{cp}-{cp}-{platform}.whl ; platform_system=={pyplatform!r} and python_version=={python!r}"
-CU111_EXTRAS = ["cupy-cuda111 ; platform_system!='Darwin'"]
+CU111_EXTRAS = ["cupy-cuda112 ; platform_system!='Darwin'"]
 for python, cu, platform in product(
     ["3.8", "3.9"], ["cu111"], ["linux_x86_64", "win_amd64"]
 ):
@@ -74,7 +74,7 @@ setup(
         "pydantic<2",
     ],
     extras_require={
-        "cuda111": CU111_EXTRAS,
+        "cuda": CU111_EXTRAS,
         "test": ["pytest", "pytest-cov"],
     },
 )
