@@ -2,10 +2,11 @@ from itertools import product
 from setuptools import setup, find_packages
 from pathlib import Path
 
+# Creates a matrix of torch/python/platform combinations for the [cuda] extra
 BASE = "https://download.pytorch.org/whl"
 TORCH_CU_TEMPLATE = "{pkg}@{base}/{cu}/{pkg}-{ver}%2B{cu}-{cp}-{cp}-{platform}.whl ; platform_system=={pyplatform!r} and python_version=={python!r}"
 TORCH_TEMPLATE = "{pkg}@{base}/{pkg}-{ver}-{cp}-{cp}-{platform}.whl ; platform_system=={pyplatform!r} and python_version=={python!r}"
-CU111_EXTRAS = ["cupy-cuda112 ; platform_system!='Darwin'"]
+TORCH_EXTRAS = []
 for python, cu, platform in product(
     ["3.8", "3.9"], ["cu111"], ["linux_x86_64", "win_amd64"]
 ):
@@ -14,7 +15,7 @@ for python, cu, platform in product(
         ("torchvision", "0.9.1", TORCH_CU_TEMPLATE),
         ("torchaudio", "0.8.1", TORCH_TEMPLATE),
     ]:
-        CU111_EXTRAS.append(
+        TORCH_EXTRAS.append(
             TORCH_TEMPLATE.format(
                 base=BASE,
                 pkg=pkg,
@@ -26,6 +27,8 @@ for python, cu, platform in product(
                 python=python,
             )
         )
+
+CU111_EXTRAS = ["cupy-cuda112 ; platform_system!='Darwin'", *TORCH_EXTRAS]
 
 setup(
     name="oyLabImaging",
@@ -65,10 +68,10 @@ setup(
         "zernike>=0.0.32",
         "multiprocess>=0.70",
         "jupyter>=1.0.0",
-		"tensorflow-cpu==2.10.0 ; platform_machine!='arm64'",
-		"csbdeep==0.7.0",
-		"stardist==0.8.3",
-        "pydantic<2"
+        "tensorflow-cpu==2.10.0 ; platform_machine!='arm64'",
+        "csbdeep==0.7.0",
+        "stardist==0.8.3",
+        "pydantic<2",
     ],
     extras_require={
         "cuda": CU111_EXTRAS,
