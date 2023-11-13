@@ -67,7 +67,7 @@ setup(
         "tqdm>=4.59.0",
         "zernike>=0.0.32",
         "multiprocess>=0.70",
-        "jupyter>=1.0.0",
+        # "jupyter>=1.0.0",
         # "tensorflow-cpu==2.10.0 ; platform_machine!='arm64'",
         # "csbdeep==0.7.0",
         # "stardist==0.8.3",
