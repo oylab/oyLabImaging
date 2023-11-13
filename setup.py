@@ -10,13 +10,13 @@ TORCH_EXTRAS = []
 for python, cu, platform in product(
     ["3.8", "3.9"], ["cu111"], ["linux_x86_64", "win_amd64"]
 ):
-    for pkg, ver, TORCH_TEMPLATE in [
+    for pkg, ver, template in [
         ("torch", "1.8.1", TORCH_CU_TEMPLATE),
         ("torchvision", "0.9.1", TORCH_CU_TEMPLATE),
         ("torchaudio", "0.8.1", TORCH_TEMPLATE),
     ]:
         TORCH_EXTRAS.append(
-            TORCH_TEMPLATE.format(
+            template.format(
                 base=BASE,
                 pkg=pkg,
                 ver=ver,
@@ -44,7 +44,7 @@ setup(
         "https://download.pytorch.org/whl/torch_stable.html",
     ],
     install_requires=[
-        # "opencv-python",
+        "opencv-python-headless",
         "cellpose==0.7.2",
         "cloudpickle==1.6.0",
         "dill==0.3.4",
@@ -60,7 +60,6 @@ setup(
         "pandas>=1.2.4",
         "Pillow>=8.3.1",
         "poppy>=1.0.1",
-        # "pyfftw>=0.12.0 ; platform_machine!='arm64'",
         "scikit-image",
         "scikit-learn",
         "scipy>=1.6.2",
