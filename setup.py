@@ -38,7 +38,7 @@ setup(
     author="Alon Oyler-Yaniv",
     url="https://github.com/alonyan/oyLabImaging",
     packages=find_packages(include=["oyLabImaging", "oyLabImaging.*"]),
-    python_requires=">=3.8, <3.11",
+    python_requires=">=3.8, <3.12",
     long_description=Path("README.md").read_text(),
     long_description_content_type="text/markdown",
     dependency_links=["https://download.pytorch.org/whl/torch_stable.html"],
