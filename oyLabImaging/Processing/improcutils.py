@@ -5,6 +5,8 @@ Created on Thu Jul 21 15:46:30 2016
 @author: Alonyan
 """
 
+
+import contextlib
 import numpy as np
 try:
     from numba import jit
@@ -464,8 +466,8 @@ class segmentation(object):
         from contextlib import contextmanager
         import sys, os
         from pathlib import Path
-        
-        
+
+
 
 
         # heavy guns for getting rid of retracing warnings!
@@ -475,11 +477,12 @@ class segmentation(object):
         logging.disable(logging.WARNING)
         import warnings
 
-        import tensorflow as tf
+        with contextlib.suppress(ImportError):
+            # only place tf is actually used in here.
+            # so it's not an explicit dependency, but it should come with stardist
+            import tensorflow as tf
 
-        tf.config.threading.set_intra_op_parallelism_threads(1)
-        tf.config.threading.set_inter_op_parallelism_threads(1)
-        
+            tf.config.threading.set_inter_op_parallelism_threads(1)
         warnings.filterwarnings("ignore")
 
         @contextmanager
@@ -520,7 +523,6 @@ class segmentation(object):
 
         from csbdeep.utils import normalize
         from stardist.models import StarDist2D
-        from tensorflow import convert_to_tensor
         import cv2
         from cv2 import INTER_NEAREST, resize
         from skimage.transform import rescale
