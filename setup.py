@@ -44,7 +44,7 @@ setup(
         "Pillow>=8.3.1",
         "poppy>=1.0.1",
         "scikit-image",
-        "scikit-learn==0.24.2",
+        "scikit-learn==1.0.2",
         "scipy>=1.6.2",
         "tqdm>=4.59.0",
         "zernike>=0.0.32",
