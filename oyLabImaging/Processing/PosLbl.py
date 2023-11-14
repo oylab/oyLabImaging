@@ -623,7 +623,7 @@ class PosLbl(object):
 
         # return tracks segments that have more than minseglength frames
         return trackbits[
-            (np.array([np.sum(r is not None) for r in trackbits]) >= minseglength)
+            (np.array([np.sum(r != None) for r in trackbits]) >= minseglength)
         ]
 
     def _closegaps(
@@ -762,7 +762,7 @@ class PosLbl(object):
             (
                 np.arange(len(trackbits)),
                 [np.sum(np.isnan(r.astype("float"))) for r in trackbits],
-                [np.sum(r is None) for r in trackbits],
+                [np.sum(r == None) for r in trackbits],
             )
         )
         self.trackinds = trackbits[sortind]
@@ -811,8 +811,7 @@ class PosLbl(object):
                 link_a = np.where(trackstarts == J)
                 link_b = np.where(list(map(lambda x: np.any(x == J - 1), trackends)))
                 if np.any(link_a):
-                    def f(x):
-                        return np.pad(link_b, ((1, 0), (0, 0)), constant_values=x)
+                    f = lambda x: np.pad(link_b, ((1, 0), (0, 0)), constant_values=x)
                     d = np.transpose(np.hstack(list(map(f, link_a[0]))))
                     possiblelinks = np.concatenate((possiblelinks, d))
 
@@ -1105,7 +1104,7 @@ class PosLbl(object):
             "ind": np.concatenate(self.index),
         }
 
-        {
+        text = {
             'string': '{ind:.2f}',
             'size': 10,
             'color': 'white',

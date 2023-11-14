@@ -468,8 +468,6 @@ class segmentation(object):
         from pathlib import Path
 
 
-
-
         # heavy guns for getting rid of retracing warnings!
         logging.getLogger("stardist").propagate = False
         logging.getLogger("tensorflow").setLevel(logging.CRITICAL)
