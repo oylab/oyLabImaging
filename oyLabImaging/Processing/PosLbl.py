@@ -5,6 +5,7 @@
 
 import sys
 from functools import partial
+import warnings
 
 import lap
 import multiprocess as mp  # import Pool, set_start_method
@@ -17,6 +18,8 @@ from tqdm import tqdm
 
 from oyLabImaging import Metadata
 from oyLabImaging.Processing import FrameLbl
+
+warnings.filterwarnings("ignore", category=np.VisibleDeprecationWarning)
 
 
 class PosLbl(object):
@@ -167,7 +170,6 @@ class PosLbl(object):
 
         print("\nAvailable channels are : " + ", ".join(list(self.channels)) + ".")
 
-    np.warnings.filterwarnings("ignore", category=np.VisibleDeprecationWarning)
 
     @property
     def PixelSize(self):
@@ -417,7 +419,6 @@ class PosLbl(object):
             if type(Channel) == str:
                 cmaps = ["gray"]
 
-            from oyLabImaging.Processing.improcutils import sample_stack
             from oyLabImaging.Processing.imvisutils import get_or_create_viewer
 
             viewer = get_or_create_viewer()
@@ -495,7 +496,7 @@ class PosLbl(object):
         nums = self.num
         if 'adaptive_radius' in kwargs:
             adaptive=True
-            sr_factor = np.sqrt(self.num/self.num[0])
+            np.sqrt(self.num/self.num[0])
         else:
             adaptive=False
             
@@ -622,7 +623,7 @@ class PosLbl(object):
 
         # return tracks segments that have more than minseglength frames
         return trackbits[
-            (np.array([np.sum(r != None) for r in trackbits]) >= minseglength)
+            (np.array([np.sum(r is not None) for r in trackbits]) >= minseglength)
         ]
 
     def _closegaps(
@@ -761,7 +762,7 @@ class PosLbl(object):
             (
                 np.arange(len(trackbits)),
                 [np.sum(np.isnan(r.astype("float"))) for r in trackbits],
-                [np.sum(r == None) for r in trackbits],
+                [np.sum(r is None) for r in trackbits],
             )
         )
         self.trackinds = trackbits[sortind]
@@ -810,7 +811,8 @@ class PosLbl(object):
                 link_a = np.where(trackstarts == J)
                 link_b = np.where(list(map(lambda x: np.any(x == J - 1), trackends)))
                 if np.any(link_a):
-                    f = lambda x: np.pad(link_b, ((1, 0), (0, 0)), constant_values=x)
+                    def f(x):
+                        return np.pad(link_b, ((1, 0), (0, 0)), constant_values=x)
                     d = np.transpose(np.hstack(list(map(f, link_a[0]))))
                     possiblelinks = np.concatenate((possiblelinks, d))
 
@@ -1103,7 +1105,7 @@ class PosLbl(object):
             "ind": np.concatenate(self.index),
         }
 
-        text = {
+        {
             'string': '{ind:.2f}',
             'size': 10,
             'color': 'white',
