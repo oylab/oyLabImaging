@@ -50,7 +50,7 @@ setup(
         "zernike>=0.0.32",
         "multiprocess>=0.70",
         "jupyter>=1.0.0",
-        "tensorflow-cpu==2.10.0",
+        "tensorflow-cpu==2.10.0 ; platform_machine!='arm64'",
         "stardist==0.8.3",
     ],
     extras_require={
