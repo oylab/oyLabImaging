@@ -1,34 +1,35 @@
-from itertools import product
 from setuptools import setup, find_packages
 from pathlib import Path
 
-# Creates a matrix of torch/python/platform combinations for the [cuda] extra
-BASE = "https://download.pytorch.org/whl"
-TORCH_CU_TEMPLATE = "{pkg}@{base}/{cu}/{pkg}-{ver}%2B{cu}-{cp}-{cp}-{platform}.whl ; platform_system=={pyplatform!r} and python_version=={python!r}"
-TORCH_TEMPLATE = "{pkg}@{base}/{pkg}-{ver}-{cp}-{cp}-{platform}.whl ; platform_system=={pyplatform!r} and python_version=={python!r}"
-TORCH_EXTRAS = []
-for python, cu, platform in product(
-    ["3.8", "3.9"], ["cu111"], ["linux_x86_64", "win_amd64"]
-):
-    for pkg, ver, template in [
-        ("torch", "1.8.1", TORCH_CU_TEMPLATE),
-        ("torchvision", "0.9.1", TORCH_CU_TEMPLATE),
-        ("torchaudio", "0.8.1", TORCH_TEMPLATE),
-    ]:
-        TORCH_EXTRAS.append(
-            template.format(
-                base=BASE,
-                pkg=pkg,
-                ver=ver,
-                cp=f'cp{python.replace(".", "")}',
-                platform=platform,
-                cu=cu,
-                pyplatform="Linux" if platform == "linux_x86_64" else "Windows",
-                python=python,
-            )
-        )
+CU111_EXTRAS = [
+    "cupy-cuda111 ; platform_system!='Darwin' and python_version<'3.10'",
+    "cupy-cuda113 ; platform_system!='Darwin' and python_version>='3.10'",
+    # PY38 - LINUX
+    "torch@https://download.pytorch.org/whl/cu111/torch-1.8.1%2Bcu111-cp38-cp38-linux_x86_64.whl ; platform_system=='Linux' and python_version=='3.8'",
+    "torchvision@https://download.pytorch.org/whl/cu111/torchvision-0.9.1%2Bcu111-cp38-cp38-linux_x86_64.whl ; platform_system=='Linux' and python_version=='3.8'",
+    "torchaudio@https://download.pytorch.org/whl/torchaudio-0.8.1-cp38-cp38-linux_x86_64.whl ; platform_system=='Linux' and python_version=='3.8'",
+    # PY38 - WINDOWS
+    "torch@https://download.pytorch.org/whl/cu111/torch-1.8.1%2Bcu111-cp38-cp38-win_amd64.whl ; platform_system=='Windows' and python_version=='3.8'",
+    "torchvision@https://download.pytorch.org/whl/cu111/torchvision-0.9.1%2Bcu111-cp38-cp38-win_amd64.whl ; platform_system=='Windows' and python_version=='3.8'",
+    "torchaudio@https://download.pytorch.org/whl/torchaudio-0.8.1-cp38-cp38-win_amd64.whl ; platform_system=='Windows' and python_version=='3.8'",
+    # PY39 - LINUX
+    "torch@https://download.pytorch.org/whl/cu111/torch-1.8.1%2Bcu111-cp39-cp39-linux_x86_64.whl ; platform_system=='Linux' and python_version=='3.9'",
+    "torchvision@https://download.pytorch.org/whl/cu111/torchvision-0.9.1%2Bcu111-cp39-cp39-linux_x86_64.whl ; platform_system=='Linux' and python_version=='3.9'",
+    "torchaudio@https://download.pytorch.org/whl/torchaudio-0.8.1-cp39-cp39-linux_x86_64.whl ; platform_system=='Linux' and python_version=='3.9'",
+    # PY39 - WINDOWS
+    "torch@https://download.pytorch.org/whl/cu111/torch-1.8.1%2Bcu111-cp39-cp39-win_amd64.whl ; platform_system=='Windows' and python_version=='3.9'",
+    "torchvision@https://download.pytorch.org/whl/cu111/torchvision-0.9.1%2Bcu111-cp39-cp39-win_amd64.whl ; platform_system=='Windows' and python_version=='3.9'",
+    "torchaudio@https://download.pytorch.org/whl/torchaudio-0.8.1-cp39-cp39-win_amd64.whl ; platform_system=='Windows' and python_version=='3.9'",
+    # PY310 - LINUX
+    "torch@https://download.pytorch.org/whl/cu113/torch-1.11.0%2Bcu113-cp310-cp310-linux_x86_64.whl ; platform_system=='Linux' and python_version=='3.10'",
+    "torchvision@https://download.pytorch.org/whl/cpu/torchvision-0.12.0%2Bcpu-cp310-cp310-linux_x86_64.whl ; platform_system=='Linux' and python_version=='3.10'",
+    "torchaudio@https://download.pytorch.org/whl/cpu/torchaudio-0.11.0%2Bcpu-cp310-cp310-linux_x86_64.whl ; platform_system=='Linux' and python_version=='3.10'",
+    # PY310 - WINDOWS
+    "torch@https://download.pytorch.org/whl/cu113/torch-1.11.0%2Bcu113-cp310-cp310-win_amd64.whl ; platform_system=='Windows' and python_version=='3.10'",
+    "torchvision@https://download.pytorch.org/whl/cpu/torchvision-0.12.0%2Bcpu-cp310-cp310-win_amd64.whl ; platform_system=='Windows' and python_version=='3.10'",
+    "torchaudio@https://download.pytorch.org/whl/cpu/torchaudio-0.11.0%2Bcpu-cp310-cp310-win_amd64.whl ; platform_system=='Windows' and python_version=='3.10'",
+]
 
-CU111_EXTRAS = ["cupy-cuda112 ; platform_system!='Darwin'", *TORCH_EXTRAS]
 
 setup(
     name="oyLabImaging",
@@ -37,12 +38,10 @@ setup(
     author="Alon Oyler-Yaniv",
     url="https://github.com/alonyan/oyLabImaging",
     packages=find_packages(include=["oyLabImaging", "oyLabImaging.*"]),
-    python_requires=">=3.8, <3.10",
+    python_requires=">=3.8, <3.11",
     long_description=Path("README.md").read_text(),
     long_description_content_type="text/markdown",
-    dependency_links=[
-        "https://download.pytorch.org/whl/torch_stable.html",
-    ],
+    dependency_links=["https://download.pytorch.org/whl/torch_stable.html"],
     install_requires=[
         "opencv-python-headless",
         "cellpose==0.7.2",
