@@ -52,6 +52,7 @@ setup(
         "lap05",
         "matplotlib>=3.3.4",
         "napari[pyqt5]==0.4.14",
+        "pydantic<2", # pinned only because of napari
         "magicgui",
         "nd2>=0.8.0",
         "numba>=0.53.1",
