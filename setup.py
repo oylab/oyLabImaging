@@ -3,7 +3,6 @@ from pathlib import Path
 
 CU111_EXTRAS = [
     "cupy-cuda111 ; platform_system!='Darwin' and python_version<'3.10'",
-    "cupy-cuda113 ; platform_system!='Darwin' and python_version>='3.10'",
     # PY38 - LINUX
     "torch@https://download.pytorch.org/whl/cu111/torch-1.8.1%2Bcu111-cp38-cp38-linux_x86_64.whl ; platform_system=='Linux' and python_version=='3.8'",
     "torchvision@https://download.pytorch.org/whl/cu111/torchvision-0.9.1%2Bcu111-cp38-cp38-linux_x86_64.whl ; platform_system=='Linux' and python_version=='3.8'",
@@ -12,22 +11,6 @@ CU111_EXTRAS = [
     "torch@https://download.pytorch.org/whl/cu111/torch-1.8.1%2Bcu111-cp38-cp38-win_amd64.whl ; platform_system=='Windows' and python_version=='3.8'",
     "torchvision@https://download.pytorch.org/whl/cu111/torchvision-0.9.1%2Bcu111-cp38-cp38-win_amd64.whl ; platform_system=='Windows' and python_version=='3.8'",
     "torchaudio@https://download.pytorch.org/whl/torchaudio-0.8.1-cp38-cp38-win_amd64.whl ; platform_system=='Windows' and python_version=='3.8'",
-    # PY39 - LINUX
-    "torch@https://download.pytorch.org/whl/cu111/torch-1.8.1%2Bcu111-cp39-cp39-linux_x86_64.whl ; platform_system=='Linux' and python_version=='3.9'",
-    "torchvision@https://download.pytorch.org/whl/cu111/torchvision-0.9.1%2Bcu111-cp39-cp39-linux_x86_64.whl ; platform_system=='Linux' and python_version=='3.9'",
-    "torchaudio@https://download.pytorch.org/whl/torchaudio-0.8.1-cp39-cp39-linux_x86_64.whl ; platform_system=='Linux' and python_version=='3.9'",
-    # PY39 - WINDOWS
-    "torch@https://download.pytorch.org/whl/cu111/torch-1.8.1%2Bcu111-cp39-cp39-win_amd64.whl ; platform_system=='Windows' and python_version=='3.9'",
-    "torchvision@https://download.pytorch.org/whl/cu111/torchvision-0.9.1%2Bcu111-cp39-cp39-win_amd64.whl ; platform_system=='Windows' and python_version=='3.9'",
-    "torchaudio@https://download.pytorch.org/whl/torchaudio-0.8.1-cp39-cp39-win_amd64.whl ; platform_system=='Windows' and python_version=='3.9'",
-    # PY310 - LINUX
-    "torch@https://download.pytorch.org/whl/cu113/torch-1.11.0%2Bcu113-cp310-cp310-linux_x86_64.whl ; platform_system=='Linux' and python_version=='3.10'",
-    "torchvision@https://download.pytorch.org/whl/cpu/torchvision-0.12.0%2Bcpu-cp310-cp310-linux_x86_64.whl ; platform_system=='Linux' and python_version=='3.10'",
-    "torchaudio@https://download.pytorch.org/whl/cpu/torchaudio-0.11.0%2Bcpu-cp310-cp310-linux_x86_64.whl ; platform_system=='Linux' and python_version=='3.10'",
-    # PY310 - WINDOWS
-    "torch@https://download.pytorch.org/whl/cu113/torch-1.11.0%2Bcu113-cp310-cp310-win_amd64.whl ; platform_system=='Windows' and python_version=='3.10'",
-    "torchvision@https://download.pytorch.org/whl/cpu/torchvision-0.12.0%2Bcpu-cp310-cp310-win_amd64.whl ; platform_system=='Windows' and python_version=='3.10'",
-    "torchaudio@https://download.pytorch.org/whl/cpu/torchaudio-0.11.0%2Bcpu-cp310-cp310-win_amd64.whl ; platform_system=='Windows' and python_version=='3.10'",
 ]
 
 
