@@ -1489,7 +1489,7 @@ class Metadata(object):
                 frames=frames,
                 ZsToLoad=ZsToLoad,
                 Channel=Channel,
-                threads=8,
+                threads=threads,
             )
 
     def CalculateDriftCorrectionCPU(
