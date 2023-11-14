@@ -496,7 +496,7 @@ class PosLbl(object):
         nums = self.num
         if 'adaptive_radius' in kwargs:
             adaptive=True
-            np.sqrt(self.num/self.num[0])
+            sr_factor = np.sqrt(self.num/self.num[0])
         else:
             adaptive=False
             
