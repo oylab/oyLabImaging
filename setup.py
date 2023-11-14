@@ -55,7 +55,7 @@ setup(
         "magicgui",
         "nd2>=0.8.0",
         "numba>=0.53.1",
-        "numpy==1.23.1",
+        "numpy",
         "pandas>=1.2.4",
         "Pillow>=8.3.1",
         "poppy>=1.0.1",
