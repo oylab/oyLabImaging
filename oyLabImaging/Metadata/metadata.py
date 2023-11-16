@@ -426,7 +426,7 @@ class Metadata(object):
                 framedata = {
                     "acq": fname,
                     "Position": event.get("Position Name") or str(event.get("P Index", "")) or 'Pos0',
-                    "frame": event.get("Index") or 0,
+                    "frame": event.get("T Index") or 0,
                     "XY": [event.get("X Coord [µm]"), event.get("Y Coord [µm]")] if event.get("X Coord [µm]") else [0,0],
                     "Z": event.get("Z Coord [µm]"),
                     "Zindex": event.get("Z Index") or 0,
