@@ -34,7 +34,7 @@ def export_napari_to_movie(
     ax.axis("off")
     fig.tight_layout()
     viewer.scale_bar.unit = "um"
-    for i in range(viewer.dims.range[0][1].astype(int) + 1):
+    for i in range(int(viewer.dims.range[0][1]) + 1):
         viewer.dims.current_step = [i, 0, 0]
         im = plt.imshow(viewer.window._qt_viewer.canvas.render(), animated=True)
         plt.gca().set_position([0, 0, 1, 1])

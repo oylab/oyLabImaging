@@ -1129,6 +1129,7 @@ class Metadata(object):
         viewer.window.add_dock_widget(container, name="Metadata Viewer")
 
         matplotlib.use("Qt5Agg")
+        return viewer
 
     def _read_local(
         self, ind_dict, ffield=False, register=False, verbose=True, crop=None, **kwargs
@@ -1457,7 +1458,7 @@ class Metadata(object):
         frames=None,
         ZsToLoad=[0],
         Channel=None,
-        threads=8,
+        threads=None,
         chunks=20,
         GPU=True,
     ):
@@ -1488,11 +1489,11 @@ class Metadata(object):
                 frames=frames,
                 ZsToLoad=ZsToLoad,
                 Channel=Channel,
-                threads=8,
+                threads=threads,
             )
 
     def CalculateDriftCorrectionCPU(
-        self, Position=None, frames=None, ZsToLoad=[0], Channel=None, threads=8
+        self, Position=None, frames=None, ZsToLoad=[0], Channel=None, threads=None,
     ):
         """
         Calculate image registration (jitter correction) parameters and add to metadata.
@@ -1504,6 +1505,8 @@ class Metadata(object):
         Channel : str, channel name to use for registration
 
         """
+        if threads is not None:
+            warnings.warn("Passing threads is deprecated. It does nothing.")
 
         # from scipy.signal import fftconvolve
         if Position is None:
@@ -1524,7 +1527,7 @@ class Metadata(object):
         )
         print("using channel " + Channel + " for drift correction")
         for pos in Position:
-            from pyfftw.interfaces.numpy_fft import fft2, ifft2
+            from scipy.fft import fft2, ifft2
 
             DataPre = self.stkread(
                 Position=pos,
@@ -1558,11 +1561,11 @@ class Metadata(object):
             DataPost = np.rot90(DataPost, axes=(0, 1), k=2)
 
             # So because of dumb licensing issues, fftconvolve can't use fftw but the slower fftpack. Python is wonderful. So we'll do it all by hand like neanderthals
-            img_fft_1 = fft2(DataPre, axes=(0, 1), threads=threads)
-            img_fft_2 = fft2(DataPost, axes=(0, 1), threads=threads)
+            img_fft_1 = fft2(DataPre, axes=(0, 1))
+            img_fft_2 = fft2(DataPost, axes=(0, 1))
             imXcorr = np.abs(
                 np.fft.ifftshift(
-                    ifft2(img_fft_1 * img_fft_2, axes=(0, 1), threads=threads),
+                    ifft2(img_fft_1 * img_fft_2, axes=(0, 1)),
                     axes=(0, 1),
                 )
             )

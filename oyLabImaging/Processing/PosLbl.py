@@ -5,6 +5,7 @@
 
 import sys
 from functools import partial
+import warnings
 
 import lap
 import multiprocess as mp  # import Pool, set_start_method
@@ -17,6 +18,8 @@ from tqdm import tqdm
 
 from oyLabImaging import Metadata
 from oyLabImaging.Processing import FrameLbl
+
+warnings.filterwarnings("ignore", category=np.VisibleDeprecationWarning)
 
 
 class PosLbl(object):
@@ -167,7 +170,10 @@ class PosLbl(object):
 
         print("\nAvailable channels are : " + ", ".join(list(self.channels)) + ".")
 
+<<<<<<< HEAD
     #np.warnings.filterwarnings("ignore", category=np.VisibleDeprecationWarning)
+=======
+>>>>>>> 1b03231ed0588f02ffc52f3bfbd68ac11effce09
 
     @property
     def PixelSize(self):
@@ -417,7 +423,6 @@ class PosLbl(object):
             if type(Channel) == str:
                 cmaps = ["gray"]
 
-            from oyLabImaging.Processing.improcutils import sample_stack
             from oyLabImaging.Processing.imvisutils import get_or_create_viewer
 
             viewer = get_or_create_viewer()

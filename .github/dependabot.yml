@@ -1,0 +1,11 @@
+# dependendabot is a service that automatically creates pull requests to update dependencies
+# https://docs.github.com/github/administering-a-repository/configuration-options-for-dependency-updates
+
+# here, we currently only use it to keep the actions in .github/workflows up to date
+# but it could also be used to keep pinned python dependencies up to date as well.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"

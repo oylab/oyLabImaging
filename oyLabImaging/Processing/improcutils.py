@@ -5,6 +5,8 @@ Created on Thu Jul 21 15:46:30 2016
 @author: Alonyan
 """
 
+
+import contextlib
 import numpy as np
 try:
     from numba import jit
@@ -28,7 +30,7 @@ def periodic_smooth_decomp(I: np.ndarray) -> (np.ndarray, np.ndarray):
 
         Code from: https://github.com/jacobkimmel/ps_decomp
     """
-    from pyfftw.interfaces.numpy_fft import fft2, ifft2
+    from scipy.fft import fft2, ifft2
 
     def u2v(u: np.ndarray) -> np.ndarray:
         """Converts the image `u` into the image `v`
@@ -79,9 +81,9 @@ def periodic_smooth_decomp(I: np.ndarray) -> (np.ndarray, np.ndarray):
 
     u = I.astype(np.float64)
     v = u2v(u)
-    v_fft = fft2(v, threads=8)
+    v_fft = fft2(v)
     s = v2s(v_fft)
-    s_i = ifft2(s, threads=8)
+    s_i = ifft2(s)
     s_f = np.real(s_i)
     p = u - s_f  # u = p + s
     return np.squeeze(p), np.squeeze(s_f)
@@ -464,8 +466,6 @@ class segmentation(object):
         from contextlib import contextmanager
         import sys, os
         from pathlib import Path
-        
-        
 
 
         # heavy guns for getting rid of retracing warnings!
@@ -475,11 +475,12 @@ class segmentation(object):
         logging.disable(logging.WARNING)
         import warnings
 
-        import tensorflow as tf
+        with contextlib.suppress(ImportError):
+            # only place tf is actually used in here.
+            # so it's not an explicit dependency, but it should come with stardist
+            import tensorflow as tf
 
-        tf.config.threading.set_intra_op_parallelism_threads(1)
-        tf.config.threading.set_inter_op_parallelism_threads(1)
-        
+            tf.config.threading.set_inter_op_parallelism_threads(1)
         warnings.filterwarnings("ignore")
 
         @contextmanager
@@ -520,7 +521,6 @@ class segmentation(object):
 
         from csbdeep.utils import normalize
         from stardist.models import StarDist2D
-        from tensorflow import convert_to_tensor
         import cv2
         from cv2 import INTER_NEAREST, resize
         from skimage.transform import rescale
