@@ -186,50 +186,50 @@ class PosLbl(object):
 
     @property
     def num(self):
-        return np.array([r.num for r in self.framelabels])
+        return np.array([r.num for r in self.framelabels],dtype=object)
 
     @property
     def centroid(self):
-        return np.array([r.centroid for r in self.framelabels])
+        return np.array([r.centroid for r in self.framelabels],dtype=object)
 
     @property
     def weighted_centroid(self):
-        return np.array([r.weighted_centroid for r in self.framelabels])
+        return np.array([r.weighted_centroid for r in self.framelabels],dtype=object)
 
     @property
     def area(self):
-        return np.array([r.area for r in self.framelabels])
+        return np.array([r.area for r in self.framelabels],dtype=object)
 
     @property
     def index(self):
-        return np.array([r.index for r in self.framelabels])
+        return np.array([r.index for r in self.framelabels],dtype=object)
 
     @property
     def centroid_um(self):
-        return np.array([r.centroid_um for r in self.framelabels])
+        return np.array([r.centroid_um for r in self.framelabels],dtype=object)
 
     @property
     def weighted_centroid_um(self):
-        return np.array([r.weighted_centroid_um for r in self.framelabels])
+        return np.array([r.weighted_centroid_um for r in self.framelabels],dtype=object)
 
     @property
     def area_um2(self):
         return np.array([r.area_um2 for r in self.framelabels])
 
     def mean(self, ch, periring=False):
-        return np.array([r.mean(ch, periring=periring) for r in self.framelabels])
+        return np.array([r.mean(ch, periring=periring) for r in self.framelabels],dtype=object)
 
     def median(self, ch, periring=False):
-        return np.array([r.median(ch, periring=periring) for r in self.framelabels])
+        return np.array([r.median(ch, periring=periring) for r in self.framelabels],dtype=object)
 
     def minint(self, ch, periring=False):
-        return np.array([r.minint(ch, periring=periring) for r in self.framelabels])
+        return np.array([r.minint(ch, periring=periring) for r in self.framelabels],dtype=object)
 
     def maxint(self, ch, periring=False):
-        return np.array([r.maxint(ch, periring=periring) for r in self.framelabels])
+        return np.array([r.maxint(ch, periring=periring) for r in self.framelabels],dtype=object)
 
     def ninetyint(self, ch, periring=False):
-        return np.array([r.ninetyint(ch, periring=periring) for r in self.framelabels])
+        return np.array([r.ninetyint(ch, periring=periring) for r in self.framelabels],dtype=object)
 
     @property
     def density(self):
