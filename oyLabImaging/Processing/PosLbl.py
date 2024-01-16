@@ -170,10 +170,7 @@ class PosLbl(object):
 
         print("\nAvailable channels are : " + ", ".join(list(self.channels)) + ".")
 
-<<<<<<< HEAD
     #np.warnings.filterwarnings("ignore", category=np.VisibleDeprecationWarning)
-=======
->>>>>>> 1b03231ed0588f02ffc52f3bfbd68ac11effce09
 
     @property
     def PixelSize(self):
