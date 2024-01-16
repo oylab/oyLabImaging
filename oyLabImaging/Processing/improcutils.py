@@ -416,7 +416,7 @@ class segmentation(object):
             imgSmooth = filters.gaussian(img, sigma=cellsize)
             img_hmax = h_maxima(imgSmooth, hThresh)  # threshold
             coordinates = peak_local_max(img_hmax, footprint=np.ones((30, 30)))
-            RegionMax = np.zeros_like(img, dtype=np.bool)
+            RegionMax = np.zeros_like(img, dtype=bool)
             RegionMax[tuple(coordinates.T)] = True
             RegionMax = RegionMax.astype("int")
             se = disk(cellsize)
