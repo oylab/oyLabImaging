@@ -60,7 +60,7 @@ conda install -c conda-forge lap
 ### **if you have cuda 11.2:**
 
 
-`pip install git+https://github.com/oylab/oyLabImaging.git#egg=oyLabImaging[cuda-win]`
+`pip install git+https://github.com/oylab/oyLabImaging.git#egg=oyLabImaging[cuda]`
 
 ### **else:**
 
@@ -86,7 +86,7 @@ conda install -c conda-forge lap
 ```
 
 ### **if you have cuda 11.2:**
-`pip install -e .[cuda-win]`
+`pip install -e .[cuda]`
 
 ### **else:**
 
