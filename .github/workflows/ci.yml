@@ -31,7 +31,7 @@ jobs:
       # checkout the repository
       - uses: actions/checkout@v4
       # install ffmpeg
-      - uses: FedericoCarboni/setup-ffmpeg@v2
+      - uses: FedericoCarboni/setup-ffmpeg@v3
       # install xvfb and libraries for headless display on windows and linux
       - uses: pyvista/setup-headless-display-action@v2
         with:
