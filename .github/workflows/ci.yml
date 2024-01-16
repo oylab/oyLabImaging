@@ -54,7 +54,7 @@ jobs:
 
       # Run tests using pytest
       - name: Run Tests
-        uses: aganders3/headless-gui@v1
+        uses: aganders3/headless-gui@v2
         with:
           run: pytest --color=yes --cov --cov-report=xml --cov-report=term-missing
 
