@@ -31,7 +31,7 @@ jobs:
       # checkout the repository
       - uses: actions/checkout@v4
       # install ffmpeg
-      - uses: FedericoCarboni/setup-ffmpeg@v2
+      - uses: FedericoCarboni/setup-ffmpeg@v3
       # install xvfb and libraries for headless display on windows and linux
       - uses: pyvista/setup-headless-display-action@v2
         with:
@@ -39,7 +39,7 @@ jobs:
 
       # setup a specific python version
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
           # cache pip downloads to speed up workflow, invalidate when setup.py changes
@@ -54,7 +54,7 @@ jobs:
 
       # Run tests using pytest
       - name: Run Tests
-        uses: aganders3/headless-gui@v1
+        uses: aganders3/headless-gui@v2
         with:
           run: pytest --color=yes --cov --cov-report=xml --cov-report=term-missing
 
