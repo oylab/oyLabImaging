@@ -60,4 +60,4 @@ jobs:
 
       # Upload test coverage to codecov
       - name: Coverage
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4
