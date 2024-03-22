@@ -576,21 +576,23 @@ class PosLbl(object):
         Helper function recursive function that gets an initial frame i and starting cell label
         l and returns all labels
         """
-        if self.num[i + 1] > 0:
-            if i + 1 < len(self.frames) - 1:
+        
+        if i + 1 < len(self.frames):
+            if self.num[i + 1] > 0:
                 if l > -1:
                     return np.append(
                         l, self._getTrackLinks(i + 1, self.framelabels[i].link1in2[l])
                     )
                 else:
                     pass
-            elif i + 1 == len(self.frames) - 1:
-                if l > -1:
-                    return l
-                else:
-                    pass
-        else:
-            return np.array([])
+            else:
+                return np.array([])
+        elif i + 1 == len(self.frames):
+            if l > -1:
+                return l
+            else:
+                pass
+        
 
     def _getAllContinuousTrackSegs(self, minseglength=4, **kwargs):
         """

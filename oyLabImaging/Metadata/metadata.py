@@ -881,8 +881,9 @@ class Metadata(object):
                 MD.base_pth, MD._md_name = path.split(pth)
 
             MD.image_table["root_pth"] = MD.image_table["filename"].copy()
-            MD.image_table.root_pth = [
-                join(MD.base_pth, f) for f in MD.image_table["root_pth"]
+            
+            MD.image_table["root_pth"] = [
+                join(MD.base_pth, f) for f in MD.image_table["filename"]
             ]
             self._md_name = "metadata.pickle"
             self.type = MD.type
@@ -1460,7 +1461,7 @@ class Metadata(object):
         Channel=None,
         threads=None,
         chunks=20,
-        GPU=True,
+        GPU=False,
     ):
         if GPU:
             try:
@@ -1505,6 +1506,8 @@ class Metadata(object):
         Channel : str, channel name to use for registration
 
         """
+        from oyLabImaging.Processing.improcutils import periodic_smooth_decomp
+
         if threads is not None:
             warnings.warn("Passing threads is deprecated. It does nothing.")
 
@@ -1541,7 +1544,7 @@ class Metadata(object):
             assert (
                 DataPre.ndim == 3
             ), "Must have more than 1 timeframe for drift correction"
-
+            DataPre,_ = periodic_smooth_decomp(DataPre)
             print("\ncalculating drift correction for position " + str(pos) + " on CPU")
             DataPre = DataPre - np.mean(DataPre, axis=(1, 2), keepdims=True)
 
@@ -1618,6 +1621,8 @@ class Metadata(object):
         Channel : str, channel name to use for registration
 
         """
+        from oyLabImaging.Processing.improcutils import periodic_smooth_decomp
+
         from cupy import _default_memory_pool, asarray
         from cupy.fft import fft2, ifft2
 
@@ -1658,6 +1663,9 @@ class Metadata(object):
             DataPre = self.stkread(
                 Position=pos, Channel=Channel, Zindex=ZsToLoad, frame=fr, register=False
             )
+            
+            DataPre,_ = periodic_smooth_decomp(DataPre)
+
             DataPre = DataPre - np.mean(DataPre, axis=(1, 2), keepdims=True)
 
             DataPost = DataPre[1:, :, :].transpose((1, 2, 0))
@@ -1988,6 +1996,7 @@ class Metadata(object):
                     verbose=False,
                     register=False,
                 )
+                stk = np.arcsinh(stk/0.001)
                 stksmp = stk.flatten()  # sample_stack(stk,int(stk.size/100))
                 stksmp = stksmp[stksmp != 0]
                 viewer.add_image(

@@ -10,7 +10,7 @@ def export_napari_to_movie(
     fps=8,
     bitrate=1800,
     timestamp_position=[10, 20],
-    timestamp_color="white",
+    timestamp_color="white",**extra_args
 ):
     """
     Export current napari canvas to a movie.
@@ -53,5 +53,5 @@ def export_napari_to_movie(
 
     writer = animation.FFMpegWriter(fps=fps, bitrate=bitrate, codec="h264")
 
-    ani.save(fname, writer=writer)
+    ani.save(fname, writer=writer,**extra_args)
     plt.close(fig)
