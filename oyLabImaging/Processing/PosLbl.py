@@ -668,10 +668,10 @@ class PosLbl(object):
         while notdoneflag:
 
             trackstarts = np.array(
-                [np.where(~np.isnan(r.astype("float")))[0][0] for r in trackbits]
+                [np.where(~np.isnan(r.astype("float")))[0][0] for r in trackbits],dtype=object
             )
             trackends = np.array(
-                [np.where(~np.isnan(r.astype("float")))[0][-1] for r in trackbits]
+                [np.where(~np.isnan(r.astype("float")))[0][-1] for r in trackbits],dtype=object
             )
 
             dtmat = np.expand_dims(trackstarts, 1) - np.expand_dims(trackends, 0)
