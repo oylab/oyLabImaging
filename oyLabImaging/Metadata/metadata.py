@@ -1871,6 +1871,132 @@ class Metadata(object):
             print("calculated drift correction for position " + str(pos))
         self.pickle()
 
+    def CalculateDriftCorrectionCPUChunks(
+        self, Position=None, frames=None, ZsToLoad=[0], Channel=None, chunks=10
+    ):
+        """
+        Calculate image registration (jitter correction) parameters and add to metadata.
+
+        Parameters
+        ----------
+        Position : str or list of strings
+        ZsToLoad : list of int - which Zs to load to calculate registration. If list, registration will be the average of the different zstack layers
+        Channel : str, channel name to use for registration
+
+        """
+        from numpy import asarray
+        from numpy.fft import fft2, ifft2
+
+        # from scipy.signal import fftconvolve
+        if Position is None:
+            Position = self.posnames
+        elif not isinstance(Position, (np.ndarray, list)):
+            Position = [Position]
+
+        if frames is None:
+            frames = self.frames
+        elif not isinstance(frames, (np.ndarray, list)):
+            Position = [frames]
+
+        if Channel is None:
+            Channel = self.channels[0]
+        assert Channel in self.channels, "%s isn't a channel, try %s" % (
+            Channel,
+            ", ".join(list(self.channels)),
+        )
+        print("using channel " + Channel + " for drift correction")
+
+        def chunker_with_overlap(seq, size):
+            return (
+                seq[np.max((0, pos - 1)) : pos + size]
+                for pos in range(0, len(seq), size)
+            )
+
+        for pos in Position:
+            ds = np.empty((0, 2), float)
+            print("\ncalculating drift correction for position " + str(pos) + " on CPU")
+            for fr in chunker_with_overlap(frames, chunks):
+                DataPre = self.stkread(
+                    Position=pos,
+                    Channel=Channel,
+                    Zindex=ZsToLoad,
+                    frame=fr,
+                    register=False,
+                    verbose=False,
+                )
+                assert (
+                    DataPre.ndim == 3
+                ), "Must have more than 1 timeframe for drift correction"
+                DataPre = DataPre - np.mean(DataPre, axis=(1, 2), keepdims=True)
+
+                DataPost = DataPre[1:, :, :].transpose((1, 2, 0))
+                DataPre = DataPre[:-1, :, :].transpose((1, 2, 0))
+                # this is in prep for # Zs>1
+                DataPre = np.reshape(
+                    DataPre,
+                    (DataPre.shape[0], DataPre.shape[1], len(ZsToLoad), len(fr) - 1),
+                )
+                DataPost = np.reshape(
+                    DataPost,
+                    (DataPost.shape[0], DataPost.shape[1], len(ZsToLoad), len(fr) - 1),
+                )
+
+                # calculate cross correlation
+                DataPost = np.rot90(DataPost, axes=(0, 1), k=2)
+
+                DataPre = asarray(DataPre)
+                DataPost = asarray(DataPost)
+
+                # So because of dumb licensing issues, fftconvolve can't use fftw but the slower fftpack. Python is wonderful. So we'll do it all by hand like neanderthals
+                img_fft_1 = fft2(DataPre, axes=(0, 1))
+                del DataPre
+                img_fft_2 = fft2(DataPost, axes=(0, 1))
+                del DataPost
+                SF = img_fft_1 * img_fft_2
+                del img_fft_1
+                del img_fft_2
+                imXcorr = np.abs(np.fft.ifftshift(ifft2(SF, axes=(0, 1)), axes=(0, 1)))
+                del SF
+                # if more than 1 slice is calculated, look for mean shift
+                imXcorrMeanZ = np.mean(imXcorr, axis=2)
+                del imXcorr
+                c = []
+                for i in range(imXcorrMeanZ.shape[-1]):
+                    c.append(np.squeeze(imXcorrMeanZ[:, :, i]).argmax())
+
+
+                d = (
+                    np.transpose(
+                        np.unravel_index(c, np.squeeze(imXcorrMeanZ[:, :, 0]).shape)
+                    )
+                    - np.array(np.squeeze(imXcorrMeanZ[:, :, 0]).shape) / 2
+                    + 1
+                )  # python indexing starts at 0
+                del imXcorrMeanZ
+                del c
+                ds = np.concatenate((ds, d))
+            D = np.insert(np.cumsum(ds, axis=0), 0, [0, 0], axis=0)
+
+            if "driftTform" not in self.image_table.columns:
+                self.image_table["driftTform"] = None
+
+            for frmind, frame in enumerate(frames):
+                inds = self.unique(Attr="index", Position=pos, frame=frame)
+                for ind in inds:
+                    self.image_table.at[ind, "driftTform"] = [
+                        1,
+                        0,
+                        0,
+                        0,
+                        1,
+                        0,
+                        np.ceil(D[frmind, 0]),
+                        np.ceil(D[frmind, 1]),
+                        1,
+                    ]
+            print("calculated drift correction for position " + str(pos))
+        self.pickle()
+
     def try_segmentation(MD):
         from typing import List
         import matplotlib
