@@ -1006,10 +1006,11 @@ class Metadata(object):
     #            else:
     #                t.save(img_as_uint(images))
     #        return fname
-
-    def viewer(MD):
+    
+    def viewer(MD, annotate=None):
         """
         Napari viewer app for metadata. Lets you easily scroll through the dataset. Takes no parameters, returns no prisoners.
+        annotate parameter allows you to annotate specific cells/things. Accepts a string. Adds position of thing to metadata.
         """
         from typing import List
         import matplotlib
@@ -1020,48 +1021,42 @@ class Metadata(object):
         from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
         from natsort import natsorted
         from scipy import stats
-
         from oyLabImaging.Processing.imvisutils import get_or_create_viewer
 
-        cmaps = ["cyan", "magenta", "yellow", "red", "green", "blue"]
-        viewer = get_or_create_viewer()
+        cmaps = ["cyan", "magenta", "yellow", "red", "green", "blue"]  # List of colormaps
+        viewer = get_or_create_viewer()  # Get or create a Napari viewer instance
 
-        # attr_list = ['area', 'convex_area','centroid','perimeter','eccentricity','solidity','inertia_tensor_eigvals', 'orientation'] #todo: derive list from F regioprops
+        Position = list(natsorted(MD.posnames))[0]  # Get the first position name
 
-        Position = list(natsorted(MD.posnames))[0]
-
+        # Define the main widget with magicgui
         @magicgui(
             auto_call=True,
             Acquisition={"widget_type": "Select", "choices": list(natsorted(MD.acq))},
-            Position={
-                "choices": list(MD.unique("Position", acq=list(natsorted(MD.acq))[0]))
-            },
+            Position={"choices": list(MD.unique("Position", acq=list(natsorted(MD.acq))[0]))},
             Channels={"widget_type": "Select", "choices": list(MD.channels)},
             Z_Index={"choices": list(MD.Zindexes)},
         )
-        def widget(
-            Acquisition: List[str],
-            Position: List[str],
-            Channels: List[str],
-            Z_Index: List,
-        ):
+        def widget(Acquisition: List[str], Position: List[str], Channels: List[str], Z_Index: List):
             ch_choices = widget.Channels.choices
+        
+        widget.Acquisition.value = list(natsorted(MD.acq))[0]
 
+        # Connect position change to clearing viewer layers
         @widget.Position.changed.connect
         def _on_pos_change():
             viewer.layers.clear()
 
+        # Connect acquisition change to updating position and channel choices and clearing viewer layers
         @widget.Acquisition.changed.connect
         def _on_acq_change():
             viewer.layers.clear()
-            widget.Position.choices = MD.unique(
-                "Position", acq=widget.Acquisition.value
-            )
+            widget.Position.choices = MD.unique("Position", acq=widget.Acquisition.value)
             widget.Channels.choices = MD.unique("Channel", acq=widget.Acquisition.value)
 
-        movie_btn = PushButton(text="Movie")
+        movie_btn = PushButton(text="Movie")  # Button to generate movie
         widget.insert(1, movie_btn)
 
+        # Connect movie button click to generating and displaying the movie
         @movie_btn.clicked.connect
         def _on_movie_clicked():
             channels = widget.Channels.get_value()
@@ -1069,15 +1064,13 @@ class Metadata(object):
             ch_choices = widget.Channels.choices
             pixsize = MD.unique("PixelSize")[0]
 
-            cmaps = ["red", "green", "blue", "cyan", "magenta", "yellow"]
+            cmaps = ["red", "green", "blue", "cyan", "magenta", "yellow"]  # Update colormaps
 
             if len(channels) == 1:
-                cmaps = ["gray"]
+                cmaps = ["gray"]  # Use gray colormap if there's only one channel
 
             for ind, ch in enumerate(channels):
-                # imgs = self._outer.img(ch, frame=list(self.T),verbose=False)
-                # stk = np.array([np.pad(im1, boxsize)[crp1[0]+boxsize:crp1[2]+boxsize, crp1[1]+boxsize:crp1[3]+boxsize] for im1, crp1 in zip(imgs, crp)])
-
+                # Read the stack of images for the given parameters
                 stk = MD.stkread(
                     Position=widget.Position.value,
                     Channel=ch,
@@ -1087,50 +1080,89 @@ class Metadata(object):
                     register=w2.value,
                     Zindex=widget.Z_Index.value,
                 )
-                stksmp = stk.flatten()  # sample_stack(stk,int(stk.size/100))
+                
+                stksmp = stk.flatten()  # Flatten the stack for contrast adjustment
                 stksmp = stksmp[stksmp != 0]
+                # Add the image stack to the viewer with appropriate settings
                 viewer.add_image(
                     stk,
                     blending="additive",
-                    contrast_limits=[
-                        np.percentile(stksmp, 1),
-                        np.percentile(stksmp, 99.9),
-                    ],
+                    contrast_limits=[np.percentile(stksmp, 1), np.percentile(stksmp, 99.9)],
                     name=ch,
                     colormap=cmaps[ind % len(cmaps)],
                     scale=[pixsize, pixsize],
                 )
+            # adding annotation capability
+            if annotate:
+                annots = []
+                if "annotations_" + annotate not in MD().columns:
+                    MD()["annotations_" + annotate] = None
+                else:
+                    finds = MD.stkread(
+                        Position=widget.Position.value,
+                        Channel=MD.Channel[0],
+                        frame=list(MD.frame),
+                        acq=widget.Acquisition.value,
+                        verbose=False,
+                        finds_only=True,
+                        Zindex=widget.Z_Index.value,
+                    )
+                    [
+                        annots.append((np.pad(a[0], ((0, 0), (1, 0)), constant_values=f)))
+                        for f,a in zip(MD().loc[finds[widget.Position.value]]['frame'],MD().loc[finds[widget.Position.value]]["annotations_" + annotate])
+                        if np.any(a)
+                    ]
+                if len(annots):
+                    points_layer = viewer.add_points(name='Annotations '+annotate, data=np.concatenate(annots), ndim=3, scale=[pixsize, pixsize], face_color='orange', size=100)
+                else:
+                    points_layer = viewer.add_points(name='Annotations '+annotate, ndim=3, scale=[pixsize, pixsize], face_color='orange', size=100)    
 
-        btn = PushButton(text="Next Position")
+                @points_layer.events.data.connect
+                def on_annotation_change(event):  
+                    '''update metadata whenever annotations change'''
+                    current_slice = viewer.dims.current_step[0]
+                    
+                    finds = MD.stkread(
+                    Position=widget.Position.value,
+                    frame=current_slice,
+                    acq=widget.Acquisition.value,
+                    verbose=False,
+                    finds_only=True)
+                    
+                    for l in finds[widget.Position.value]:
+                        J = points_layer.data[:,0] == current_slice
+                        MD().loc[l, "annotations_" + annotate]  = np.round([points_layer.data[J,1:]])
+
+                
+        btn = PushButton(text="Next Position")  # Button to go to the next position
         widget.append(btn)
 
+        # Connect next position button click to updating the position
         @btn.clicked.connect
         def _on_next_clicked():
             choices = widget.Position.choices
             current_index = choices.index(widget.Position.value)
-            widget.Position.value = choices[(current_index + 1) % (len(choices))]
+            widget.Position.value = choices[(current_index + 1) % len(choices)]
 
+        # Add drift correction checkbox if driftTform column is present
         if "driftTform" in MD().columns:
             w2 = Checkbox(value=False, text="Drift Correction?")
             widget.append(w2)
         else:
-
             class Object(object):
                 pass
-
             w2 = Object()
             w2.value = False
 
-        container = Container(layout="horizontal")
+        container = Container(layout="horizontal")  # Create a container for the widget
+        layout = container.native.layout()  # Get the native layout for the container
 
-        layout = container.native.layout()
+        layout.addWidget(widget.native)  # Add the widget to the container
 
-        layout.addWidget(widget.native)  # adding native, because we're in Qt
+        viewer.window.add_dock_widget(container, name="Metadata Viewer")  # Add the container as a dock widget in the viewer
 
-        viewer.window.add_dock_widget(container, name="Metadata Viewer")
-
-        matplotlib.use("Qt5Agg")
-        return viewer
+        matplotlib.use("Qt5Agg")  # Use Qt5Agg backend for Matplotlib
+        return viewer  # Return the viewer instance
 
     def _read_local(
         self, ind_dict, ffield=False, register=False, verbose=True, crop=None, **kwargs

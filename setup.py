@@ -16,7 +16,7 @@ CU111_EXTRAS = [
 
 setup(
     name="oyLabImaging",
-    version="0.2.6",
+    version="0.2.7",
     description="data processing code for the Oyler-Yaniv lab @HMS",
     author="Alon Oyler-Yaniv",
     url="https://github.com/alonyan/oyLabImaging",
@@ -34,7 +34,7 @@ setup(
         "ipywidgets==7.6.5",
         "lap05",
         "matplotlib>=3.3.4",
-        "napari[pyqt5]==0.4.14",
+        "napari[pyqt5]==0.4.19",
         "pydantic<2", # pinned only because of napari
         "magicgui",
         "nd2>=0.8.0",
