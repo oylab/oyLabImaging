@@ -803,11 +803,9 @@ class PosLbl(object):
         while notdoneflag:
 
             trackstarts = np.array(
-                [np.where(~np.isnan(r.astype("float")))[0][0] for r in trackbits]
-            )
+                [np.where(~np.isnan(r.astype("float")))[0][0] for r in trackbits],dtype=object)
             trackends = np.array(
-                [np.where(~np.isnan(r.astype("float")))[0] for r in trackbits]
-            )
+                [np.where(~np.isnan(r.astype("float")))[0] for r in trackbits],dtype=object)
 
             possiblelinks = np.empty((0, 2), int)
             for J in np.unique(trackstarts):
@@ -883,7 +881,7 @@ class PosLbl(object):
         self.relatives = relatives
         self.trackinds = trackbits
 
-    def img(self, Channel=None, Zindex=[0], **kwargs):
+    def img(self, Channel=None, Zindex=None, **kwargs):
         """
         Parameters
         ------
@@ -900,9 +898,13 @@ class PosLbl(object):
         if Channel is None:
             Channel = self.channels[0]
             print("loading " + Channel)
+        
 
         pth = self.pth
         MD = Metadata(pth, verbose=False)
+        if Zindex is None:
+            Zindex = MD.Zindexes[0]
+
         return MD.stkread(
             Channel=Channel,
             Position=self.posname,
