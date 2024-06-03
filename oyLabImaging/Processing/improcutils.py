@@ -347,6 +347,49 @@ def DownScale(imgin):  # use 2x downscaling for scrol speed
     return imgout
 
 
+def background_subtraction(I, 
+                           msk=False, 
+                           alpha=10,
+                           samplingdensity=10):
+    
+    from tps import ThinPlateSpline
+    import cv2
+    
+    if I.ndim==2:  
+        Imsk = np.copy(I)
+        if np.any(msk):
+            Imsk[msk] = np.mean(I[~msk])
+
+        sz = I.shape
+
+        r = np.floor(np.linspace(0, sz[0]-1, samplingdensity)).astype(int)
+        c = np.floor(np.linspace(0, sz[1]-1, samplingdensity)).astype(int)
+
+        c, r = np.meshgrid(c, r)
+        bcksml = Imsk[r, c]
+        
+        tps = ThinPlateSpline(alpha=alpha)  # Regularization
+
+        source_xy = np.stack([c, r], axis=2).reshape(-1, 2)
+        tps.fit(source_xy, bcksml.flatten())
+
+        bcksml = tps.transform(source_xy).reshape(bcksml.shape)
+
+        bck = cv2.resize(bcksml, sz[::-1], interpolation=cv2.INTER_LINEAR)
+
+        if I.dtype == np.float32:
+            bck = bck.astype(np.float32)
+
+        I = I - bck
+        I[I < 0] = 0
+        return I
+    elif I.ndim==3: 
+        return np.stack([background_subtraction(s) for s in I]) #TODO add masking in 3D!
+    else:
+        print('what is this thing?')
+
+
+
 class segmentation(object):
     """
     class for all segmentation functions

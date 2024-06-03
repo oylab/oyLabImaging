@@ -8,7 +8,7 @@ from skimage import measure
 
 from oyLabImaging import Metadata
 from oyLabImaging.Processing.generalutils import regionprops_to_df
-from oyLabImaging.Processing.improcutils import Zernike, segmentation
+from oyLabImaging.Processing.improcutils import Zernike, segmentation, background_subtraction
 from packaging import version
 import skimage
 import cv2
@@ -94,6 +94,7 @@ class FrameLbl(object):
         cytoplasm=False,
         CytoChannel=None,
         zernike=False,
+        bg_subtract=False,
         segment_type="watershed",
         **kwargs
     ):
@@ -204,7 +205,6 @@ class FrameLbl(object):
         except:
             imgCyto = ""
 
-        # imgNuc = np.max([Data[ch] for ch in NucChannel], axis=0)
         imgNuc = np.sum(
             [(Data[ch] - np.mean(Data[ch])) / np.std(Data[ch]) for ch in NucChannel],
             axis=0,
@@ -212,6 +212,10 @@ class FrameLbl(object):
 
         L = self._seg_fun(img=imgNuc, imgCyto=imgCyto, **kwargs)
 
+        if bg_subtract is True:
+            for ch in MD.channels:
+                Data[ch] = background_subtraction(Data[ch], msk=L>0)
+        
         props = measure.regionprops(L, intensity_image=Data[NucChannel[0]])
 
         if skimg_version_old:

@@ -52,6 +52,7 @@ setup(
         "jupyter>=1.0.0",
         "tensorflow-cpu==2.10.0 ; platform_machine!='arm64'",
         "stardist==0.8.3",
+        "thin-plate-spline",
     ],
     extras_require={
         "cuda": CU111_EXTRAS,
