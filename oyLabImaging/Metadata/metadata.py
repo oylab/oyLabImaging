@@ -425,9 +425,15 @@ class Metadata(object):
                     continue
                 framedata = {
                     "acq": fname,
-                    "Position": event.get("Position Name") or str(event.get("P Index", "")) or 'Pos0',
+                    "Position": event.get("Position Name")
+                    or str(event.get("P Index", ""))
+                    or "Pos0",
                     "frame": event.get("T Index") or 0,
-                    "XY": [event.get("X Coord [µm]"), event.get("Y Coord [µm]")] if event.get("X Coord [µm]") else [0,0],
+                    "XY": (
+                        [event.get("X Coord [µm]"), event.get("Y Coord [µm]")]
+                        if event.get("X Coord [µm]")
+                        else [0, 0]
+                    ),
                     "Z": event.get("Z Coord [µm]"),
                     "Zindex": event.get("Z Index") or 0,
                     "Exposure": event.get("Exposure Time [ms]"),
@@ -794,8 +800,8 @@ class Metadata(object):
         image_table["XY"] = [[0, 0]] * len(fnames)
         image_table["Z"] = 0
         image_table["Zindex"] = 0
-        image_table["Channel"] = 'Ch_0'
-        image_table["Position"] = 'Pos0'
+        image_table["Channel"] = "Ch_0"
+        image_table["Position"] = "Pos0"
         image_table["frame"] = 0
         image_table["PixelSize"] = 1
 
@@ -881,7 +887,7 @@ class Metadata(object):
                 MD.base_pth, MD._md_name = path.split(pth)
 
             MD.image_table["root_pth"] = MD.image_table["filename"].copy()
-            
+
             MD.image_table["root_pth"] = [
                 join(MD.base_pth, f) for f in MD.image_table["filename"]
             ]
@@ -1006,7 +1012,7 @@ class Metadata(object):
     #            else:
     #                t.save(img_as_uint(images))
     #        return fname
-    
+
     def viewer(MD, annotate=None):
         """
         Napari viewer app for metadata. Lets you easily scroll through the dataset. Takes no parameters, returns no prisoners.
@@ -1023,7 +1029,14 @@ class Metadata(object):
         from scipy import stats
         from oyLabImaging.Processing.imvisutils import get_or_create_viewer
 
-        cmaps = ["cyan", "magenta", "yellow", "red", "green", "blue"]  # List of colormaps
+        cmaps = [
+            "cyan",
+            "magenta",
+            "yellow",
+            "red",
+            "green",
+            "blue",
+        ]  # List of colormaps
         viewer = get_or_create_viewer()  # Get or create a Napari viewer instance
 
         Position = list(natsorted(MD.posnames))[0]  # Get the first position name
@@ -1032,13 +1045,20 @@ class Metadata(object):
         @magicgui(
             auto_call=True,
             Acquisition={"widget_type": "Select", "choices": list(natsorted(MD.acq))},
-            Position={"choices": list(MD.unique("Position", acq=list(natsorted(MD.acq))[0]))},
+            Position={
+                "choices": list(MD.unique("Position", acq=list(natsorted(MD.acq))[0]))
+            },
             Channels={"widget_type": "Select", "choices": list(MD.channels)},
             Z_Index={"choices": list(MD.Zindexes)},
         )
-        def widget(Acquisition: List[str], Position: List[str], Channels: List[str], Z_Index: List):
+        def widget(
+            Acquisition: List[str],
+            Position: List[str],
+            Channels: List[str],
+            Z_Index: List,
+        ):
             ch_choices = widget.Channels.choices
-        
+
         widget.Acquisition.value = list(natsorted(MD.acq))[0]
 
         # Connect position change to clearing viewer layers
@@ -1050,7 +1070,9 @@ class Metadata(object):
         @widget.Acquisition.changed.connect
         def _on_acq_change():
             viewer.layers.clear()
-            widget.Position.choices = MD.unique("Position", acq=widget.Acquisition.value)
+            widget.Position.choices = MD.unique(
+                "Position", acq=widget.Acquisition.value
+            )
             widget.Channels.choices = MD.unique("Channel", acq=widget.Acquisition.value)
 
         movie_btn = PushButton(text="Movie")  # Button to generate movie
@@ -1064,7 +1086,14 @@ class Metadata(object):
             ch_choices = widget.Channels.choices
             pixsize = MD.unique("PixelSize")[0]
 
-            cmaps = ["red", "green", "blue", "cyan", "magenta", "yellow"]  # Update colormaps
+            cmaps = [
+                "red",
+                "green",
+                "blue",
+                "cyan",
+                "magenta",
+                "yellow",
+            ]  # Update colormaps
 
             if len(channels) == 1:
                 cmaps = ["gray"]  # Use gray colormap if there's only one channel
@@ -1080,14 +1109,17 @@ class Metadata(object):
                     register=w2.value,
                     Zindex=widget.Z_Index.value,
                 )
-                
+
                 stksmp = stk.flatten()  # Flatten the stack for contrast adjustment
                 stksmp = stksmp[stksmp != 0]
                 # Add the image stack to the viewer with appropriate settings
                 viewer.add_image(
                     stk,
                     blending="additive",
-                    contrast_limits=[np.percentile(stksmp, 1), np.percentile(stksmp, 99.9)],
+                    contrast_limits=[
+                        np.percentile(stksmp, 1),
+                        np.percentile(stksmp, 99.9),
+                    ],
                     name=ch,
                     colormap=cmaps[ind % len(cmaps)],
                     scale=[pixsize, pixsize],
@@ -1108,32 +1140,56 @@ class Metadata(object):
                         Zindex=widget.Z_Index.value,
                     )
                     [
-                        annots.append((np.pad(a[0], ((0, 0), (1, 0)), constant_values=f)))
-                        for f,a in zip(MD().loc[finds[widget.Position.value]]['frame'],MD().loc[finds[widget.Position.value]]["annotations_" + annotate])
+                        annots.append(
+                            (np.pad(a[0], ((0, 0), (1, 0)), constant_values=f))
+                        )
+                        for f, a in zip(
+                            MD().loc[finds[widget.Position.value]]["frame"],
+                            MD().loc[finds[widget.Position.value]][
+                                "annotations_" + annotate
+                            ],
+                        )
                         if np.any(a)
                     ]
                 if len(annots):
-                    points_layer = viewer.add_points(name='Annotations '+annotate, data=np.concatenate(annots), ndim=3, scale=[pixsize, pixsize], face_color='orange', size=100)
+                    points_layer = viewer.add_points(
+                        name="Annotations " + annotate,
+                        data=np.concatenate(annots),
+                        ndim=3,
+                        scale=[pixsize, pixsize],
+                        face_color="orange",
+                        size=10,
+                        out_of_slice_display=True,
+                    )
                 else:
-                    points_layer = viewer.add_points(name='Annotations '+annotate, ndim=3, scale=[pixsize, pixsize], face_color='orange', size=100)    
+                    points_layer = viewer.add_points(
+                        name="Annotations " + annotate,
+                        ndim=3,
+                        scale=[pixsize, pixsize],
+                        face_color="orange",
+                        size=10,
+                        out_of_slice_display=True,
+                    )
 
                 @points_layer.events.data.connect
-                def on_annotation_change(event):  
-                    '''update metadata whenever annotations change'''
+                def on_annotation_change(event):
+                    """update metadata whenever annotations change"""
                     current_slice = viewer.dims.current_step[0]
-                    
-                    finds = MD.stkread(
-                    Position=widget.Position.value,
-                    frame=current_slice,
-                    acq=widget.Acquisition.value,
-                    verbose=False,
-                    finds_only=True)
-                    
-                    for l in finds[widget.Position.value]:
-                        J = points_layer.data[:,0] == current_slice
-                        MD().loc[l, "annotations_" + annotate]  = np.round([points_layer.data[J,1:]])
 
-                
+                    finds = MD.stkread(
+                        Position=widget.Position.value,
+                        frame=current_slice,
+                        acq=widget.Acquisition.value,
+                        verbose=False,
+                        finds_only=True,
+                    )
+
+                    for l in finds[widget.Position.value]:
+                        J = points_layer.data[:, 0] == current_slice
+                        MD().loc[l, "annotations_" + annotate] = np.round(
+                            [points_layer.data[J, 1:]]
+                        )
+
         btn = PushButton(text="Next Position")  # Button to go to the next position
         widget.append(btn)
 
@@ -1149,8 +1205,10 @@ class Metadata(object):
             w2 = Checkbox(value=False, text="Drift Correction?")
             widget.append(w2)
         else:
+
             class Object(object):
                 pass
+
             w2 = Object()
             w2.value = False
 
@@ -1159,7 +1217,9 @@ class Metadata(object):
 
         layout.addWidget(widget.native)  # Add the widget to the container
 
-        viewer.window.add_dock_widget(container, name="Metadata Viewer")  # Add the container as a dock widget in the viewer
+        viewer.window.add_dock_widget(
+            container, name="Metadata Viewer"
+        )  # Add the container as a dock widget in the viewer
 
         matplotlib.use("Qt5Agg")  # Use Qt5Agg backend for Matplotlib
         return viewer  # Return the viewer instance
@@ -1526,7 +1586,12 @@ class Metadata(object):
             )
 
     def CalculateDriftCorrectionCPU(
-        self, Position=None, frames=None, ZsToLoad=[0], Channel=None, threads=None,
+        self,
+        Position=None,
+        frames=None,
+        ZsToLoad=[0],
+        Channel=None,
+        threads=None,
     ):
         """
         Calculate image registration (jitter correction) parameters and add to metadata.
@@ -1576,7 +1641,7 @@ class Metadata(object):
             assert (
                 DataPre.ndim == 3
             ), "Must have more than 1 timeframe for drift correction"
-            DataPre,_ = periodic_smooth_decomp(DataPre)
+            DataPre, _ = periodic_smooth_decomp(DataPre)
             print("\ncalculating drift correction for position " + str(pos) + " on CPU")
             DataPre = DataPre - np.mean(DataPre, axis=(1, 2), keepdims=True)
 
@@ -1695,8 +1760,8 @@ class Metadata(object):
             DataPre = self.stkread(
                 Position=pos, Channel=Channel, Zindex=ZsToLoad, frame=fr, register=False
             )
-            
-            DataPre,_ = periodic_smooth_decomp(DataPre)
+
+            DataPre, _ = periodic_smooth_decomp(DataPre)
 
             DataPre = DataPre - np.mean(DataPre, axis=(1, 2), keepdims=True)
 
@@ -1996,7 +2061,6 @@ class Metadata(object):
                 for i in range(imXcorrMeanZ.shape[-1]):
                     c.append(np.squeeze(imXcorrMeanZ[:, :, i]).argmax())
 
-
                 d = (
                     np.transpose(
                         np.unravel_index(c, np.squeeze(imXcorrMeanZ[:, :, 0]).shape)
@@ -2146,7 +2210,7 @@ class Metadata(object):
 
             for ind, ch in enumerate(channels):
                 stk = MD.stkread(
-                    acq = widget.Acquisition.value,
+                    acq=widget.Acquisition.value,
                     Position=widget.Position.value,
                     frame=widget.Frame.value,
                     Zindex=widget.Z_Index.value,
@@ -2154,7 +2218,7 @@ class Metadata(object):
                     verbose=False,
                     register=False,
                 )
-                stk = np.arcsinh(stk/0.001)
+                stk = np.arcsinh(stk / 0.001)
                 stksmp = stk.flatten()  # sample_stack(stk,int(stk.size/100))
                 stksmp = stksmp[stksmp != 0]
                 viewer.add_image(
@@ -2201,7 +2265,7 @@ class Metadata(object):
             for ch in NucChannel + CytoChannel:
                 Data[ch] = np.squeeze(
                     MD.stkread(
-                        acq = acq,
+                        acq=acq,
                         Channel=ch,
                         frame=frame,
                         Position=Pos,
@@ -2256,3 +2320,81 @@ class Metadata(object):
         movie_btn.visible = False
         _on_seg_func_change()
         return widget
+
+    def export_annotations_to_images(
+        MD,
+        Channel="DIC N2",
+        boxsize=64,
+        predeathzoomfolder="PreDeathZoom_annot",
+        override=False,
+    ):
+        """
+        Export zoomed in images of annotated cells.
+
+        Parameters
+        ----------
+        boxsize : integer
+        predeathzoomfolder : str
+        override : bool
+        """
+        from PIL import Image
+        from skimage import img_as_uint
+        from tifffile import TiffWriter
+
+        foldername = os.path.join(MD.base_pth, predeathzoomfolder + os.path.sep)
+        if not os.path.exists(foldername):
+            os.makedirs(foldername)
+
+        annot_colums = list(MD().columns[["annotations" in c for c in MD().columns]])
+
+        classnames = [a.replace("annotations_", "") for a in annot_colums]
+        for c, a in zip(classnames, annot_colums):
+            classfoldername = os.path.join(foldername, c + os.path.sep)
+            if not os.path.exists(classfoldername):
+                os.makedirs(classfoldername)
+            else:
+                if override == False:
+                    raise Exception(
+                        "Folder already exists. Delete, change name, or set override=True."
+                    )
+                else:
+                    import shutil
+
+                    shutil.rmtree(classfoldername)
+                    os.makedirs(classfoldername)
+
+            unique_pos_frm = list(
+                MD()[MD()[a].notna()][["Position", "frame"]]
+                .drop_duplicates()
+                .to_records()
+            )
+            for r in unique_pos_frm:
+                stk = MD.stkread(Pos=r[1], frame=r[2], ch=Channel, verbose=False)
+                im = Image.fromarray(stk)
+                ind = MD.stkread(
+                    Pos=r[1], frame=r[2], ch=Channel, verbose=False, finds_only=True
+                )[r[1]][0]
+                cents = np.fliplr(MD().at[ind, a][0])
+
+                crp = list(
+                    map(
+                        tuple,
+                        np.ceil(
+                            np.concatenate((cents - boxsize, cents + boxsize), axis=1)
+                        ).astype(int),
+                    )
+                )
+                for i, crp1 in enumerate(crp):
+                    filename = os.path.join(
+                        classfoldername,
+                        "pos_"
+                        + r[1]
+                        + "_frame_"
+                        + str(r[2])
+                        + "_cell_"
+                        + str(i)
+                        + ".tif",
+                    )
+
+                    with TiffWriter(filename, bigtiff=False, imagej=True) as t:
+                        t.write(img_as_uint(np.array(im.crop(crp1))))
