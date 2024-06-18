@@ -384,7 +384,7 @@ def background_subtraction(I,
         I[I < 0] = 0
         return I
     elif I.ndim==3: 
-        return np.stack([background_subtraction(s) for s in I]) #TODO add masking in 3D!
+        return np.stack([background_subtraction(s) for s in I])
     else:
         print('what is this thing?')
 
