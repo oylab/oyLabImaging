@@ -118,7 +118,7 @@ class PosLbl(object):
         self.posname = Pos
 
         self.channels = MD.unique("Channel", Position=Pos)
-        
+
         if acq is None:
             self.acq = MD.unique("acq", Position=Pos)
         else:
@@ -135,6 +135,8 @@ class PosLbl(object):
         self._tracked = False
         self._splitflag = False
         # self.PixelSize = MD.unique('PixelSize')[0]
+
+        threads = np.min((threads, len(self.frames)))
 
         # Create all framelabels for the different TPs. This will segment and measure stuff.
         if calculate:
@@ -157,8 +159,7 @@ class PosLbl(object):
                         total=len(self.frames),
                     )
                 )
-                # ppool.close()
-                # ppool.join()
+
             self.framelabels = np.array(frames)
             self._calculate_pointmat()
             print("\nFinished loading and segmenting position " + str(Pos))
@@ -170,7 +171,7 @@ class PosLbl(object):
 
         print("\nAvailable channels are : " + ", ".join(list(self.channels)) + ".")
 
-    #np.warnings.filterwarnings("ignore", category=np.VisibleDeprecationWarning)
+    # np.warnings.filterwarnings("ignore", category=np.VisibleDeprecationWarning)
 
     @property
     def PixelSize(self):
@@ -186,50 +187,62 @@ class PosLbl(object):
 
     @property
     def num(self):
-        return np.array([r.num for r in self.framelabels],dtype=object)
+        return np.array([r.num for r in self.framelabels], dtype=object)
 
     @property
     def centroid(self):
-        return np.array([r.centroid for r in self.framelabels],dtype=object)
+        return np.array([r.centroid for r in self.framelabels], dtype=object)
 
     @property
     def weighted_centroid(self):
-        return np.array([r.weighted_centroid for r in self.framelabels],dtype=object)
+        return np.array([r.weighted_centroid for r in self.framelabels], dtype=object)
 
     @property
     def area(self):
-        return np.array([r.area for r in self.framelabels],dtype=object)
+        return np.array([r.area for r in self.framelabels], dtype=object)
 
     @property
     def index(self):
-        return np.array([r.index for r in self.framelabels],dtype=object)
+        return np.array([r.index for r in self.framelabels], dtype=object)
 
     @property
     def centroid_um(self):
-        return np.array([r.centroid_um for r in self.framelabels],dtype=object)
+        return np.array([r.centroid_um for r in self.framelabels], dtype=object)
 
     @property
     def weighted_centroid_um(self):
-        return np.array([r.weighted_centroid_um for r in self.framelabels],dtype=object)
+        return np.array(
+            [r.weighted_centroid_um for r in self.framelabels], dtype=object
+        )
 
     @property
     def area_um2(self):
         return np.array([r.area_um2 for r in self.framelabels])
 
     def mean(self, ch, periring=False):
-        return np.array([r.mean(ch, periring=periring) for r in self.framelabels],dtype=object)
+        return np.array(
+            [r.mean(ch, periring=periring) for r in self.framelabels], dtype=object
+        )
 
     def median(self, ch, periring=False):
-        return np.array([r.median(ch, periring=periring) for r in self.framelabels],dtype=object)
+        return np.array(
+            [r.median(ch, periring=periring) for r in self.framelabels], dtype=object
+        )
 
     def minint(self, ch, periring=False):
-        return np.array([r.minint(ch, periring=periring) for r in self.framelabels],dtype=object)
+        return np.array(
+            [r.minint(ch, periring=periring) for r in self.framelabels], dtype=object
+        )
 
     def maxint(self, ch, periring=False):
-        return np.array([r.maxint(ch, periring=periring) for r in self.framelabels],dtype=object)
+        return np.array(
+            [r.maxint(ch, periring=periring) for r in self.framelabels], dtype=object
+        )
 
     def ninetyint(self, ch, periring=False):
-        return np.array([r.ninetyint(ch, periring=periring) for r in self.framelabels],dtype=object)
+        return np.array(
+            [r.ninetyint(ch, periring=periring) for r in self.framelabels], dtype=object
+        )
 
     @property
     def density(self):
@@ -386,7 +399,7 @@ class PosLbl(object):
                 if not isinstance(frame, (list, np.ndarray)):
                     frame = np.array([frame])
 
-            f_ind = [np.where(self.frame==f)[0][0] for f in frame]
+            f_ind = [np.where(self.frame == f)[0][0] for f in frame]
             cents = np.fliplr(self.centroid[f_ind])
             crp = list(
                 map(
@@ -396,7 +409,7 @@ class PosLbl(object):
                     ).astype(int),
                 )
             )
-            
+
             stk = self._outer.img(
                 Channel, frame=frame, crop=crp, verbose=False, groupby="Channel"
             )
@@ -495,12 +508,12 @@ class PosLbl(object):
 
         cents = self.centroid_um
         nums = self.num
-        if 'adaptive_radius' in kwargs:
-            adaptive=True
-            sr_factor = np.sqrt(self.num/self.num[0])
+        if "adaptive_radius" in kwargs:
+            adaptive = True
+            sr_factor = np.sqrt(self.num / self.num[0])
         else:
-            adaptive=False
-            
+            adaptive = False
+
         if params:
             Cp = [p[0] for p in params if p[0] in self.channels]
             Wp = [p[1] for p in params if p[0] in self.channels]
@@ -516,7 +529,7 @@ class PosLbl(object):
                 T = KDTree(cents[i + 1])
                 # We calculate points in centroid(n+1) that are less than distance_upper_bound from points in centroid(n)
                 if adaptive:
-                    sr = search_radius/np.sqrt(self.num[i]/self.num[0])
+                    sr = search_radius / np.sqrt(self.num[i] / self.num[0])
                 else:
                     sr = search_radius
 
@@ -576,7 +589,7 @@ class PosLbl(object):
         Helper function recursive function that gets an initial frame i and starting cell label
         l and returns all labels
         """
-        
+
         if i + 1 < len(self.frames):
             if self.num[i + 1] > 0:
                 if l > -1:
@@ -592,7 +605,6 @@ class PosLbl(object):
                 return l
             else:
                 pass
-        
 
     def _getAllContinuousTrackSegs(self, minseglength=4, **kwargs):
         """
@@ -638,7 +650,6 @@ class PosLbl(object):
         mintracklength=30,
         **kwargs
     ):
-
         """
         Helper function : close gaps between open stubs using JV lap.
 
@@ -668,10 +679,12 @@ class PosLbl(object):
         while notdoneflag:
 
             trackstarts = np.array(
-                [np.where(~np.isnan(r.astype("float")))[0][0] for r in trackbits],dtype=object
+                [np.where(~np.isnan(r.astype("float")))[0][0] for r in trackbits],
+                dtype=object,
             )
             trackends = np.array(
-                [np.where(~np.isnan(r.astype("float")))[0][-1] for r in trackbits],dtype=object
+                [np.where(~np.isnan(r.astype("float")))[0][-1] for r in trackbits],
+                dtype=object,
             )
 
             dtmat = np.expand_dims(trackstarts, 1) - np.expand_dims(trackends, 0)
@@ -771,7 +784,6 @@ class PosLbl(object):
         self.trackinds = trackbits[sortind]
 
     def _split(self, search_radius=20, params=[], maxAmpRatio=5, **kwargs):
-
         """
         Helper function : find splits using JV lap.
 
@@ -803,9 +815,13 @@ class PosLbl(object):
         while notdoneflag:
 
             trackstarts = np.array(
-                [np.where(~np.isnan(r.astype("float")))[0][0] for r in trackbits],dtype=object)
+                [np.where(~np.isnan(r.astype("float")))[0][0] for r in trackbits],
+                dtype=object,
+            )
             trackends = np.array(
-                [np.where(~np.isnan(r.astype("float")))[0] for r in trackbits],dtype=object)
+                [np.where(~np.isnan(r.astype("float")))[0] for r in trackbits],
+                dtype=object,
+            )
 
             possiblelinks = np.empty((0, 2), int)
             for J in np.unique(trackstarts):
@@ -898,7 +914,6 @@ class PosLbl(object):
         if Channel is None:
             Channel = self.channels[0]
             print("loading " + Channel)
-        
 
         pth = self.pth
         MD = Metadata(pth, verbose=False)
@@ -1110,15 +1125,15 @@ class PosLbl(object):
         }
 
         text = {
-            'string': '{ind:.2f}',
-            'size': 10,
-            'color': 'white',
-            'translation': np.array([0, 0]),
-            }
+            "string": "{ind:.2f}",
+            "size": 10,
+            "color": "white",
+            "translation": np.array([0, 0]),
+        }
         pointlayer = viewer.add_points(
             pointsmat,
             properties=point_props,
-            text = 'ind',#[str(a) for a in np.concatenate(self.index)],
+            text="ind",  # [str(a) for a in np.concatenate(self.index)],
             face_color=face_color,
             edge_width=0,
             face_colormap=colormap,
