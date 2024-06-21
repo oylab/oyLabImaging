@@ -136,12 +136,43 @@ class Metadata(object):
                 self._open_file = self._read_local
             elif load_type == "google_cloud":
                 raise NotImplementedError("google_cloud loading is not implemented.")
+            
         if np.all(self.unique("Position") == "Default"):
             self.image_table["Position"] = self.image_table["acq"]
+        self.test_duplicates()
 
     def __call__(self):
         return self.image_table
-
+    
+    def test_duplicates(self,cols = ['Position','frame','Channel','Zindex']):
+        duplicates = self.image_table.duplicated(subset=cols, keep=False)
+        if duplicates.any():
+            import logging
+            logging.warning("There are duplicates in " + str(cols) + ". Please fix before proceeding.")
+            return True
+        else:
+            print('No duplicates!')
+            return False
+    
+    def fix_duplicate_posnames(self):
+        with self.suppress_logging_warning():
+            if self.test_duplicates():
+                self()['Position'] = self()['Position'].astype(str) + "_" + pd.factorize(self()['acq'])[0].astype(str)
+    
+    def suppress_logging_warning(self):
+        """
+        Context manager to suppress logging warnings.
+        """
+        class SuppressLoggingWarning:
+            def __enter__(self):
+                self.previous_level = logging.getLogger().getEffectiveLevel()
+                logging.getLogger().setLevel(logging.ERROR)
+            
+            def __exit__(self, exc_type, exc_val, exc_tb):
+                logging.getLogger().setLevel(self.previous_level)
+        
+        return SuppressLoggingWarning()
+    
     # keeping some multiples for backwards compatability
     @property
     def posnames(self):
@@ -1004,7 +1035,7 @@ class Metadata(object):
                 else:
                     return stk
 
-    #    def save_images(self, images, fname = '/Users/robertf/Downloads/tmp_stk.tif'):
+    #    def save_images(self, images, fname = '/Users/usr/Downloads/tmp_stk.tif'):
     #        with TiffWriter(fname, bigtiff=False, imagej=True) as t:
     #            if len(images.shape)>2:
     #                for i in range(images.shape[2]):
