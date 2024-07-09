@@ -1140,17 +1140,17 @@ class Metadata(object):
                     register=w2.value,
                     Zindex=widget.Z_Index.value,
                 )
-
-                stksmp = stk.flatten()  # Flatten the stack for contrast adjustment
+                if stk.ndim == 2:
+                    stksmp = stk.flatten()  # Flatten the stack for contrast adjustment
+                elif stk.ndim == 3:
+                    stksmp = stk[int(stk.shape[0]/2)].flatten()
+                stksmp = np.random.choice(stksmp,5000)
                 stksmp = stksmp[stksmp != 0]
                 # Add the image stack to the viewer with appropriate settings
                 viewer.add_image(
                     stk,
                     blending="additive",
-                    contrast_limits=[
-                        np.percentile(stksmp, 1),
-                        np.percentile(stksmp, 99.9),
-                    ],
+                    contrast_limits=np.percentile(stksmp, [1,99.9]),
                     name=ch,
                     colormap=cmaps[ind % len(cmaps)],
                     scale=[pixsize, pixsize],
@@ -2251,14 +2251,13 @@ class Metadata(object):
                 )
                 stk = np.arcsinh(stk / 0.001)
                 stksmp = stk.flatten()  # sample_stack(stk,int(stk.size/100))
+                stksmp = np.random.choice(stksmp,5000)
                 stksmp = stksmp[stksmp != 0]
+
                 viewer.add_image(
                     stk,
                     blending="additive",
-                    contrast_limits=[
-                        np.percentile(stksmp, 1),
-                        np.percentile(stksmp, 99.9),
-                    ],
+                    contrast_limits=np.percentile(stksmp, [1,99.9]),
                     name=ch,
                     colormap=cmaps[ind % len(cmaps)],
                     scale=[pixsize, pixsize],
