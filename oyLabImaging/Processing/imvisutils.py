@@ -54,4 +54,4 @@ def export_napari_to_movie(
     writer = animation.FFMpegWriter(fps=fps, bitrate=bitrate, codec="h264")
 
     ani.save(fname, writer=writer,**extra_args)
-    plt.close(fig)
+    #plt.close(fig)
