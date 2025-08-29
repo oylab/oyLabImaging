@@ -97,7 +97,7 @@ class Metadata(object):
         self._md_name = self._determine_metadata_name(pth)
 
         # If it can't find a supported MD, it exits w/o doing anything
-        if self.type == None:
+        if self.type is None:
             print("Could not find supported metadata.")
             return
 
@@ -135,43 +135,52 @@ class Metadata(object):
                 self._open_file = self._read_local
             elif load_type == "google_cloud":
                 raise NotImplementedError("google_cloud loading is not implemented.")
-            
+
         if np.all(self.unique("Position") == "Default"):
             self.image_table["Position"] = self.image_table["acq"]
         self.test_duplicates()
 
     def __call__(self):
         return self.image_table
-    
-    def test_duplicates(self,cols = ['Position','frame','Channel','Zindex']):
+
+    def test_duplicates(self, cols=["Position", "frame", "Channel", "Zindex"]):
         duplicates = self.image_table.duplicated(subset=cols, keep=False)
         if duplicates.any():
             import logging
-            logging.warning("There are duplicates in " + str(cols) + ". Please fix before proceeding.")
+
+            logging.warning(
+                "There are duplicates in "
+                + str(cols)
+                + ". Please fix before proceeding."
+            )
             return True
         else:
-            print('No duplicates!')
             return False
-    
+
     def fix_duplicate_posnames(self):
         with self.suppress_logging_warning():
             if self.test_duplicates():
-                self()['Position'] = self()['Position'].astype(str) + "_" + pd.factorize(self()['acq'])[0].astype(str)
-    
+                self()["Position"] = (
+                    self()["Position"].astype(str)
+                    + "_"
+                    + pd.factorize(self()["acq"])[0].astype(str)
+                )
+
     def suppress_logging_warning(self):
         """
         Context manager to suppress logging warnings.
         """
+
         class SuppressLoggingWarning:
             def __enter__(self):
                 self.previous_level = logging.getLogger().getEffectiveLevel()
                 logging.getLogger().setLevel(logging.ERROR)
-            
+
             def __exit__(self, exc_type, exc_val, exc_tb):
                 logging.getLogger().setLevel(self.previous_level)
-        
+
         return SuppressLoggingWarning()
-    
+
     # keeping some multiples for backwards compatability
     @property
     def posnames(self):
@@ -327,9 +336,9 @@ class Metadata(object):
         fname, fext = path.splitext(pth)
         if path.isdir(pth):
             for subdir, curdir, filez in walk(pth, followlinks=True):
-                assert (
-                    len([f for f in filez if f.endswith(".nd2")]) < 2
-                ), "directory had multiple nd2 files. Either specify a direct path or (preferably) organize your data so that every nd2 file is in a separate folder"
+                assert len([f for f in filez if f.endswith(".nd2")]) < 2, (
+                    "directory had multiple nd2 files. Either specify a direct path or (preferably) organize your data so that every nd2 file is in a separate folder"
+                )
 
                 for f in filez:
                     if f == "metadata.pickle":
@@ -948,7 +957,7 @@ class Metadata(object):
         sortby="TimestampFrame",
         finds_only=False,
         metadata=False,
-        **kwargs
+        **kwargs,
     ):
         """
         Main interface of Metadata
@@ -1139,14 +1148,14 @@ class Metadata(object):
                 if stk.ndim == 2:
                     stksmp = stk.flatten()  # Flatten the stack for contrast adjustment
                 elif stk.ndim == 3:
-                    stksmp = stk[int(stk.shape[0]/2)].flatten()
-                stksmp = np.random.choice(stksmp,5000)
+                    stksmp = stk[int(stk.shape[0] / 2)].flatten()
+                stksmp = np.random.choice(stksmp, 5000)
                 stksmp = stksmp[stksmp != 0]
                 # Add the image stack to the viewer with appropriate settings
                 viewer.add_image(
                     stk,
                     blending="additive",
-                    contrast_limits=np.percentile(stksmp, [1,99.9]),
+                    contrast_limits=np.percentile(stksmp, [1, 99.9]),
                     name=ch,
                     colormap=cmaps[ind % len(cmaps)],
                     scale=[pixsize, pixsize],
@@ -1307,9 +1316,9 @@ class Metadata(object):
                         else:
                             im = im.crop(crop)
                     if type(crop) == list:
-                        assert len(crop) == len(
-                            value
-                        ), "C`est pas terrible! crop list length should be the same as loaded images"
+                        assert len(crop) == len(value), (
+                            "C`est pas terrible! crop list length should be the same as loaded images"
+                        )
                         if register:
                             pillow = True
                             dT = self.image_table.at[find, "driftTform"][6:8]
@@ -1388,9 +1397,9 @@ class Metadata(object):
                         else:
                             im = im.crop(crop)
                     if type(crop) == list:
-                        assert len(crop) == len(
-                            value
-                        ), "C`est pas terrible! crop list length should be the same as loaded images"
+                        assert len(crop) == len(value), (
+                            "C`est pas terrible! crop list length should be the same as loaded images"
+                        )
                         if register:
                             pillow = True
                             dT = self.image_table.at[find, "driftTform"][6:8]
@@ -1665,9 +1674,9 @@ class Metadata(object):
                 verbose=False,
             )
 
-            assert (
-                DataPre.ndim == 3
-            ), "Must have more than 1 timeframe for drift correction"
+            assert DataPre.ndim == 3, (
+                "Must have more than 1 timeframe for drift correction"
+            )
             DataPre, _ = periodic_smooth_decomp(DataPre)
             print("\ncalculating drift correction for position " + str(pos) + " on CPU")
             DataPre = DataPre - np.mean(DataPre, axis=(1, 2), keepdims=True)
@@ -1780,9 +1789,9 @@ class Metadata(object):
                     verbose=False,
                 )
             )
-            assert (
-                DataPre.ndim == 3
-            ), "Must have more than 1 timeframe for drift correction"
+            assert DataPre.ndim == 3, (
+                "Must have more than 1 timeframe for drift correction"
+            )
             print("\ncalculating drift correction for position " + str(pos) + " on GPU")
             DataPre = self.stkread(
                 Position=pos, Channel=Channel, Zindex=ZsToLoad, frame=fr, register=False
@@ -1916,9 +1925,9 @@ class Metadata(object):
                     register=False,
                     verbose=False,
                 )
-                assert (
-                    DataPre.ndim == 3
-                ), "Must have more than 1 timeframe for drift correction"
+                assert DataPre.ndim == 3, (
+                    "Must have more than 1 timeframe for drift correction"
+                )
                 DataPre = DataPre - np.mean(DataPre, axis=(1, 2), keepdims=True)
 
                 DataPost = DataPre[1:, :, :].transpose((1, 2, 0))
@@ -2048,9 +2057,9 @@ class Metadata(object):
                     register=False,
                     verbose=False,
                 )
-                assert (
-                    DataPre.ndim == 3
-                ), "Must have more than 1 timeframe for drift correction"
+                assert DataPre.ndim == 3, (
+                    "Must have more than 1 timeframe for drift correction"
+                )
                 DataPre = DataPre - np.mean(DataPre, axis=(1, 2), keepdims=True)
 
                 DataPost = DataPre[1:, :, :].transpose((1, 2, 0))
@@ -2247,13 +2256,13 @@ class Metadata(object):
                 )
                 stk = np.arcsinh(stk / 0.001)
                 stksmp = stk.flatten()  # sample_stack(stk,int(stk.size/100))
-                stksmp = np.random.choice(stksmp,5000)
+                stksmp = np.random.choice(stksmp, 5000)
                 stksmp = stksmp[stksmp != 0]
 
                 viewer.add_image(
                     stk,
                     blending="additive",
-                    contrast_limits=np.percentile(stksmp, [1,99.9]),
+                    contrast_limits=np.percentile(stksmp, [1, 99.9]),
                     name=ch,
                     colormap=cmaps[ind % len(cmaps)],
                     scale=[pixsize, pixsize],
@@ -2274,9 +2283,9 @@ class Metadata(object):
 
         @btn.clicked.connect
         def _on_try_clicked():
-            assert (
-                len(widget.NucChannels.get_value()) > 0
-            ), "You must pick at least a single nuclear channel"
+            assert len(widget.NucChannels.get_value()) > 0, (
+                "You must pick at least a single nuclear channel"
+            )
 
             NucChannel = widget.NucChannels.get_value()
             CytoChannel = widget.CytoChannels.get_value()
@@ -2299,9 +2308,9 @@ class Metadata(object):
                         verbose=False,
                     )
                 )
-                assert (
-                    Data[ch].ndim == 2
-                ), "channel/position/frame/Zindex did not return unique result"
+                assert Data[ch].ndim == 2, (
+                    "channel/position/frame/Zindex did not return unique result"
+                )
 
             imagedims = np.shape(Data[NucChannel[0]])
 
