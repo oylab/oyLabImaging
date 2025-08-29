@@ -6,9 +6,13 @@
 import sys
 from functools import partial
 import warnings
+import os
 
 import lap
 import multiprocess as mp  # import Pool, set_start_method
+
+import cloudpickle
+import dill
 
 mp.set_start_method("spawn", force=True)
 
@@ -95,11 +99,12 @@ class PosLbl(object):
         threads=10,
         register=False,
         calculate=True,
-        **kwargs
+        override=False,
+        **kwargs,
     ):
-
-        if any([Pos is None]):
-            raise ValueError("Please provide position")
+        self._registerflag = register
+        self._tracked = False
+        self._splitflag = False
 
         if pth is None:
             if MD is not None:
@@ -107,15 +112,26 @@ class PosLbl(object):
         else:
             self.pth = pth
 
+        if any([Pos is None]):
+            raise ValueError("Please provide position")
+
+        if Pos not in MD.posnames:
+            raise AssertionError("Position does not exist in dataset")
+        self.posname = Pos
+
+        fname = "PosLbls"
+        foldername = os.path.join(self.pth, fname + os.path.sep)
+        filename = os.path.join(foldername, Pos + ".pkl")
+        if not override:
+            if os.path.exists(filename):
+                self.load(Pos=self.posname, pth=self.pth, fname=fname)
+                calculate = False
+
         if MD is None:
             MD = Metadata(pth)
 
         if MD().empty:
             raise AssertionError("No metadata found in supplied path")
-
-        if Pos not in MD.posnames:
-            raise AssertionError("Position does not exist in dataset")
-        self.posname = Pos
 
         self.channels = MD.unique("Channel", Position=Pos)
 
@@ -131,13 +147,9 @@ class PosLbl(object):
         else:
             self.frames = frames
 
-        self._registerflag = register
-        self._tracked = False
-        self._splitflag = False
         # self.PixelSize = MD.unique('PixelSize')[0]
 
         threads = np.min((threads, len(self.frames)))
-
         # Create all framelabels for the different TPs. This will segment and measure stuff.
         if calculate:
             with mp.Pool(threads) as ppool:
@@ -152,7 +164,7 @@ class PosLbl(object):
                                 acq=self.acq,
                                 NucChannel=NucChannel,
                                 register=self._registerflag,
-                                **kwargs
+                                **kwargs,
                             ),
                             self.frames,
                         ),
@@ -162,6 +174,7 @@ class PosLbl(object):
 
             self.framelabels = np.array(frames)
             self._calculate_pointmat()
+            self.save()
             print("\nFinished loading and segmenting position " + str(Pos))
 
     def __call__(self):
@@ -172,6 +185,52 @@ class PosLbl(object):
         print("\nAvailable channels are : " + ", ".join(list(self.channels)) + ".")
 
     # np.warnings.filterwarnings("ignore", category=np.VisibleDeprecationWarning)
+
+    def save(self, fname="PosLbls"):
+        """
+        save poslbl
+        """
+        import os
+
+        foldername = os.path.join(self.pth, fname + os.path.sep)
+        if not os.path.exists(foldername):
+            os.makedirs(foldername)
+        fname = os.path.join(foldername, self.posname + ".pkl")
+        with open(fname, "wb") as dbfile:
+            cloudpickle.dump(self, dbfile)
+            # print("saved Position " + self.posname)
+            sys.stdout.write("\r" + "saved Position " + self.posname)
+            sys.stdout.flush()
+
+    def load(self, Pos=None, pth=None, fname="PosLbls"):
+        if Pos is None:
+            if self.posname is not None:
+                Pos = self.posname
+        if pth is None:
+            if self.pth is not None:
+                pth = self.pth
+        p = PosLbl._load(Pos=Pos, pth=pth, fname=fname)
+        self.__dict__.update(p.__dict__)
+
+    @classmethod
+    def _load(self, Pos=None, pth=None, fname="PosLbls"):
+        """
+        load poslbl
+        """
+        import os
+
+        foldername = os.path.join(pth, fname + os.path.sep)
+        if not os.path.exists(foldername):
+            os.makedirs(foldername)
+        fname = os.path.join(foldername, Pos + ".pkl")
+        with open(fname, "rb") as dbfile:
+            p = dill.load(dbfile)
+            # print("Loaded position " + str(Pos) + " from pickle file.")
+            sys.stdout.write(
+                "\r" + "Loaded position " + str(Pos) + " from pickle file."
+            )
+            sys.stdout.flush()
+        return p
 
     @property
     def PixelSize(self):
@@ -420,7 +479,7 @@ class PosLbl(object):
             Channel=["DeepBlue"],
             boxsize=75,
             cmaps=["red", "green", "blue", "cyan", "magenta", "yellow"],
-            **kwargs
+            **kwargs,
         ):
             """
             Function to display a close up movie of a cell being tracked.
@@ -494,6 +553,7 @@ class PosLbl(object):
             self._splitflag = False
         self._calculate_trackmat()
         self.track_to_use = []
+        self.save()
 
     def _link(self, search_radius=15, params=[], **kwargs):
         """
@@ -648,7 +708,7 @@ class PosLbl(object):
         maxAmpRatio=5,
         maxTimeJump=4,
         mintracklength=30,
-        **kwargs
+        **kwargs,
     ):
         """
         Helper function : close gaps between open stubs using JV lap.
@@ -677,7 +737,6 @@ class PosLbl(object):
         notdoneflag = 1
 
         while notdoneflag:
-
             trackstarts = np.array(
                 [np.where(~np.isnan(r.astype("float")))[0][0] for r in trackbits],
                 dtype=object,
@@ -813,7 +872,6 @@ class PosLbl(object):
         notdoneflag = 1
 
         while notdoneflag:
-
             trackstarts = np.array(
                 [np.where(~np.isnan(r.astype("float")))[0][0] for r in trackbits],
                 dtype=object,
@@ -925,7 +983,7 @@ class PosLbl(object):
             Position=self.posname,
             register=self._registerflag,
             Zindex=Zindex,
-            **kwargs
+            **kwargs,
         )
 
     def _calculate_pointmat(self):
@@ -1015,7 +1073,7 @@ class PosLbl(object):
         Zindex=[0],
         frames=None,
         cmaps=["red", "green", "blue", "cyan", "magenta", "yellow"],
-        **kwargs
+        **kwargs,
     ):
         """
         Parameters
@@ -1060,7 +1118,7 @@ class PosLbl(object):
                 scale=[self.PixelSize, self.PixelSize],
                 colormap=cmaps[ind % len(cmaps)],
                 name=ch,
-                **kwargs
+                **kwargs,
             )
 
     def plot_tracks(self, J=None, **kwargs):
@@ -1096,7 +1154,7 @@ class PosLbl(object):
         func=lambda x: x,
         size=8,
         face_color="mean",
-        **kwargs
+        **kwargs,
     ):
         """
         Parameters
@@ -1188,9 +1246,9 @@ class PosLbl(object):
         )
 
         if prop in ch_props:
-            assert (
-                channel in self.channels
-            ), "requested channel does not exist, try " + " ,".join(self.channels)
+            assert channel in self.channels, (
+                "requested channel does not exist, try " + " ,".join(self.channels)
+            )
         peritext = ""
         if periring:
             peritext = "_periring"

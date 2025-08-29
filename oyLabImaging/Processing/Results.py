@@ -55,7 +55,7 @@ class results(object):
 
     """
 
-    def __init__(self, MD=None, pth=None, threads=10, **kwargs):
+    def __init__(self, MD=None, pth=None, threads=10, fname="results.pickle",**kwargs):
 
         if pth is None:
             if MD is not None:
@@ -65,8 +65,8 @@ class results(object):
 
         pth = self.pth
 
-        if "results.pickle" in listdir(pth):
-            r = results.load(pth, fname="results.pickle")
+        if fname in listdir(pth):
+            r = results.load(pth, fname=fname)
             self.__dict__.update(r.__dict__)
             self.pth = pth
             for p in self.PosLbls.values():
@@ -91,7 +91,7 @@ class results(object):
         print("\nAvailable channels are : " + ", ".join(list(self.channels)) + ".")
         print(
             "\nPositions already segmented are : "
-            + ", ".join(sorted([str(a) for a in self.PosLbls.keys()]))
+            + ", ".join(natsorted([str(a) for a in self.PosLbls.keys()]))
         )
         print(
             "\nAvailable positions : "
@@ -112,7 +112,7 @@ class results(object):
         }
     )
     
-    def setPosLbls(self, MD=None, groups=None, Position=None, **kwargs):
+    def setPosLbls(self, MD=None, groups=None, Position=None,override=True, **kwargs):
         """
         function to create PosLbl instances.
 
@@ -144,7 +144,7 @@ class results(object):
 
         for p in Position:
             print("\nProcessing position " + str(p))
-            self.PosLbls.update({p: PosLbl(MD=MD, Pos=p, pth=MD.base_pth, **kwargs)})
+            self.PosLbls.update({p: PosLbl(MD=MD, Pos=p, pth=MD.base_pth,override=override, **kwargs)})
         self.save()
 
     @alias(
@@ -156,7 +156,7 @@ class results(object):
         }
     )
 
-    def segment_and_extract_features(self, MD=None, groups=None, Position=None, **kwargs):
+    def segment_and_extract_features(self, MD=None, groups=None, Position=None,override=True, **kwargs):
         """
         function to create PosLbl instances.
 
@@ -173,7 +173,7 @@ class results(object):
         **kwargs : specific args for segmentation function, anything that goes into FrameLbl
         Threads : how many threads to use for parallel execution. Limited to ~6 for GPU based segmentation and 128 for CPU (but don't use all 128)
         """
-        return self.setPosLbls(MD=MD, groups=groups, Position=Position, **kwargs)
+        return self.setPosLbls(MD=MD, groups=groups, Position=Position, override=override, **kwargs)
     
     def calculate_tracks(self, Position=None, save=True, split=True, **kwargs):
         """
@@ -374,9 +374,17 @@ class results(object):
         """
         save results
         """
+        #save individual positions and clear data
+        for pos in self.PosLbls.keys():
+            self.PosLbls[pos].save()
+            self.PosLbls[pos].framelabels=[]
+        #save results object without position data
         with open(join(self.pth, fname), "wb") as dbfile:
             cloudpickle.dump(self, dbfile)
-            print("saved results")
+            print("\nsaved results.")
+        #replace position data
+        for pos in self.PosLbls.keys():
+            self.PosLbls[pos].load()
 
     @classmethod
     def load(cls, pth, fname="results.pickle"):
@@ -385,6 +393,10 @@ class results(object):
         """
         with open(join(pth, fname), "rb") as dbfile:
             r = dill.load(dbfile)
+        #replace position data
+        for pos in r.PosLbls.keys():
+            if r.PosLbls[pos].framelabels==[]:
+                r.PosLbls[pos].load()
         return r
 
     @alias(
