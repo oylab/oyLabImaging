@@ -543,7 +543,7 @@ class Metadata(object):
                 "frame": mdsing["Frame"],
                 "Channel": mdsum["ChNames"][mdsing["ChannelIndex"]],
                 "Marker": mdsum["ChNames"][mdsing["ChannelIndex"]],
-                "group": mdsing["PositionName"],
+                "group": None,
                 "XY": [mdsing["XPositionUm"], mdsing["YPositionUm"]],
                 "Z": mdsing["ZPositionUm"],
                 "Zindex": mdsing["SliceIndex"],
@@ -838,6 +838,7 @@ class Metadata(object):
         image_table["Zindex"] = 0
         image_table["Channel"] = "Ch_0"
         image_table["Position"] = "Pos0"
+        image_table["group"] = None
         image_table["frame"] = 0
         image_table["PixelSize"] = 1
 
@@ -2356,6 +2357,40 @@ class Metadata(object):
         _on_seg_func_change()
         return widget
 
+    def annotate_positions(self) -> None:
+        from ._annotation_widget import MainWidget
+        unique_positions = np.vstack(
+            [self().XY[self.unique("index", Position=p)[0]] for p in self.Position]
+        )
+        posnames = self.posnames
+        # check that self.image_table has a 'group' column
+        if "group" not in self.image_table.columns:
+            self.image_table["group"] = None
+        # make dictionary with position name as key and group as value for all positions that aren't None of the position name
+        df = self.image_table
+        position_to_group = (
+            df.loc[
+                df["group"].notna() & (df["group"] != "") & (df["group"] != df["Position"])
+            ].set_index("Position")["group"].to_dict()
+        )
+        main_widget = MainWidget(unique_positions, posnames,position_to_group)
+        main_widget.exec()
+
+        # block somehow until closed...
+
+        position_to_group = main_widget.groups()
+        #print(position_to_group)
+        df = self.image_table
+        df['group'] = None
+        df["group"] = df["Position"].map(position_to_group).fillna(df["group"])
+
+
+
+
+
+
+
+
     def export_annotations_to_images(
         MD,
         Channel="DIC N2",
@@ -2433,3 +2468,4 @@ class Metadata(object):
 
                     with TiffWriter(filename, bigtiff=False, imagej=True) as t:
                         t.write(img_as_uint(np.array(im.crop(crp1))))
+
