@@ -88,6 +88,7 @@ class FrameLbl(object):
         acq=None,
         Zindex=0,
         register=True,
+        ffield=False,
         periring=False,
         periringsize=5,
         NucChannel=None,
@@ -154,6 +155,7 @@ class FrameLbl(object):
                     Position=Pos,
                     acq=self.acq,
                     Zindex=Zindex,
+                    ffield=ffield,
                     verbose=False,
                 )
             )
@@ -193,6 +195,7 @@ class FrameLbl(object):
         }
 
         self._seg_params = input_dict
+        self._ffield = ffield
 
         try:
             imgCyto = np.sum(
