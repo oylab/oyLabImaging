@@ -895,12 +895,19 @@ class Metadata(object):
     def pickle(self):
         """
         save metadata as a pickle file. Saves as 'metadata.pickle' in the metadata root path.
+        Flat fields are stored as TIFFs on disk and excluded from the pickle.
         """
         with open(join(self.base_pth, "metadata.pickle"), "wb") as dbfile:
             tempfn = self.image_table["root_pth"].copy()
             del self.image_table["root_pth"]
-            pickle.dump(self, dbfile)
-            self.image_table["root_pth"] = tempfn
+            # Strip in-memory flat field cache — arrays live on disk as TIFFs
+            saved_ff = getattr(self, '_flatfields', {})
+            self._flatfields = {}
+            try:
+                pickle.dump(self, dbfile)
+            finally:
+                self._flatfields = saved_ff
+                self.image_table["root_pth"] = tempfn
             md_logger.info("saved metadata")
 
     def unpickle(self, pth, fname="*.pickle", delimiter="\t"):
@@ -1494,7 +1501,135 @@ class Metadata(object):
 
         return images_dict
 
-    # Function to apply flat field correction
+    def CalculateFlatField(self, Channel=None, n_samples=50, n_bands=9):
+        """Estimate per-channel blind flat fields using the à trous wavelet transform.
+
+        Mirrors the approach in the wollmanlab/Metadata MATLAB pipeline:
+        average a sample of images to cancel cell signal, then take the
+        coarsest AWT approximation plane as the illumination field.
+
+        Flat fields are saved as TIFFs in ``{base_pth}/FlatFields/{ch}.tif``.
+        Drop a TIFF with the correct channel name there to use an externally
+        acquired (hard-copy) flat field without running this function.
+
+        Parameters
+        ----------
+        Channel : str, list of str, or None
+            Channels to process.  None processes all channels.
+        n_samples : int
+            Maximum number of images to average per channel.
+        n_bands : int
+            Number of AWT scales.  Default 9 matches the MATLAB usage.
+        """
+        import tifffile
+        from oyLabImaging.Processing.improcutils import awt
+
+        channels = Channel
+        if channels is None:
+            channels = list(self.Channel)
+        elif isinstance(channels, str):
+            channels = [channels]
+
+        fld = join(self.base_pth, 'FlatFields')
+        os.makedirs(fld, exist_ok=True)
+
+        if not hasattr(self, '_flatfields'):
+            self._flatfields = {}
+
+        rng = np.random.default_rng(42)
+
+        for ch in channels:
+            ch_rows = self.image_table[self.image_table['Channel'] == ch]
+            if len(ch_rows) == 0:
+                warnings.warn(f"No images found for channel '{ch}', skipping.")
+                continue
+
+            finds = ch_rows.index.tolist()
+            if len(finds) > n_samples:
+                finds = rng.choice(finds, size=n_samples, replace=False).tolist()
+            mean_img = self._load_mean_image(finds)
+            flt = awt(mean_img, nBands=n_bands)[..., n_bands].astype(np.float32)
+            tifffile.imwrite(join(fld, f'{ch}.tif'), flt)
+            self._flatfields[ch] = flt.astype(np.float64)
+            print(f"Flat field estimated for channel '{ch}' ({len(finds)} images).")
+
+    def _load_mean_image(self, finds):
+        """Load raw images for the given row indices and return their mean."""
+        imgs = []
+        for find in finds:
+            try:
+                img = self._load_single_raw(find)
+                if img is not None:
+                    imgs.append(img.astype(np.float64))
+            except Exception:
+                continue
+        if not imgs:
+            raise RuntimeError("Could not load any images for flat field estimation.")
+        return np.mean(np.stack(imgs, axis=0), axis=0)
+
+    def _load_single_raw(self, find):
+        """Load one raw image by image_table row index, without correction."""
+        from skimage import io as skio
+        row = self.image_table.loc[find]
+        if self.type == 'nd2':
+            import nd2
+            with nd2.ND2File(self.unique('root_pth')[0]) as nd2imgs:
+                n_ch = nd2imgs.attributes.channelCount
+                frame = nd2imgs.read_frame(find // n_ch)
+                return np.array(frame[find % n_ch])
+        else:
+            fname = row['root_pth']
+            from PIL import Image as PILImage
+            im = PILImage.open(fname)
+            try:
+                im.seek(0)
+            except Exception:
+                pass
+            return np.array(im)
+
+    def _get_flatfield(self, ch):
+        """Lazy-load flat field for channel: session cache → TIFF on disk → None."""
+        import tifffile
+        if not hasattr(self, '_flatfields'):
+            self._flatfields = {}
+        if ch in self._flatfields:
+            return self._flatfields[ch]
+        flt_path = join(self.base_pth, 'FlatFields', f'{ch}.tif')
+        if path.exists(flt_path):
+            flt = tifffile.imread(flt_path).astype(np.float64)
+            self._flatfields[ch] = flt
+            return flt
+        return None
+
+    def _doFlatFieldCorrection(self, img, find):
+        """Apply flat field correction: corrected = img - flt + max(flt).
+
+        Flat field is lazy-loaded from {base_pth}/FlatFields/{ch}.tif on first
+        use and cached for the session.  Works regardless of source image format
+        (ND2, TIFF, etc.) since the flat field is always loaded from a TIFF.
+        """
+        if not hasattr(self, '_ffield_warned'):
+            self._ffield_warned = set()
+
+        ch = self.image_table.at[find, 'Channel']
+        flt = self._get_flatfield(ch)
+
+        if flt is None:
+            if ch not in self._ffield_warned:
+                self._ffield_warned.add(ch)
+                warnings.warn(
+                    f"No flat field found for channel '{ch}' — loading without "
+                    f"correction. Run MD.CalculateFlatField(Channel='{ch}') or "
+                    f"drop a TIFF at FlatFields/{ch}.tif.",
+                    stacklevel=3,
+                )
+            return img
+
+        img = img.astype(np.float64)
+        corrected = img - flt + flt.max()
+        return np.clip(corrected, 0, None).astype(img.dtype if img.dtype != np.float64 else np.float32)
+
+    # Function to apply flat field correction (explicit flat field, division-based)
     def _doFlatfieldCorrection(self, img, flt, **kwargs):
         """
         Perform flatfield correction.
