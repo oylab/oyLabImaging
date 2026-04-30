@@ -16,7 +16,7 @@ CU111_EXTRAS = [
 
 setup(
     name="oyLabImaging",
-    version="0.2.9",
+    version="0.2.10",
     description="data processing code for the Oyler-Yaniv lab @HMS",
     author="Alon Oyler-Yaniv",
     url="https://github.com/alonyan/oyLabImaging",
