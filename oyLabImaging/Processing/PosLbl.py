@@ -98,11 +98,13 @@ class PosLbl(object):
         NucChannel=None,
         threads=10,
         register=False,
+        ffield=False,
         calculate=True,
         override=False,
         **kwargs,
     ):
         self._registerflag = register
+        self._ffieldflag = ffield
         self._tracked = False
         self._splitflag = False
 
@@ -164,6 +166,7 @@ class PosLbl(object):
                                 acq=self.acq,
                                 NucChannel=NucChannel,
                                 register=self._registerflag,
+                                ffield=self._ffieldflag,
                                 **kwargs,
                             ),
                             self.frames,
@@ -225,11 +228,13 @@ class PosLbl(object):
         fname = os.path.join(foldername, Pos + ".pkl")
         with open(fname, "rb") as dbfile:
             p = dill.load(dbfile)
-            # print("Loaded position " + str(Pos) + " from pickle file.")
             sys.stdout.write(
                 "\r" + "Loaded position " + str(Pos) + " from pickle file."
             )
             sys.stdout.flush()
+        # Rebind to the current class so methods always reflect live code,
+        # not the version that was baked in by cloudpickle at save time.
+        p.__class__ = PosLbl
         return p
 
     @property
@@ -1067,6 +1072,334 @@ class PosLbl(object):
         else:
             return np.array([]), []
 
+    def radial_corr(self, ch_i, ch_j=None, frame=None,
+                    img=False, ffield=True,
+                    max_r=None, dr=None,
+                    intensity='mean', periring=False, n_max=200_000, seed=42):
+        """Radial cross/auto-correlation g(r).
+
+        img=False (default): cell-level Pearson correlation binned by distance.
+        img=True: pixel-level FFT correlation (Moisan 2011 boundary conditions).
+
+        ffield checks whether FrameLbls were segmented with flat-field
+        correction (img=False) or applies correction when loading images (img=True).
+
+        Returns
+        -------
+        dict with keys r, g, sem, n, ch_i, ch_j, max_r, dr, img
+        """
+        from oyLabImaging.Processing.spatial import radial_corr
+        return radial_corr(self, ch_i=ch_i, ch_j=ch_j, frame=frame,
+                           img=img, ffield=ffield, max_r=max_r, dr=dr,
+                           intensity=intensity, periring=periring,
+                           n_max=n_max, seed=seed)
+
+    def plot_radial_corr(self, ch_i, ch_j=None, frame=None,
+                         img=False, ffield=True,
+                         max_r=None, dr=None,
+                         intensity='mean', periring=False,
+                         ax=None, **plot_kwargs):
+        """Compute and plot radial correlation in one call."""
+        from oyLabImaging.Processing.spatial import radial_corr, plot_radial
+        result = radial_corr(self, ch_i=ch_i, ch_j=ch_j, frame=frame,
+                             img=img, ffield=ffield, max_r=max_r, dr=dr,
+                             intensity=intensity, periring=periring)
+        return plot_radial(result, ax=ax, **plot_kwargs)
+
+    def radial_density(self, frame=None, max_r=200.0, dr=5.0):
+        """Pair correlation function g(r) for cell positions.
+
+        g(r) = 1 for a random distribution; >1 clustering; <1 repulsion.
+
+        Returns
+        -------
+        dict with keys r, g, n, max_r, dr
+        """
+        from oyLabImaging.Processing.spatial import radial_density
+        return radial_density(self, frame=frame, max_r=max_r, dr=dr)
+
+    def plot_radial_density(self, frame=None, max_r=200.0, dr=5.0,
+                            ax=None, **plot_kwargs):
+        """Compute and plot pair correlation function in one call."""
+        from oyLabImaging.Processing.spatial import radial_density, plot_radial
+        result = radial_density(self, frame=frame, max_r=max_r, dr=dr)
+        return plot_radial(result, ax=ax, **plot_kwargs)
+
+    def local_moran_I(self, ch, frame=None, radius=50.0, n_permutations=999,
+                      intensity='mean', periring=False, seed=42, ffield=True):
+        """Local Moran's I (LISA) for detecting collective activity hotspots.
+
+        ffield=True (default) warns if FrameLbls were segmented without
+        flat-field correction, since illumination bias affects I scores.
+
+        Returns a dict (single frame) or list of dicts (multiple frames) with
+        per-cell I scores, p-values, edge flags, and standardized intensities.
+        """
+        from oyLabImaging.Processing.spatial import local_moran_I
+        return local_moran_I(self, ch=ch, frame=frame, radius=radius,
+                             n_permutations=n_permutations, intensity=intensity,
+                             periring=periring, seed=seed, ffield=ffield)
+
+    def find_activity_clusters(self, lisa_result, min_I=0.5, max_pvalue=0.05,
+                               min_cells=10, eps=None):
+        """DBSCAN clustering on LISA-significant cells.
+
+        Pass the output of local_moran_I (single frame) plus threshold params.
+        """
+        from oyLabImaging.Processing.spatial import find_activity_clusters
+        return find_activity_clusters(lisa_result, min_I=min_I,
+                                      max_pvalue=max_pvalue,
+                                      min_cells=min_cells, eps=eps)
+
+    def activity_clusters(self, ch, frame=None, radius=50.0, n_permutations=999,
+                          intensity='mean', periring=False, seed=42, ffield=True,
+                          min_I=0.5, max_pvalue=0.05, min_cells=3, eps=None):
+        """Compute LISA then find activity clusters — no plotting.
+
+        Returns
+        -------
+        list of dicts (one per frame) with keys:
+            frame_index, n_clusters, cluster_sizes, coords, labels, I, pvalue
+        """
+        from oyLabImaging.Processing.spatial import local_moran_I, find_activity_clusters
+
+        lisa_list = local_moran_I(self, ch=ch, frame=frame, radius=radius,
+                                  n_permutations=n_permutations,
+                                  intensity=intensity, periring=periring,
+                                  seed=seed, ffield=ffield)
+        if isinstance(lisa_list, dict):
+            lisa_list = [lisa_list]
+
+        results = []
+        for lisa_res in lisa_list:
+            cl = find_activity_clusters(lisa_res, min_I=min_I,
+                                        max_pvalue=max_pvalue,
+                                        min_cells=min_cells, eps=eps)
+            cl['frame_index'] = lisa_res['frame_index']
+            results.append(cl)
+        return results
+
+    def plot_lisa(self, ch, frame=None, radius=50.0, n_permutations=999,
+                  intensity='mean', periring=False, seed=42, ffield=True,
+                  min_I=0.5, max_pvalue=0.005, min_cells=10,
+                  show_clusters=True, overlay=True, size=8,
+                  colormap='RdBu_r', vmax=None):
+        """Compute LISA and visualise in napari.
+
+        Parameters
+        ----------
+        ch : str
+        frame : int, list of int, or None
+        radius : float  neighborhood radius in µm
+        overlay : bool  add raw channel image behind LISA points (default True)
+        show_clusters : bool  add convex-hull outlines for significant clusters
+        min_I, max_pvalue, min_cells : cluster thresholds
+        colormap : diverging colormap for Moran's I
+        vmax : color scale maximum (default: 99th percentile of |I|)
+
+        Returns
+        -------
+        layer : napari Points layer
+        cluster_results : list of dicts  (only when show_clusters=True)
+        """
+        import matplotlib.cm as cm
+        import matplotlib.colors as mcolors
+        from scipy.spatial import ConvexHull
+        from oyLabImaging.Processing.spatial import local_moran_I, find_activity_clusters
+        from oyLabImaging.Processing.imvisutils import get_or_create_viewer
+
+        # ── resolve frames ────────────────────────────────────────────────────
+        n_frames = len(self.framelabels)
+        if frame is None:
+            frames = list(range(n_frames))
+        elif isinstance(frame, (int, np.integer)):
+            frames = [int(frame)]
+        else:
+            frames = [int(f) for f in frame]
+
+        # ── LISA computation ──────────────────────────────────────────────────
+        lisa_list = local_moran_I(self, ch=ch, frame=frames,
+                                  radius=radius, n_permutations=n_permutations,
+                                  intensity=intensity, periring=periring,
+                                  seed=seed, ffield=ffield)
+        if isinstance(lisa_list, dict):
+            lisa_list = [lisa_list]
+
+        ps = float(self.PixelSize)
+        viewer = get_or_create_viewer()
+
+        #── overlay image ─────────────────────────────────────────────────────
+        if overlay:
+            for t in frames:
+                # load one frame at a time — always results in a 2-D (H, W) array
+                raw = self.img(Channel=ch, verbose=False, frames=[self.frames[t]])
+                raw = np.squeeze(raw)
+                # collapse accidental colour dim (e.g. grayscale stored as RGB)
+                if raw.ndim == 3:
+                    raw = raw.mean(axis=-1)
+                lo, hi = np.percentile(raw, [1, 99.9])
+                viewer.add_image(
+                    raw,
+                    blending='additive',
+                    contrast_limits=[lo, hi],
+                    scale=[ps, ps],
+                    colormap='gray',
+                    name=f'{ch} t={t}',
+                )
+
+        # ── collect points ────────────────────────────────────────────────────
+        all_pts, all_I, all_pv = [], [], []
+
+        for lisa_res in lisa_list:
+            t = lisa_res['frame_index']
+            fl = self.framelabels[t]
+            cen = np.asarray(fl.centroid, dtype=np.float64)   # (N, 2) row/col
+            if len(cen) == 0:
+                continue
+            I        = lisa_res['I']
+            pvalue   = lisa_res['pvalue']
+            is_edge  = lisa_res.get('is_edge', np.zeros(len(I), dtype=bool))
+            interior = ~is_edge & ~np.isnan(I)
+            all_pts.append(cen[interior])
+            all_I.append(I[interior])
+            all_pv.append(pvalue[interior])
+
+        if not all_pts:
+            raise ValueError("No valid interior cells found.")
+
+        pts_int   = np.concatenate(all_pts)           # (M, 2) row/col pixels
+        moran_int = np.concatenate(all_I).astype(np.float64)
+        pval_int  = np.concatenate(all_pv).astype(np.float64)
+
+        # ── colour map ────────────────────────────────────────────────────────
+        vmax_use = vmax if vmax is not None else float(
+            np.nanpercentile(np.abs(moran_int), 99))
+        norm     = mcolors.TwoSlopeNorm(vmin=-vmax_use, vcenter=0.0, vmax=vmax_use)
+        rgba     = cm.get_cmap(colormap)(norm(moran_int))
+
+        # ── LISA points layer ─────────────────────────────────────────────────
+        layer = viewer.add_points(
+            pts_int,
+            face_color=rgba,
+            edge_width=0,
+            size=size,
+            blending='translucent',
+            scale=[ps, ps],
+            name=f'LISA {ch}',
+            properties={'moran_I': moran_int, 'pvalue': pval_int},
+        )
+
+        # ── cluster outlines ──────────────────────────────────────────────────
+        cluster_results = []
+        if show_clusters:
+            hulls, centroid_pts, centroid_ids = [], [], []
+
+            for lisa_res in lisa_list:
+                t = lisa_res['frame_index']
+                cl = find_activity_clusters(lisa_res, min_I=min_I,
+                                            max_pvalue=max_pvalue,
+                                            min_cells=min_cells)
+                cl['frame_index'] = t
+                cluster_results.append(cl)
+                if cl['n_clusters'] == 0:
+                    continue
+
+                fl  = self.framelabels[t]
+                xy  = np.asarray(fl.XY, dtype=np.float64)
+
+                for k in range(cl['n_clusters']):
+                    pts_um = cl['coords'][cl['labels'] == k]   # (M, 2) µm
+                    pts_px = (pts_um - xy) / ps                # (M, 2) pixels
+
+                    if len(pts_px) >= 3:
+                        try:
+                            verts = pts_px[ConvexHull(pts_px).vertices]
+                        except Exception:
+                            verts = pts_px
+                    else:
+                        verts = pts_px
+
+                    hulls.append(verts)
+                    centroid_pts.append(pts_px.mean(axis=0))
+                    centroid_ids.append(k + 1)
+
+            if hulls:
+                viewer.add_shapes(
+                    hulls,
+                    shape_type='polygon',
+                    face_color=[1, 1, 1, 0.0],
+                    edge_color='#ff1493',
+                    edge_width=10,
+                    scale=[ps, ps],
+                    name=f'LISA {ch} clusters',
+                )
+                viewer.add_points(
+                    np.array(centroid_pts),
+                    properties={'n': np.array(centroid_ids, dtype=int)},
+                    text='n',
+                    face_color=[0, 0, 0, 0],
+                    edge_width=0,
+                    size=size * 1.5,
+                    blending='translucent',
+                    scale=[ps, ps],
+                    name=f'LISA {ch} cluster labels',
+                )
+
+        if show_clusters:
+            return layer, cluster_results
+        return layer
+
+    def fit_corr_lengthscale(self, ch, ch_j=None, frame=None,
+                              img=False, ffield=True,
+                              r_min=10.0, max_r=None, dr=None,
+                              plot=False, **fit_kwargs):
+        """Fit g(r) to A·exp(−r/λ) + C to extract a spatial length scale.
+
+        Defaults to img=False (cell-level correlation).  Set img=True for
+        pixel-level FFT correlation (sub-cell resolution, Oyler-Yaniv et al. 2017).
+
+        The fit starts at r_min (~one cell diameter) to exclude within-nucleus
+        autocorrelation.
+
+        Parameters
+        ----------
+        ch : str
+            Source channel.
+        ch_j : str, optional
+            Target channel.  Defaults to ch (autocorrelation).
+        frame : int, list of int, or None
+        img : bool
+            True = pixel-level correlation (default); False = cell-level.
+        ffield : bool
+            Flat-field flag forwarded to radial_corr.
+        r_min : float
+            Minimum radius (µm) for the exponential fit.
+        max_r : float, optional
+            Maximum radius (µm).  Defaults: 250 (img=True), 200 (img=False).
+        dr : float, optional
+            Bin width (µm).  Defaults: 0.5 (img=True), 5 (img=False).
+        plot : bool
+            If True, overlay fit on g(r) plot and return (fit, ax).
+        **fit_kwargs
+            Forwarded to fit_lengthscale (e.g. min_pairs).
+
+        Returns
+        -------
+        fit : dict  (or (fit, ax) when plot=True)
+        """
+        from oyLabImaging.Processing.spatial import (
+            radial_corr, fit_lengthscale, plot_radial,
+        )
+
+        result = radial_corr(self, ch_i=ch, ch_j=ch_j, frame=frame,
+                             img=img, ffield=ffield, max_r=max_r, dr=dr)
+        fit = fit_lengthscale(result, r_min=r_min, **fit_kwargs)
+
+        if plot:
+            ax = plot_radial(result, fit_results=fit)
+            return fit, ax
+        return fit
+
     def plot_images(
         self,
         Channel="DeepBlue",
@@ -1178,8 +1511,8 @@ class PosLbl(object):
             pointsmat = self._pointmatrix
 
         point_props = {
-            "mean": func(np.concatenate(self.mean(Channel, periring=periring))),
-            "ind": np.concatenate(self.index),
+            "mean": func(np.concatenate(self.mean(Channel, periring=periring))).astype(np.float64),
+            "ind": np.concatenate(self.index).astype(np.float64),
         }
 
         text = {
