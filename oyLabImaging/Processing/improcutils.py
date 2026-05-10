@@ -45,7 +45,7 @@ def periodic_smooth_decomp(I: np.ndarray) -> (np.ndarray, np.ndarray):
         """
 
         if u.ndim == 2:
-            np.expand_dims(u, 0)
+            u = np.expand_dims(u, 0)
 
         v = np.zeros(u.shape, dtype=np.float64)
 

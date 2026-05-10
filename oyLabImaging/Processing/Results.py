@@ -64,8 +64,7 @@ class results(object):
 
     """
 
-    def __init__(self, MD=None, pth=None, threads=10, fname="results.pickle",**kwargs):
-
+    def __init__(self, MD=None, pth=None, threads=10, fname="results.pickle", **kwargs):
         if pth is None:
             if MD is not None:
                 self.pth = MD.base_pth
@@ -120,8 +119,7 @@ class results(object):
             "f": "frames",
         }
     )
-    
-    def setPosLbls(self, MD=None, groups=None, Position=None,override=True, **kwargs):
+    def setPosLbls(self, MD=None, groups=None, Position=None, override=True, **kwargs):
         """
         function to create PosLbl instances.
 
@@ -141,9 +139,10 @@ class results(object):
         if MD is None:
             MD = Metadata(self.pth)
         if groups is not None:
-            assert np.all(
-                np.isin(groups, self.groups)
-            ), "some provided groups don't exist, try %s" % ", ".join(list(self.groups))
+            assert np.all(np.isin(groups, self.groups)), (
+                "some provided groups don't exist, try %s"
+                % ", ".join(list(self.groups))
+            )
             Position = MD.unique("Position", group=groups)
         if Position is None:
             Position = self.PosNames
@@ -153,7 +152,9 @@ class results(object):
 
         for p in Position:
             print("\nProcessing position " + str(p))
-            self.PosLbls.update({p: PosLbl(MD=MD, Pos=p, pth=MD.base_pth,override=override, **kwargs)})
+            self.PosLbls.update(
+                {p: PosLbl(MD=MD, Pos=p, pth=MD.base_pth, override=override, **kwargs)}
+            )
         self.save()
 
     @alias(
@@ -164,8 +165,9 @@ class results(object):
             "p": "Position",
         }
     )
-
-    def segment_and_extract_features(self, MD=None, groups=None, Position=None,override=True, **kwargs):
+    def segment_and_extract_features(
+        self, MD=None, groups=None, Position=None, override=True, **kwargs
+    ):
         """
         function to create PosLbl instances.
 
@@ -182,8 +184,10 @@ class results(object):
         **kwargs : specific args for segmentation function, anything that goes into FrameLbl
         Threads : how many threads to use for parallel execution. Limited to ~6 for GPU based segmentation and 128 for CPU (but don't use all 128)
         """
-        return self.setPosLbls(MD=MD, groups=groups, Position=Position, override=override, **kwargs)
-    
+        return self.setPosLbls(
+            MD=MD, groups=groups, Position=Position, override=override, **kwargs
+        )
+
     def calculate_tracks(self, Position=None, save=True, split=True, **kwargs):
         """
         function to calculate tracks for a PosLbl instance.
@@ -555,15 +559,15 @@ class results(object):
         """
         save results
         """
-        #save individual positions and clear data
+        # save individual positions and clear data
         for pos in self.PosLbls.keys():
             self.PosLbls[pos].save()
-            self.PosLbls[pos].framelabels=[]
-        #save results object without position data
+            self.PosLbls[pos].framelabels = []
+        # save results object without position data
         with open(join(self.pth, fname), "wb") as dbfile:
             cloudpickle.dump(self, dbfile)
             print("\nsaved results.")
-        #replace position data
+        # replace position data
         for pos in self.PosLbls.keys():
             self.PosLbls[pos].load()
 
@@ -574,7 +578,7 @@ class results(object):
         """
         with open(join(pth, fname), "rb") as dbfile:
             r = dill.load(dbfile)
-        #replace position data
+        # replace position data
         for pos in r.PosLbls.keys():
             if len(r.PosLbls[pos].framelabels) == 0:
                 r.PosLbls[pos].load()
@@ -661,7 +665,6 @@ class results(object):
         )
         A = np.reshape(A, newshape=(-1, A.shape[1]))
         savetxt(filename, A, delimiter=",")
-
 
     def track_explorer(R, keep_only=False):
         """
@@ -1663,12 +1666,14 @@ class frameData(object):
         a = [self._outer.PosLbls[pn].area[frame] for pn in self.Position]
         a = np.concatenate(a)
         return a
-    
+
     @property
     def cellposition(self):
         frame = self.frame
-        return np.concatenate([[pn]*self._outer.PosLbls[pn].num[frame] for pn in self.Position])
-    
+        return np.concatenate(
+            [[pn] * self._outer.PosLbls[pn].num[frame] for pn in self.Position]
+        )
+
     @property
     def cellperposition(self):
         frame = self.frame
@@ -1678,9 +1683,12 @@ class frameData(object):
         ch = ch if isinstance(ch, (list, np.ndarray)) else [ch]
         frame = self.frame
         a = [
-            self._outer.PosLbls[pn].framelabels[frame].regionprops[[''.join(['mean_',c, '_periring'* periring]) for c in ch]]
-            for pn in self.Position if self._outer.PosLbls[pn].num
-        ]   
+            self._outer.PosLbls[pn]
+            .framelabels[frame]
+            .regionprops[["".join(["mean_", c, "_periring" * periring]) for c in ch]]
+            for pn in self.Position
+            if self._outer.PosLbls[pn].num
+        ]
         a = np.concatenate(a)
         return a
 
@@ -1688,20 +1696,25 @@ class frameData(object):
         ch = ch if isinstance(ch, (list, np.ndarray)) else [ch]
         frame = self.frame
         a = [
-            self._outer.PosLbls[pn].framelabels[frame].regionprops[[''.join(['median_',c, '_periring'* periring]) for c in ch]]
-            for pn in self.Position if self._outer.PosLbls[pn].num
-        ]   
+            self._outer.PosLbls[pn]
+            .framelabels[frame]
+            .regionprops[["".join(["median_", c, "_periring" * periring]) for c in ch]]
+            for pn in self.Position
+            if self._outer.PosLbls[pn].num
+        ]
         a = np.concatenate(a)
         return a
-
 
     def minint(self, ch, periring=False):
         ch = ch if isinstance(ch, (list, np.ndarray)) else [ch]
         frame = self.frame
         a = [
-            self._outer.PosLbls[pn].framelabels[frame].regionprops[[''.join(['min_',c, '_periring'* periring]) for c in ch]]
-            for pn in self.Position if self._outer.PosLbls[pn].num
-        ]   
+            self._outer.PosLbls[pn]
+            .framelabels[frame]
+            .regionprops[["".join(["min_", c, "_periring" * periring]) for c in ch]]
+            for pn in self.Position
+            if self._outer.PosLbls[pn].num
+        ]
         a = np.concatenate(a)
         return a
 
@@ -1709,9 +1722,12 @@ class frameData(object):
         ch = ch if isinstance(ch, (list, np.ndarray)) else [ch]
         frame = self.frame
         a = [
-            self._outer.PosLbls[pn].framelabels[frame].regionprops[[''.join(['max_',c, '_periring'* periring]) for c in ch]]
-            for pn in self.Position if self._outer.PosLbls[pn].num
-        ]   
+            self._outer.PosLbls[pn]
+            .framelabels[frame]
+            .regionprops[["".join(["max_", c, "_periring" * periring]) for c in ch]]
+            for pn in self.Position
+            if self._outer.PosLbls[pn].num
+        ]
         a = np.concatenate(a)
         return a
 
@@ -1719,9 +1735,12 @@ class frameData(object):
         ch = ch if isinstance(ch, (list, np.ndarray)) else [ch]
         frame = self.frame
         a = [
-            self._outer.PosLbls[pn].framelabels[frame].regionprops[[''.join(['90th_',c, '_periring'* periring]) for c in ch]]
-            for pn in self.Position if self._outer.PosLbls[pn].num
-        ]   
+            self._outer.PosLbls[pn]
+            .framelabels[frame]
+            .regionprops[["".join(["90th_", c, "_periring" * periring]) for c in ch]]
+            for pn in self.Position
+            if self._outer.PosLbls[pn].num
+        ]
         a = np.concatenate(a)
         return a
 

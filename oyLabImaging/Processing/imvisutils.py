@@ -52,6 +52,6 @@ def export_napari_to_movie(
     ani = animation.ArtistAnimation(fig, ims, interval=50, blit=True, repeat_delay=1000)
 
     writer = animation.FFMpegWriter(fps=fps, bitrate=bitrate, codec="h264")
-
     ani.save(fname, writer=writer,**extra_args)
+    return ani
     #plt.close(fig)
