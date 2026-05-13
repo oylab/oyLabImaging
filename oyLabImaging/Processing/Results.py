@@ -1224,10 +1224,15 @@ class results(object):
                         
                         for bar in bars:
                             y = bar.get_height()
-                            if y > 0.001: 
-                                label_fmt = f'{y:.2f}' if metric == 'expression' else f'{y:.1f}%'
-                                ax.text(bar.get_x() + bar.get_width()/2, y + (max_y_val * 0.02 + 0.01), label_fmt, ha='center', va='bottom', fontweight='bold', fontsize=9)
+                            # FIXED: Tiny threshold so raw intensities aren't skipped
+                            if y > 0.000001: 
+                                # FIXED: 4 decimal places for expression
+                                label_fmt = f'{y:.4f}' if metric == 'expression' else f'{y:.1f}%'
+                                # FIXED: Dynamic offset so text hugs the bar and never floats away
+                                text_y = y + (max_y_val * 0.03)
+                                ax.text(bar.get_x() + bar.get_width()/2, text_y, label_fmt, ha='center', va='bottom', fontweight='bold', fontsize=9)
 
+                    # Dynamic headroom
                     ax.set_ylim(0, max(max_y_val * 1.20, 5) if metric != 'expression' else max_y_val * 1.20) 
                     ax.set_xticks(x_indices)
                     ax.set_xticklabels(valid_positions, fontweight='bold', fontsize=12)
