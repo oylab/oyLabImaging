@@ -538,10 +538,19 @@ class Metadata(object):
 
         mdkeys = [key for key in mddata.keys() if key.startswith("Metadata")]
 
+        # Build an informative acq name: relative path from base_pth to pth,
+        # stripping the position-name component if metadata.txt lives inside
+        # the position folder (position-level metadata layout).
+        _rel = os.path.relpath(pth, self.base_pth)
+        _sample_pos = mddata[mdkeys[0]]["PositionName"] if mdkeys else ""
+        if os.path.basename(pth.rstrip(os.sep)) == _sample_pos:
+            _rel = os.path.dirname(_rel)
+        acq_name = _rel if _rel not in (".", "") else mdsum["Prefix"]
+
         for key in mdkeys:
             mdsing = mddata[key]
             framedata = {
-                "acq": mdsum["Prefix"],
+                "acq": acq_name,
                 "Position": mdsing["PositionName"],
                 "frame": mdsing["Frame"],
                 "Channel": mdsum["ChNames"][mdsing["ChannelIndex"]],
