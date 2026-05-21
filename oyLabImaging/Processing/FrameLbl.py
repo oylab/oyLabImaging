@@ -123,13 +123,19 @@ class FrameLbl(object):
 
         self._seg_fun = segmentation.segtype_to_segfun(segment_type)
 
-        self.channels = MD.unique("Channel", Position=Pos, frame=frame)
+        available_acqs = MD.unique("acq", Position=Pos, frame=frame)
         if acq is None:
-            self.acq = MD.unique("acq", Position=Pos, frame=frame)
+            if len(available_acqs) > 1:
+                raise ValueError(
+                    f"Multiple acquisitions found for Position='{Pos}', frame={frame}: "
+                    f"{available_acqs}. Please specify acq=."
+                )
+            self.acq = available_acqs[0]
         else:
             self.acq = acq
 
-        self.XY = MD().at[MD.unique("index", Position=Pos, frame=frame)[0], "XY"]
+        self.channels = MD.unique("Channel", Position=Pos, frame=frame, acq=self.acq)
+        self.XY = MD().at[MD.unique("index", Position=Pos, frame=frame, acq=self.acq)[0], "XY"]
         self._pixelsize = MD()["PixelSize"][0]
 
         if NucChannel is None:
@@ -334,6 +340,8 @@ class FrameLbl(object):
         print(
             "FrameLbl object for position "
             + self.posname
+            + ", acquisition  "
+            + str(self.acq)
             + " at frame "
             + str(self.frame)
             + "."
