@@ -135,12 +135,15 @@ class PosLbl(object):
         if MD().empty:
             raise AssertionError("No metadata found in supplied path")
 
-        self.channels = MD.unique("Channel", Position=Pos)
-
         if acq is None:
-            self.acq = MD.unique("acq", Position=Pos)
+            acqs = MD.unique("acq", Position=Pos)
+            if len(acqs) > 1:
+                raise ValueError(f"Multiple acquisitions found for Position='{Pos}': {acqs}. Please specify acq=.")
+            self.acq = acqs[0]
         else:
             self.acq = acq
+
+        self.channels = MD.unique("Channel", Position=Pos, acq=self.acq)
 
         if frames is None:
             self.frames = MD.unique("frame", Position=Pos)
@@ -181,7 +184,7 @@ class PosLbl(object):
             print("\nFinished loading and segmenting position " + str(Pos))
 
     def __call__(self):
-        print("PosLbl object for position " + str(self.posname) + ".")
+        print("PosLbl object for position " + str(self.posname) + ", acquisition " + str(self.acq) + ".")
         print("\nThe path to the experiment is: \n " + self.pth)
         print("\n " + str(len(self.frames)) + " frames processed.")
 
@@ -214,6 +217,7 @@ class PosLbl(object):
                 pth = self.pth
         p = PosLbl._load(Pos=Pos, pth=pth, fname=fname)
         self.__dict__.update(p.__dict__)
+        self.__class__ = PosLbl
 
     @classmethod
     def _load(self, Pos=None, pth=None, fname="PosLbls"):
@@ -960,13 +964,15 @@ class PosLbl(object):
         self.relatives = relatives
         self.trackinds = trackbits
 
-    def img(self, Channel=None, Zindex=None, **kwargs):
+    def img(self, Channel=None, Zindex=None, ffield=None, **kwargs):
         """
         Parameters
         ------
         Channel : [DeepBlue] str or list of strings
         register : {[True], False}
         Zindex=[0]
+        ffield : {[None], True, False} — defaults to the ffield flag the
+                 position was segmented with (self._ffieldflag)
 
         Returns
         -------
@@ -978,6 +984,9 @@ class PosLbl(object):
             Channel = self.channels[0]
             print("loading " + Channel)
 
+        if ffield is None:
+            ffield = self._ffieldflag
+
         pth = self.pth
         MD = Metadata(pth, verbose=False)
         if Zindex is None:
@@ -987,6 +996,7 @@ class PosLbl(object):
             Channel=Channel,
             Position=self.posname,
             register=self._registerflag,
+            ffield=ffield,
             Zindex=Zindex,
             **kwargs,
         )
@@ -1439,9 +1449,10 @@ class PosLbl(object):
         viewer.scale_bar.unit = "um"
         viewer.scale_bar.font_size = 16
 
+        ffield = kwargs.pop('ffield', None)
         for ind, ch in enumerate(Channel):
             stk = self.img(
-                Channel=ch, verbose=True, Zindex=Zindex, frames=frames, **kwargs
+                Channel=ch, verbose=True, Zindex=Zindex, frames=frames, ffield=ffield, **kwargs
             )
             stksmp = sample_stack(stk, int(stk.size / 1000))
             viewer.add_image(
