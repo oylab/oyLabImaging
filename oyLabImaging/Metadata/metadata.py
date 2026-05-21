@@ -577,7 +577,7 @@ class Metadata(object):
             join(pth, f.split("/")[-1]) for f in image_table.root_pth
         ]
         image_table["filename"] = [
-            f.replace(self.base_pth, "") for f in image_table.root_pth
+            f.replace(self.base_pth, "").lstrip(os.sep) for f in image_table.root_pth
         ]
         return image_table
 
@@ -593,7 +593,7 @@ class Metadata(object):
         image_table["root_pth"] = image_table.filename
 
         image_table["filename"] = [
-            f.replace(self.base_pth, "") for f in image_table.filename
+            f.replace(self.base_pth, "").lstrip(os.sep) for f in image_table.filename
         ]
         return image_table
 
@@ -867,7 +867,7 @@ class Metadata(object):
         image_table["TimestampFrame"] = image_table["frame"]
 
         image_table["filename"] = [
-            f.replace(self.base_pth, "") for f in image_table.root_pth
+            f.replace(self.base_pth, "").lstrip(os.sep) for f in image_table.root_pth
         ]
         self.image_table = image_table
 
@@ -945,7 +945,7 @@ class Metadata(object):
             MD.image_table["root_pth"] = MD.image_table["filename"].copy()
 
             MD.image_table["root_pth"] = [
-                join(MD.base_pth, f) for f in MD.image_table["filename"]
+                join(MD.base_pth, f.lstrip(os.sep)) for f in MD.image_table["filename"]
             ]
             self._md_name = "metadata.pickle"
             self.type = MD.type
@@ -1372,7 +1372,7 @@ class Metadata(object):
                 im.close()
 
                 if ffield:
-                    img = self._doFlatFieldCorrection(img, find)
+                    img = self._doFlatFieldCorrection(img, find, verbose=verbose)
                 if not pillow:
                     if register:
                         img = self._register(img, find)
@@ -1453,7 +1453,7 @@ class Metadata(object):
                     img = np.array(im)
 
                     if ffield:
-                        img = self._doFlatFieldCorrection(img, find)
+                        img = self._doFlatFieldCorrection(img, find, verbose=verbose)
                     if not pillow:
                         if register:
                             img = self._register(img, find)
@@ -1531,22 +1531,23 @@ class Metadata(object):
         return images_dict
 
     def CalculateFlatField(self, Channel=None, n_samples=50, n_bands=9):
-        """Estimate per-channel blind flat fields using the à trous wavelet transform.
+        """Estimate per-channel, per-acq blind flat fields using the à trous wavelet transform.
 
         Mirrors the approach in the wollmanlab/Metadata MATLAB pipeline:
         average a sample of images to cancel cell signal, then take the
         coarsest AWT approximation plane as the illumination field.
 
-        Flat fields are saved as TIFFs in ``{base_pth}/FlatFields/{ch}.tif``.
-        Drop a TIFF with the correct channel name there to use an externally
-        acquired (hard-copy) flat field without running this function.
+        Flat fields are saved as TIFFs in ``{base_pth}/FlatFields/{ch}_{safe_acq}.tif``.
+        Drop a TIFF with the correct name there to use an externally acquired
+        (hard-copy) flat field without running this function. A global ``{ch}.tif``
+        is also accepted as a fallback by _get_flatfield.
 
         Parameters
         ----------
         Channel : str, list of str, or None
             Channels to process.  None processes all channels.
         n_samples : int
-            Maximum number of images to average per channel.
+            Maximum number of images to average per channel per acq.
         n_bands : int
             Number of AWT scales.  Default 9 matches the MATLAB usage.
         """
@@ -1573,14 +1574,18 @@ class Metadata(object):
                 warnings.warn(f"No images found for channel '{ch}', skipping.")
                 continue
 
-            finds = ch_rows.index.tolist()
-            if len(finds) > n_samples:
-                finds = rng.choice(finds, size=n_samples, replace=False).tolist()
-            mean_img = self._load_mean_image(finds)
-            flt = awt(mean_img, nBands=n_bands)[..., n_bands].astype(np.float32)
-            tifffile.imwrite(join(fld, f'{ch}.tif'), flt)
-            self._flatfields[ch] = flt.astype(np.float64)
-            print(f"Flat field estimated for channel '{ch}' ({len(finds)} images).")
+            for acq in ch_rows['acq'].unique():
+                acq_rows = ch_rows[ch_rows['acq'] == acq]
+                finds = acq_rows.index.tolist()
+                if len(finds) > n_samples:
+                    finds = rng.choice(finds, size=n_samples, replace=False).tolist()
+                mean_img = self._load_mean_image(finds)
+                flt = awt(mean_img, nBands=n_bands)[..., n_bands].astype(np.float32)
+                safe_acq = acq.replace('/', '_').replace('\\', '_')
+                fname = f'{ch}_{safe_acq}.tif'
+                tifffile.imwrite(join(fld, fname), flt)
+                self._flatfields[(ch, acq)] = flt.astype(np.float64)
+                print(f"Flat field estimated for channel '{ch}', acq '{acq}' ({len(finds)} images).")
 
     def _load_mean_image(self, finds):
         """Load raw images for the given row indices and return their mean."""
@@ -1616,11 +1621,23 @@ class Metadata(object):
                 pass
             return np.array(im)
 
-    def _get_flatfield(self, ch):
-        """Lazy-load flat field for channel: session cache → TIFF on disk → None."""
+    def _get_flatfield(self, ch, acq=None):
+        """Lazy-load flat field: {ch}_{acq}.tif → {ch}.tif → None."""
         import tifffile
         if not hasattr(self, '_flatfields'):
             self._flatfields = {}
+        # Per-acq flat field takes priority
+        if acq is not None:
+            key = (ch, acq)
+            if key in self._flatfields:
+                return self._flatfields[key]
+            safe_acq = acq.replace('/', '_').replace('\\', '_')
+            flt_path = join(self.base_pth, 'FlatFields', f'{ch}_{safe_acq}.tif')
+            if path.exists(flt_path):
+                flt = tifffile.imread(flt_path).astype(np.float64)
+                self._flatfields[key] = flt
+                return flt
+        # Fall back to global per-channel
         if ch in self._flatfields:
             return self._flatfields[ch]
         flt_path = join(self.base_pth, 'FlatFields', f'{ch}.tif')
@@ -1630,29 +1647,36 @@ class Metadata(object):
             return flt
         return None
 
-    def _doFlatFieldCorrection(self, img, find):
+    def _doFlatFieldCorrection(self, img, find, verbose=False):
         """Apply flat field correction: corrected = img - flt + max(flt).
 
-        Flat field is lazy-loaded from {base_pth}/FlatFields/{ch}.tif on first
-        use and cached for the session.  Works regardless of source image format
-        (ND2, TIFF, etc.) since the flat field is always loaded from a TIFF.
+        Looks up {ch}_{acq}.tif first, falls back to {ch}.tif.
+        Results are cached so each TIFF is read only once per session.
         """
         if not hasattr(self, '_ffield_warned'):
             self._ffield_warned = set()
-
-        ch = self.image_table.at[find, 'Channel']
-        flt = self._get_flatfield(ch)
+        row = self.image_table.loc[find]
+        ch  = row['Channel']
+        acq = row['acq']
+        flt = self._get_flatfield(ch, acq)
 
         if flt is None:
-            if ch not in self._ffield_warned:
-                self._ffield_warned.add(ch)
+            key = (ch, acq)
+            if key not in self._ffield_warned:
+                self._ffield_warned.add(key)
                 warnings.warn(
-                    f"No flat field found for channel '{ch}' — loading without "
-                    f"correction. Run MD.CalculateFlatField(Channel='{ch}') or "
-                    f"drop a TIFF at FlatFields/{ch}.tif.",
+                    f"No flat field found for channel '{ch}', acq '{acq}' — "
+                    f"loading without correction. Run MD.CalculateFlatField() or "
+                    f"drop a TIFF at FlatFields/{ch}_{acq}.tif (or {ch}.tif).",
                     stacklevel=3,
                 )
             return img
+
+        if verbose:
+            safe_acq = acq.replace('/', '_').replace('\\', '_') if acq else None
+            fname = f"FlatFields/{ch}_{safe_acq}.tif" if safe_acq else f"FlatFields/{ch}.tif"
+            sys.stdout.write(" , " + "applying flat field " + fname)
+            sys.stdout.flush()
 
         img = img.astype(np.float64)
         corrected = img - flt + flt.max()
