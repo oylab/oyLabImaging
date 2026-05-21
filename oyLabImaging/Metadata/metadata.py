@@ -336,6 +336,9 @@ class Metadata(object):
         fname, fext = path.splitext(pth)
         if path.isdir(pth):
             for subdir, curdir, filez in walk(pth, followlinks=True):
+                # Skip the FlatFields directory — those TIFFs are not raw images
+                curdir[:] = [d for d in curdir if d != 'FlatFields']
+
                 assert len([f for f in filez if f.endswith(".nd2")]) < 2, (
                     "directory had multiple nd2 files. Either specify a direct path or (preferably) organize your data so that every nd2 file is in a separate folder"
                 )
@@ -1151,6 +1154,7 @@ class Metadata(object):
                     acq=widget.Acquisition.value,
                     verbose=True,
                     register=w2.value,
+                    ffield=w_ff.value,
                     Zindex=widget.Z_Index.value,
                 )
                 if stk.ndim == 2:
@@ -1255,6 +1259,22 @@ class Metadata(object):
 
             w2 = Object()
             w2.value = False
+
+        # Add flat field checkbox if FlatFields TIFFs are present on disk
+        _ff_dir = join(MD.base_pth, 'FlatFields')
+        _has_ff = path.isdir(_ff_dir) and any(
+            f.endswith('.tif') for f in os.listdir(_ff_dir)
+        )
+        if _has_ff:
+            w_ff = Checkbox(value=False, text="Flat Field Correction?")
+            widget.append(w_ff)
+        else:
+
+            class Object(object):
+                pass
+
+            w_ff = Object()
+            w_ff.value = False
 
         container = Container(layout="horizontal")  # Create a container for the widget
         layout = container.native.layout()  # Get the native layout for the container
@@ -2354,6 +2374,11 @@ class Metadata(object):
 
         @widget.Position.changed.connect
         def _on_pos_change():
+            new_channels = MD.unique(
+                "Channel", acq=widget.Acquisition.value, Position=widget.Position.value
+            )
+            widget.NucChannels.choices = new_channels
+            widget.CytoChannels.choices = new_channels
             viewer.layers.clear()
             _on_movie_clicked()
 
@@ -2363,6 +2388,9 @@ class Metadata(object):
             widget.Position.choices = MD.unique(
                 "Position", acq=widget.Acquisition.value
             )
+            new_channels = MD.unique("Channel", acq=widget.Acquisition.value)
+            widget.NucChannels.choices = new_channels
+            widget.CytoChannels.choices = new_channels
             _on_movie_clicked()
 
         movie_btn = PushButton(text="Image")
@@ -2389,6 +2417,7 @@ class Metadata(object):
                     Channel=ch,
                     verbose=False,
                     register=False,
+                    ffield=w_ff.value,
                 )
                 stk = np.arcsinh(stk / 0.001)
                 stksmp = stk.flatten()  # sample_stack(stk,int(stk.size/100))
@@ -2442,6 +2471,7 @@ class Metadata(object):
                         Position=Pos,
                         Zindex=Zindex,
                         verbose=False,
+                        ffield=w_ff.value,
                     )
                 )
                 assert Data[ch].ndim == 2, (
@@ -2475,6 +2505,27 @@ class Metadata(object):
 
             L = segfun(img=imgNuc, imgCyto=imgCyto, **widget.input_dict)
             viewer.add_labels(L, scale=[pixsize, pixsize])
+
+        # Add flat field checkbox if FlatFields TIFFs are present on disk
+        _ff_dir = join(MD.base_pth, 'FlatFields')
+        _has_ff = path.isdir(_ff_dir) and any(
+            f.endswith('.tif') for f in os.listdir(_ff_dir)
+        )
+        if _has_ff:
+            w_ff = Checkbox(value=False, text="Flat Field Correction?")
+            widget.append(w_ff)
+
+            @w_ff.changed.connect
+            def _on_ff_change():
+                viewer.layers.clear()
+                _on_movie_clicked()
+        else:
+
+            class Object(object):
+                pass
+
+            w_ff = Object()
+            w_ff.value = False
 
         container = Container(layout="horizontal")
         container.max_width = 400
