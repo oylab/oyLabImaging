@@ -242,6 +242,35 @@ _INTENSITY_METHODS = {
 }
 
 
+def _frame_data_multi(fl, channels, intensity, periring):
+    """Return (coords, vals_matrix) for one FrameLbl with multiple channels.
+
+    vals_matrix : (n_cells, n_channels) float64 array.
+    Returns (None, None) if the frame has no cells.
+    """
+    if fl.num == 0:
+        return None, None
+
+    method_name = _INTENSITY_METHODS.get(intensity)
+    if method_name is None:
+        raise ValueError(
+            f"intensity must be one of {list(_INTENSITY_METHODS)}, got '{intensity}'"
+        )
+
+    coords = np.asarray(fl.centroid_um, dtype=np.float64)
+    if len(coords) == 0:
+        return None, None
+
+    cols = []
+    for ch in channels:
+        v = np.asarray(getattr(fl, method_name)(ch, periring=periring), dtype=np.float64)
+        if len(v) != len(coords):
+            return None, None
+        cols.append(v)
+
+    return coords, np.column_stack(cols)
+
+
 def _frame_data(fl, ch_i, ch_j, intensity, periring):
     """Return (coords, vals_i, vals_j) for one FrameLbl, or (None, None, None)."""
     if fl.num == 0:
@@ -525,8 +554,14 @@ def plot_radial(results, labels=None, ax=None, colors=None, alpha_fill=0.2,
     if colors is None:
         colors = [prop_cycle[i % len(prop_cycle)] for i in range(len(results))]
 
-    is_crosscorr = 'ch_i' in results[0]
-    ref_y = 0.0 if is_crosscorr else 1.0
+    is_variogram = results[0].get('variogram', False)
+    is_crosscorr = 'ch_i' in results[0] and not is_variogram
+    if is_variogram:
+        ref_y = results[0].get('variogram_ref', 1.0)
+    elif is_crosscorr:
+        ref_y = 0.0
+    else:
+        ref_y = 1.0
 
     for idx, (res, label, color) in enumerate(zip(results, labels, colors)):
         r   = res['r']
@@ -564,7 +599,18 @@ def plot_radial(results, labels=None, ax=None, colors=None, alpha_fill=0.2,
 
     # Axis labels
     ax.set_xlabel('Distance (µm)', fontsize=12)
-    if is_crosscorr:
+    if is_variogram:
+        ch_i = results[0].get('ch_i', '')
+        ch_j = results[0].get('ch_j', ch_i)
+        if len(results) == 1 and ch_i:
+            if ch_i == ch_j:
+                ylabel = f'Mark variogram γ̃(r)  [{ch_i}]'
+            else:
+                ylabel = f'Cross-variogram γ̃(r)  [{ch_i} × {ch_j}]'
+        else:
+            ylabel = 'Mark variogram γ̃(r)'
+        ax.set_ylabel(ylabel, fontsize=12)
+    elif is_crosscorr:
         ch_i = results[0].get('ch_i', '')
         ch_j = results[0].get('ch_j', '')
         if len(results) == 1 and ch_i:
@@ -591,6 +637,12 @@ def plot_radial(results, labels=None, ax=None, colors=None, alpha_fill=0.2,
 
 
 def _auto_label(result: dict) -> str:
+    if result.get('variogram'):
+        ch_i = result.get('ch_i', '')
+        ch_j = result.get('ch_j', ch_i)
+        if not ch_i:
+            return 'γ̃(r)'
+        return f'{ch_i} γ̃(r)' if ch_i == ch_j else f'{ch_i} × {ch_j} γ̃(r)'
     ch_i = result.get('ch_i', '')
     ch_j = result.get('ch_j', '')
     if not ch_i:
@@ -784,6 +836,533 @@ def find_activity_clusters(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Mark variogram
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _mark_variogram_core(coords, vals_i, vals_j, max_r, dr, n_max, seed) -> dict:
+    """Normalized mark variogram / cross-variogram.
+
+    Auto (vals_j is vals_i):
+        γ̃(r) = E[(m_i − m_j)²] / (2σ²)  →  1 at large r.
+    Cross (vals_j is not vals_i):
+        γ̃_AB(r) = E[(A_i − A_j)(B_i − B_j)] / (2σ_A σ_B)  →  Corr(A,B) at large r.
+    """
+    is_cross = vals_j is not vals_i
+
+    sigma_i = float(vals_i.std())
+    sigma_j = float(vals_j.std()) if is_cross else sigma_i
+
+    if sigma_i < 1e-12 or sigma_j < 1e-12:
+        warnings.warn("Near-zero variance in one channel — mark variogram is undefined.")
+        sigma_i = sigma_j = 1.0
+
+    norm = 2.0 * sigma_i * sigma_j
+    if is_cross:
+        ref = float(np.corrcoef(vals_i, vals_j)[0, 1])
+    else:
+        ref = 1.0
+
+    edges, centres, n_bins = _radial_bins(max_r, dr)
+
+    tree = cKDTree(coords)
+    dist_mat = tree.sparse_distance_matrix(tree, max_distance=max_r,
+                                           output_type='coo_matrix')
+
+    rows  = np.asarray(dist_mat.row,  dtype=int)
+    cols  = np.asarray(dist_mat.col,  dtype=int)
+    dists = np.asarray(dist_mat.data)
+
+    nonself = rows != cols
+    rows, cols, dists = rows[nonself], cols[nonself], dists[nonself]
+
+    if is_cross:
+        contribs = (vals_i[rows] - vals_i[cols]) * (vals_j[rows] - vals_j[cols])
+    else:
+        contribs = (vals_i[rows] - vals_i[cols]) ** 2
+
+    bin_idx = np.searchsorted(edges[1:], dists, side='right')
+    valid   = bin_idx < n_bins
+    bin_idx, contribs = bin_idx[valid], contribs[valid]
+
+    rng = np.random.default_rng(seed)
+    bin_counts  = np.bincount(bin_idx, minlength=n_bins).astype(int)
+    bin_sums    = np.bincount(bin_idx, weights=contribs,      minlength=n_bins)
+    bin_sq_sums = np.bincount(bin_idx, weights=contribs ** 2, minlength=n_bins)
+
+    for b in np.where(bin_counts > n_max)[0]:
+        idx_b = rng.choice(np.where(bin_idx == b)[0], size=n_max, replace=False)
+        c = contribs[idx_b]
+        bin_sums[b]    = c.sum()
+        bin_sq_sums[b] = (c ** 2).sum()
+        bin_counts[b]  = n_max
+
+    with np.errstate(invalid='ignore'):
+        msd = np.where(bin_counts > 0, bin_sums / bin_counts, np.nan)
+        var_of_mean = np.where(
+            bin_counts > 1,
+            (bin_sq_sums / bin_counts - msd ** 2) / (bin_counts - 1),
+            np.nan,
+        )
+        sem = np.sqrt(np.where(var_of_mean > 0, var_of_mean, 0.0))
+
+    return {'r': centres, 'g': msd / norm, 'sem': sem / norm, 'n': bin_counts,
+            'variogram_ref': ref}
+
+
+def mark_variogram(
+    pos,
+    ch_i: str,
+    ch_j: Optional[str] = None,
+    frame=None,
+    max_r: float = 200.0,
+    dr: float = 5.0,
+    n_max: int = 50_000,
+    intensity: str = 'mean',
+    periring: bool = False,
+    seed: int = 42,
+    ffield: bool = True,
+) -> dict:
+    """Normalized mark variogram / cross-variogram γ̃(r) for cell intensities.
+
+    Auto (ch_j omitted or equal to ch_i):
+        γ̃(r) = E[(m_i − m_j)²] / (2σ²).  γ̃ → 1 at large r.
+
+    Cross (ch_j given, different from ch_i):
+        γ̃_AB(r) = E[(A_i − A_j)(B_i − B_j)] / (2σ_A σ_B).
+        γ̃_AB → Corr(A, B) at large r (reference line in plot).
+
+    γ̃ < reference: marks at distance r co-vary more than at large r (positive spatial autocorrelation).
+    γ̃ > reference: marks at distance r co-vary less / in opposite direction.
+
+    Parameters
+    ----------
+    pos : PosLbl
+    ch_i : str
+        First channel (or the only channel for auto-variogram).
+    ch_j : str, optional
+        Second channel.  Defaults to ch_i (auto-variogram).
+    frame : int, list of int, or None
+    max_r : float   Maximum radius in µm.
+    dr : float      Bin width in µm.
+    n_max : int     Max pairs subsampled per bin (speed vs. accuracy).
+    intensity : str Per-cell metric: 'mean', 'median', 'max', 'min', 'ninety'.
+    periring : bool Use perinuclear-ring intensity.
+    seed : int
+
+    Returns
+    -------
+    dict
+        r             : (B,) bin centres in µm
+        g             : (B,) γ̃(r) values
+        sem           : (B,) standard error of the mean per bin
+        n             : (B,) pair counts per bin
+        variogram_ref : float — reference value at large r (1.0 for auto; Corr(A,B) for cross)
+        ch_i, ch_j, variogram=True, max_r, dr
+    """
+    ch_j = ch_j or ch_i
+    frames = _resolve_frames(pos, frame)
+
+    if ffield:
+        uncorrected = [t for t in frames
+                       if not getattr(pos.framelabels[t], '_ffield', False)]
+        if uncorrected:
+            warnings.warn(
+                f"ffield=True requested but {len(uncorrected)} frame(s) were "
+                f"segmented without flat-field correction.  Intensities may "
+                f"contain illumination bias.",
+                stacklevel=2,
+            )
+    else:
+        corrected = [t for t in frames
+                     if getattr(pos.framelabels[t], '_ffield', False)]
+        if corrected:
+            warnings.warn(
+                f"ffield=False requested but the FrameLbl data for "
+                f"{len(corrected)} frame(s) was segmented with flat-field "
+                f"correction.  Cell intensities are already ffield-corrected.",
+                stacklevel=2,
+            )
+
+    per_frame = []
+    for t in frames:
+        fl = pos.framelabels[t]
+        coords, vals_i, vals_j = _frame_data(fl, ch_i, ch_j, intensity, periring)
+        if coords is None or len(coords) < 2:
+            continue
+        # Pass same object for auto so core can detect it via identity
+        vj = vals_j if ch_j != ch_i else vals_i
+        per_frame.append(_mark_variogram_core(coords, vals_i, vj, max_r, dr, n_max, seed))
+
+    if not per_frame:
+        raise ValueError("No frames with enough cells to compute mark variogram.")
+
+    result = _combine(per_frame, max_r, dr)
+    # Carry forward the variogram_ref (average across frames, weighted by pair count)
+    refs = [f['variogram_ref'] for f in per_frame]
+    ns   = [f['n'].sum() for f in per_frame]
+    result['variogram_ref'] = float(np.average(refs, weights=ns)) if ns else per_frame[0]['variogram_ref']
+    result.update({'ch_i': ch_i, 'ch_j': ch_j, 'variogram': True, 'max_r': max_r, 'dr': dr})
+    return result
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Geographically Weighted Regression (GWR)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _gwr_core(coords: np.ndarray, y: np.ndarray, X_pred: np.ndarray,
+              bandwidth: float, kernel: str) -> dict:
+    """Fit a local WLS regression at every cell (GWR).
+
+    Parameters
+    ----------
+    coords   : (N, 2) cell positions in µm
+    y        : (N,)   response variable
+    X_pred   : (N, p) predictor columns — intercept added internally
+    bandwidth: kernel bandwidth in µm
+    kernel   : 'gaussian' (soft cutoff at 3σ) or 'bisquare' (hard cutoff)
+
+    Returns
+    -------
+    dict with arrays of shape (N, p+1) for beta / t_stat / se,
+    and (N,) for r_squared and pvalue (normal approximation on t-stats).
+    """
+    from scipy.stats import norm as _norm
+
+    N = len(coords)
+    p = X_pred.shape[1]
+    X = np.column_stack([np.ones(N), X_pred])   # (N, p+1)
+
+    beta   = np.full((N, p + 1), np.nan)
+    r_sq   = np.full(N, np.nan)
+    t_stat = np.full((N, p + 1), np.nan)
+    se_arr = np.full((N, p + 1), np.nan)
+
+    cutoff = bandwidth * 3.0 if kernel == 'gaussian' else bandwidth
+    tree = cKDTree(coords)
+    nb_list = tree.query_ball_point(coords, r=cutoff)
+
+    for i in range(N):
+        nb = np.array(nb_list[i], dtype=int)
+        if len(nb) < p + 2:
+            continue
+
+        d = np.linalg.norm(coords[nb] - coords[i], axis=1)
+        if kernel == 'gaussian':
+            w = np.exp(-0.5 * (d / bandwidth) ** 2)
+        else:
+            u = np.clip(d / bandwidth, 0.0, 1.0)
+            w = (1.0 - u ** 2) ** 2
+
+        pos_w = w > 1e-10
+        nb, w = nb[pos_w], w[pos_w]
+        if len(nb) < p + 2:
+            continue
+
+        Xi     = X[nb]           # (k, p+1)
+        yi     = y[nb]           # (k,)
+        w_sqrt = np.sqrt(w)      # (k,)
+
+        # WLS via transformed OLS: multiply rows by √w
+        Xw = Xi * w_sqrt[:, None]
+        yw = yi * w_sqrt
+
+        b, _, rank, _ = np.linalg.lstsq(Xw, yw, rcond=None)
+        if rank < p + 1:
+            continue
+
+        beta[i] = b
+
+        y_hat  = Xi @ b
+        resid  = yi - y_hat
+        y_mean = np.average(yi, weights=w)
+        SS_res = float(w @ resid ** 2)
+        SS_tot = float(w @ (yi - y_mean) ** 2)
+        r_sq[i] = 1.0 - SS_res / SS_tot if SS_tot > 1e-12 else np.nan
+
+        dof    = max(len(nb) - (p + 1), 1)
+        sigma2 = SS_res / dof
+        try:
+            cov  = sigma2 * np.linalg.inv(Xw.T @ Xw)
+            se_i = np.sqrt(np.maximum(np.diag(cov), 0.0))
+            se_arr[i] = se_i
+            t_stat[i] = np.where(se_i > 1e-12, b / se_i, np.nan)
+        except np.linalg.LinAlgError:
+            pass
+
+    # Two-sided p-values using normal approximation (large-n)
+    pvalue = 2.0 * (1.0 - _norm.cdf(np.abs(t_stat)))
+
+    return {'beta': beta, 'r_squared': r_sq, 't_stat': t_stat,
+            'se': se_arr, 'pvalue': pvalue}
+
+
+def gwr(
+    pos,
+    ch_y: str,
+    ch_x,
+    frame=None,
+    bandwidth: float = 50.0,
+    kernel: str = 'gaussian',
+    intensity: str = 'mean',
+    periring: bool = False,
+    seed: int = 42,
+    ffield: bool = True,
+) -> dict:
+    """Geographically Weighted Regression (GWR).
+
+    Fits a local weighted linear regression at each cell using a spatial
+    kernel, yielding per-cell estimates of slope, intercept, R², and
+    significance.  Where the slope is high and R² is high, the two channels
+    are strongly locally correlated; where the slope varies spatially,
+    the correlation is non-stationary — the channels couple differently in
+    different tissue regions.
+
+    Model at cell i:
+        ch_y = β₀(i) + β₁(i)·ch_x₁ + β₂(i)·ch_x₂ + … + ε
+    Weights: Gaussian  w_ij = exp(−d²/(2·bw²))
+             Bisquare  w_ij = (1−(d/bw)²)²  for d < bw, else 0.
+
+    Parameters
+    ----------
+    pos : PosLbl
+    ch_y : str           Response channel.
+    ch_x : str or list   Predictor channel(s).
+    frame : int or None
+    bandwidth : float    Kernel bandwidth in µm.
+    kernel : str         'gaussian' (default) or 'bisquare'.
+    intensity : str      Per-cell metric: 'mean', 'median', 'max', 'min', 'ninety'.
+    periring : bool
+    ffield : bool
+
+    Returns
+    -------
+    dict (single frame) or list of dicts:
+        beta      : (N, p+1)  local intercept + slopes
+        r_squared : (N,)      local R²
+        t_stat    : (N, p+1)  t-statistics
+        se        : (N, p+1)  standard errors
+        pvalue    : (N, p+1)  two-sided p-values (normal approx)
+        coords    : (N, 2)    cell positions in µm
+        ch_y, ch_x, bandwidth, kernel, frame_index
+    """
+    if isinstance(ch_x, str):
+        ch_x = [ch_x]
+
+    channels = [ch_y] + list(ch_x)
+    frames = _resolve_frames(pos, frame)
+
+    if ffield:
+        uncorrected = [t for t in frames
+                       if not getattr(pos.framelabels[t], '_ffield', False)]
+        if uncorrected:
+            warnings.warn(
+                f"ffield=True requested but {len(uncorrected)} frame(s) were "
+                f"segmented without flat-field correction.",
+                stacklevel=2,
+            )
+    else:
+        corrected = [t for t in frames
+                     if getattr(pos.framelabels[t], '_ffield', False)]
+        if corrected:
+            warnings.warn(
+                f"ffield=False requested but {len(corrected)} frame(s) were "
+                f"segmented with flat-field correction.  Intensities are already corrected.",
+                stacklevel=2,
+            )
+
+    per_frame = []
+    for t in frames:
+        fl = pos.framelabels[t]
+        coords, vals = _frame_data_multi(fl, channels, intensity, periring)
+        if coords is None or len(coords) < len(ch_x) + 2:
+            continue
+
+        y      = vals[:, 0]
+        X_pred = vals[:, 1:]
+
+        res = _gwr_core(coords, y, X_pred, bandwidth, kernel)
+        res.update({'coords': coords, 'ch_y': ch_y, 'ch_x': list(ch_x),
+                    'bandwidth': bandwidth, 'kernel': kernel, 'frame_index': t})
+        per_frame.append(res)
+
+    if not per_frame:
+        raise ValueError("No frames with enough cells to compute GWR.")
+
+    if isinstance(frame, (int, np.integer)) or (
+        isinstance(frame, list) and len(frame) == 1
+    ):
+        return per_frame[0]
+    return per_frame
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Spatial regionalization
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _spatial_niche_features(coords: np.ndarray, vals_matrix: np.ndarray,
+                             radius: float) -> np.ndarray:
+    """Mean marker expression within *radius* µm for each cell (includes self).
+
+    Returns (n_cells, n_markers) niche matrix.
+    """
+    tree = cKDTree(coords)
+    neighbors = tree.query_ball_point(coords, r=radius)
+    niche = np.zeros_like(vals_matrix)
+    for i, nb in enumerate(neighbors):
+        niche[i] = vals_matrix[nb].mean(axis=0)
+    return niche
+
+
+def spatial_regions(
+    pos,
+    channels,
+    frame=None,
+    radius: float = 50.0,
+    n_regions=None,
+    method: str = 'kmeans',
+    intensity: str = 'mean',
+    periring: bool = False,
+    seed: int = 42,
+    ffield: bool = True,
+    max_k: int = 10,
+) -> dict:
+    """Multivariate spatial regionalization.
+
+    Tissue is partitioned into spatial regions based on the local neighborhood
+    expression pattern of multiple marker channels.  For each cell a *niche
+    vector* is computed — the mean intensity of every marker within *radius* µm
+    — then z-score normalized and clustered.  Regions are defined by which
+    markers are collectively elevated in the neighborhood, not by co-expression
+    on individual cells.
+
+    Parameters
+    ----------
+    pos : PosLbl
+    channels : list of str
+        Marker channels to include in the niche vector.
+    frame : int, list of int, or None
+        Frame index.  None processes all frames independently.
+    radius : float
+        Neighborhood radius in µm for niche averaging.
+    n_regions : int or None
+        Number of regions.  None → auto-selected (k = 2 … max_k) via silhouette.
+    method : str
+        'kmeans' (default) or 'gmm'.
+    intensity : str
+        Per-cell intensity metric: 'mean', 'median', 'max', 'min', 'ninety'.
+    periring : bool
+        Use perinuclear-ring intensity.
+    seed : int
+    ffield : bool
+    max_k : int
+        Upper bound for auto k-selection.
+
+    Returns
+    -------
+    dict (single frame) or list of dicts:
+        labels          : (N,) int    — region index per cell (0-based)
+        coords          : (N, 2)      — cell positions in µm
+        niche           : (N, C)      — z-scored niche feature matrix used for clustering
+        marker_profiles : (k, C)      — mean raw niche expression per region per channel
+        n_regions       : int
+        channels        : list of str
+        silhouette      : float       — silhouette score of the clustering
+        frame_index     : int
+    """
+    from sklearn.cluster import KMeans
+    from sklearn.mixture import GaussianMixture
+    from sklearn.preprocessing import StandardScaler
+    from sklearn.metrics import silhouette_score
+
+    frames = _resolve_frames(pos, frame)
+
+    if ffield:
+        uncorrected = [t for t in frames
+                       if not getattr(pos.framelabels[t], '_ffield', False)]
+        if uncorrected:
+            warnings.warn(
+                f"ffield=True requested but {len(uncorrected)} frame(s) were "
+                f"segmented without flat-field correction.  Intensities may "
+                f"contain illumination bias.",
+                stacklevel=2,
+            )
+    else:
+        corrected = [t for t in frames
+                     if getattr(pos.framelabels[t], '_ffield', False)]
+        if corrected:
+            warnings.warn(
+                f"ffield=False requested but the FrameLbl data for "
+                f"{len(corrected)} frame(s) was segmented with flat-field "
+                f"correction.  Cell intensities are already ffield-corrected.",
+                stacklevel=2,
+            )
+
+    per_frame = []
+    for t in frames:
+        fl = pos.framelabels[t]
+        coords, vals = _frame_data_multi(fl, channels, intensity, periring)
+        min_cells = max(3, n_regions if n_regions is not None else 2)
+        if coords is None or len(coords) < min_cells:
+            continue
+
+        niche_raw = _spatial_niche_features(coords, vals, radius)
+
+        scaler = StandardScaler()
+        X = scaler.fit_transform(niche_raw)
+
+        sample_size = min(5000, len(X))
+
+        # Auto-select k via silhouette score
+        k = n_regions
+        if k is None:
+            sil_scores = []
+            for ki in range(2, max_k + 1):
+                km_tmp = KMeans(n_clusters=ki, n_init=10, random_state=seed)
+                lbl_tmp = km_tmp.fit_predict(X)
+                sil_scores.append(
+                    silhouette_score(X, lbl_tmp, sample_size=sample_size,
+                                     random_state=seed)
+                )
+            k = int(np.argmax(sil_scores)) + 2
+
+        if method == 'gmm':
+            model = GaussianMixture(n_components=k, random_state=seed, n_init=5)
+            labels = model.fit_predict(X)
+        else:
+            model = KMeans(n_clusters=k, n_init=20, random_state=seed)
+            labels = model.fit_predict(X)
+
+        sil = float(silhouette_score(X, labels, sample_size=sample_size,
+                                     random_state=seed))
+
+        marker_profiles = np.array([
+            niche_raw[labels == ki].mean(axis=0) if (labels == ki).any()
+            else np.zeros(len(channels))
+            for ki in range(k)
+        ])
+
+        per_frame.append({
+            'labels':          labels,
+            'coords':          coords,
+            'niche':           X,
+            'marker_profiles': marker_profiles,
+            'n_regions':       k,
+            'channels':        list(channels),
+            'silhouette':      sil,
+            'frame_index':     t,
+        })
+
+    if not per_frame:
+        raise ValueError("No frames with enough cells to compute spatial regions.")
+
+    if isinstance(frame, (int, np.integer)) or (
+        isinstance(frame, list) and len(frame) == 1
+    ):
+        return per_frame[0]
+    return per_frame
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # LISA core
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -883,6 +1462,161 @@ def _local_moran_core(
         'edge_frac': edge_frac,
         'is_edge': is_edge,
     }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Getis-Ord Gi*
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _gistar_core(
+    coords: np.ndarray,
+    vals: np.ndarray,
+    radius: float,
+    seed: int,
+    fov_bbox=None,
+) -> dict:
+    """Getis-Ord Gi* with analytical z-score and Ripley-style edge flagging.
+
+    Gi* (with asterisk) includes the focal cell in its own neighbourhood,
+    making the statistic a local z-score of the neighbourhood sum:
+
+        z_i = (Σ_{j ∈ N*_i} x_j − X̄·W_i) / (S · √((n·W_i − W_i²) / (n−1)))
+
+    where X̄ is the global mean, S the population std, W_i = |N*_i|.
+    Positive z: hot spot (high-value cluster); negative: cold spot.
+    """
+    from scipy.stats import norm as _norm
+
+    n = len(vals)
+    x_bar = float(vals.mean())
+    s = float(np.sqrt(max(np.mean(vals ** 2) - x_bar ** 2, 0.0)))  # population std
+
+    rng = np.random.default_rng(seed)
+    edge_frac = _circle_fov_fraction(coords, radius, rng, fov_bbox=fov_bbox)
+    is_edge = edge_frac < 0.90
+
+    tree = cKDTree(coords)
+    neighbors = tree.query_ball_point(coords, r=radius)  # includes self (Gi*)
+
+    z_scores = np.full(n, np.nan, dtype=np.float64)
+
+    if s < 1e-12:
+        warnings.warn("Near-zero variance — Gi* will be 0.")
+        z_scores[:] = 0.0
+    else:
+        for i in range(n):
+            nb = np.array(neighbors[i], dtype=int)
+            w_i = len(nb)
+            if w_i == 0:
+                continue
+            numer = float(vals[nb].sum()) - x_bar * w_i
+            denom_sq = s ** 2 * (n * w_i - w_i ** 2) / max(n - 1, 1)
+            z_scores[i] = numer / np.sqrt(denom_sq) if denom_sq > 0 else 0.0
+
+    pvalue = np.where(
+        np.isfinite(z_scores),
+        2.0 * (1.0 - _norm.cdf(np.abs(z_scores))),
+        np.nan,
+    )
+
+    return {
+        'coords':    coords,
+        'vals':      vals,
+        'z_score':   z_scores,
+        'pvalue':    pvalue,
+        'edge_frac': edge_frac,
+        'is_edge':   is_edge,
+    }
+
+
+def gistar(
+    pos,
+    ch: str,
+    frame=None,
+    radius: float = 50.0,
+    intensity: str = 'mean',
+    periring: bool = False,
+    seed: int = 42,
+    ffield: bool = True,
+) -> dict:
+    """Getis-Ord Gi* hot-spot statistic for each cell.
+
+    Returns a per-cell z-score indicating whether cell i sits within a
+    local cluster of high (z > 0) or low (z < 0) values relative to the
+    global distribution.  Unlike LISA, Gi* does not require the focal cell
+    to be atypical itself — it measures whether its neighbourhood as a
+    whole is elevated.
+
+    Parameters
+    ----------
+    pos : PosLbl
+    ch : str
+        Channel whose intensity is the spatial mark.
+    frame : int, list of int, or None
+    radius : float
+        Neighbourhood radius in µm.
+    intensity : str
+        Per-cell metric: 'mean', 'median', 'max', 'min', 'ninety'.
+    periring : bool
+        Use perinuclear-ring intensity.
+    seed : int
+
+    Returns
+    -------
+    dict (single frame) or list of dicts:
+        coords    : (N, 2)  cell positions in µm
+        z_score   : (N,)    Gi* z-score per cell
+        pvalue    : (N,)    two-sided p-value (normal approximation)
+        vals      : (N,)    raw intensity values
+        edge_frac : (N,)    fraction of search circle inside FOV
+        is_edge   : (N,)    True for cells with < 90 % circle coverage
+        ch, radius, frame_index
+    """
+    frames = _resolve_frames(pos, frame)
+
+    if ffield:
+        uncorrected = [t for t in frames
+                       if not getattr(pos.framelabels[t], '_ffield', False)]
+        if uncorrected:
+            warnings.warn(
+                f"ffield=True requested but {len(uncorrected)} frame(s) were "
+                f"segmented without flat-field correction.  Intensities may "
+                f"contain illumination bias.",
+                stacklevel=2,
+            )
+    else:
+        corrected = [t for t in frames
+                     if getattr(pos.framelabels[t], '_ffield', False)]
+        if corrected:
+            warnings.warn(
+                f"ffield=False requested but the FrameLbl data for "
+                f"{len(corrected)} frame(s) was segmented with flat-field "
+                f"correction.  Cell intensities are already ffield-corrected.",
+                stacklevel=2,
+            )
+
+    per_frame = []
+    for t in frames:
+        fl = pos.framelabels[t]
+        coords, vals, _ = _frame_data(fl, ch, ch, intensity, periring)
+        if coords is None or len(coords) < 3:
+            continue
+        ps = float(fl._pixelsize)
+        H, W = fl.imagedims
+        xy = np.asarray(fl.XY, dtype=np.float64)
+        fov_bbox = (xy[0], xy[0] + H * ps, xy[1], xy[1] + W * ps)
+        res = _gistar_core(coords, vals, radius, seed, fov_bbox)
+        res.update({'ch': ch, 'radius': radius, 'frame_index': t})
+        per_frame.append(res)
+
+    if not per_frame:
+        raise ValueError("No frames with enough cells to compute Gi*.")
+
+    if isinstance(frame, (int, np.integer)) or (
+        isinstance(frame, list) and len(frame) == 1
+    ):
+        return per_frame[0]
+    return per_frame
 
 
 def fit_lengthscale(

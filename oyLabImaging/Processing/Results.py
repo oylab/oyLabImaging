@@ -374,6 +374,361 @@ class results(object):
             ntracks.append(self.PosLbls[pos].numtracks)
         return ntracks
 
+    def calculate_spatial_stats(self, Position=None, channels=None, frame=None,
+                                stats=None, ffield=True, img=False, n_jobs=4, **kwargs):
+        """
+        Compute spatial statistics across multiple positions and cache results.
+
+        Parameters
+        ----------
+        Position : str or list, optional
+            Positions to process. Defaults to all segmented positions.
+        channels : list, optional
+            Channels to use. Defaults to all channels. Auto-correlations and all
+            unique cross-pairs (A×B but not both A×B and B×A) are computed.
+        frame : int or list, optional
+            Frame(s) to process. Defaults to None (all frames aggregated).
+        stats : list of str, optional
+            Which statistics to compute. Any subset of:
+              'radial_corr'    — radial intensity correlation g(r)
+              'radial_density' — pair correlation function (geometry only)
+              'lengthscale'    — exponential fit λ of g(r); computed automatically
+                                 whenever 'radial_corr' is requested
+              'mark_variogram' — normalised mark variogram γ̃(r)
+            Defaults to all four.
+        ffield : bool
+            Apply flat-field correction (default True).
+        img : bool
+            Use pixel-level FFT correlation instead of cell-level for
+            `radial_corr` and `lengthscale` (default False).
+        n_jobs : int
+            Number of parallel threads (default 4).
+
+        Returns
+        -------
+        dict stored on self.spatial_stats with keys matching requested stats.
+        Curve stats (radial_corr, radial_density, mark_variogram) are stored as
+        nested dicts  {pos: {(ch_i, ch_j): result}} or {pos: result}.
+        lengthscale is stored as both a nested dict and a summary DataFrame.
+        """
+        import itertools
+        import pandas as pd
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        from tqdm import tqdm
+
+        _valid = {'radial_corr', 'radial_density', 'lengthscale', 'mark_variogram'}
+        if stats is None:
+            stats = list(_valid)
+        else:
+            stats = list(stats)
+            unknown = set(stats) - _valid
+            if unknown:
+                raise ValueError(f"Unknown stats: {unknown}. Valid: {_valid}")
+
+        # lengthscale requires radial_corr
+        if 'lengthscale' in stats and 'radial_corr' not in stats:
+            stats.append('radial_corr')
+
+        if Position is None:
+            Position = list(self.PosLbls.keys())
+        elif not isinstance(Position, (list, np.ndarray)):
+            Position = [Position]
+        missing = [p for p in Position if p not in self.PosLbls]
+        if missing:
+            raise ValueError(f"Positions not segmented: {missing}")
+
+        if channels is None:
+            channels = list(self.channels)
+        elif not isinstance(channels, list):
+            channels = [channels]
+
+        # auto + upper-triangle cross pairs
+        ch_pairs = [(ch, ch) for ch in channels]
+        ch_pairs += [(a, b) for a, b in itertools.combinations(channels, 2)]
+
+        def _process_pos(pos):
+            import io
+            import sys
+            P = self.PosLbls[pos]
+            pos_result = {}
+            _stdout, sys.stdout = sys.stdout, io.StringIO()
+            try:
+                if 'radial_density' in stats:
+                    pos_result['radial_density'] = P.radial_density(frame=frame)
+
+                if 'radial_corr' in stats:
+                    pos_result['radial_corr'] = {}
+                    if 'lengthscale' in stats:
+                        pos_result['lengthscale'] = {}
+                    for (ch_i, ch_j) in ch_pairs:
+                        chj = None if ch_j == ch_i else ch_j
+                        pos_result['radial_corr'][(ch_i, ch_j)] = P.radial_corr(
+                            ch_i, ch_j=chj, frame=frame, img=img, ffield=ffield)
+                        if 'lengthscale' in stats:
+                            pos_result['lengthscale'][(ch_i, ch_j)] = \
+                                P.fit_corr_lengthscale(ch_i, ch_j=chj, frame=frame,
+                                                       img=img, ffield=ffield)
+
+                if 'mark_variogram' in stats:
+                    pos_result['mark_variogram'] = {}
+                    for (ch_i, ch_j) in ch_pairs:
+                        chj = None if ch_j == ch_i else ch_j
+                        pos_result['mark_variogram'][(ch_i, ch_j)] = P.mark_variogram(
+                            ch_i, ch_j=chj, frame=frame, ffield=ffield)
+            finally:
+                sys.stdout = _stdout
+
+            return pos, pos_result
+
+        compiled = {s: {} for s in stats}
+        with ThreadPoolExecutor(max_workers=n_jobs) as pool:
+            futures = {pool.submit(_process_pos, pos): pos for pos in Position}
+            for fut in tqdm(as_completed(futures), total=len(futures),
+                            desc='spatial stats', unit='pos'):
+                pos, pos_result = fut.result()
+                for stat, data in pos_result.items():
+                    compiled[stat][pos] = data
+
+        # build lengthscale summary DataFrame
+        if 'lengthscale' in compiled:
+            rows = []
+            for pos, fits in compiled['lengthscale'].items():
+                for (ch_i, ch_j), fit in fits.items():
+                    if fit is not None:
+                        rows.append(dict(position=pos, ch_i=ch_i, ch_j=ch_j,
+                                         lam=fit.get('lambda'), lam_err=fit.get('lambda_err'),
+                                         r_sq=fit.get('r_sq')))
+            compiled['lengthscale_summary'] = pd.DataFrame(rows)
+
+        if not hasattr(self, 'spatial_stats'):
+            self.spatial_stats = {}
+        self.spatial_stats.update(compiled)
+        self.save()
+        return self.spatial_stats
+
+    def spatial_report(self, groups=None, stats=None, channels=None, panel_size=(4, 3)):
+        """
+        Plot a multi-figure report comparing spatial statistics across positions.
+
+        Parameters
+        ----------
+        groups : dict, optional
+            {label: [list of positions]} to compare. If None, uses the 'group'
+            field from the metadata if available, otherwise each position is its
+            own group. Groups with more than one member are shown as mean ± SEM.
+        stats : list of str, optional
+            Which stats to include. Defaults to all computed stats.
+        channels : list, optional
+            Restrict to specific channels. Defaults to all channels in spatial_stats.
+        panel_size : tuple
+            (width, height) in inches per subplot panel.
+
+        Returns
+        -------
+        list of matplotlib Figure objects
+        """
+        from collections import defaultdict
+
+        import matplotlib.pyplot as plt
+        import numpy as np
+
+        if not hasattr(self, 'spatial_stats') or not self.spatial_stats:
+            raise RuntimeError(
+                "No spatial statistics found. Run R.calculate_spatial_stats() first."
+            )
+
+        _curve_stats = ['radial_corr', 'radial_density', 'mark_variogram']
+        _all_stats = _curve_stats + ['lengthscale']
+        available = set(self.spatial_stats) - {'lengthscale_summary'}
+
+        if stats is None:
+            stats = [s for s in _all_stats if s in available]
+        else:
+            missing = [s for s in stats if s not in available]
+            if missing:
+                raise ValueError(
+                    f"Stats not computed: {missing}. Run calculate_spatial_stats() first."
+                )
+
+        # collect all positions that appear in any stat
+        all_positions = set()
+        for s in stats:
+            if s in self.spatial_stats:
+                all_positions.update(self.spatial_stats[s].keys())
+        all_positions = sorted(all_positions)
+
+        # resolve groups
+        if groups is not None:
+            pass  # use as supplied
+        else:
+            # try metadata group field
+            try:
+                MD = Metadata(self.pth)
+                pos_to_group = {}
+                for pos in all_positions:
+                    grp_vals = MD.unique('group', Position=pos)
+                    grp = grp_vals[0] if (grp_vals and grp_vals[0] is not None) else None
+                    pos_to_group[pos] = grp if grp else pos
+                if len(set(pos_to_group.values())) < len(all_positions):
+                    g = defaultdict(list)
+                    for pos, grp in pos_to_group.items():
+                        g[grp].append(pos)
+                    groups = dict(g)
+                else:
+                    groups = {pos: [pos] for pos in all_positions}
+            except Exception:
+                groups = {pos: [pos] for pos in all_positions}
+
+        n_groups = len(groups)
+        use_sem = any(len(v) > 1 for v in groups.values())
+        colors = plt.cm.tab10(np.linspace(0, 0.9, max(n_groups, 1)))
+
+        # determine channel pairs from stored data
+        def _detect_ch_pairs(stat_name):
+            d = self.spatial_stats.get(stat_name, {})
+            for pos_data in d.values():
+                if isinstance(pos_data, dict):
+                    return list(pos_data.keys())
+            return []
+
+        if channels is not None:
+            ch_set = set(channels)
+            raw_pairs = _detect_ch_pairs('radial_corr') or _detect_ch_pairs('mark_variogram')
+            ch_pairs = [(a, b) for a, b in raw_pairs
+                        if a in ch_set and b in ch_set]
+        else:
+            ch_pairs = _detect_ch_pairs('radial_corr') or _detect_ch_pairs('mark_variogram')
+
+        def _pair_label(ch_i, ch_j):
+            return ch_i if ch_i == ch_j else f'{ch_i} × {ch_j}'
+
+        def _subplot_grid(n, panel_size):
+            ncols = min(n, 3)
+            nrows = (n + ncols - 1) // ncols
+            fig, axes = plt.subplots(
+                nrows, ncols,
+                figsize=(panel_size[0] * ncols, panel_size[1] * nrows),
+                squeeze=False,
+            )
+            return fig, axes, nrows, ncols
+
+        def _plot_curves(ax, stat_name, key, groups, colors, ref=None):
+            """Plot mean ± SEM curves for one channel pair across groups."""
+            stat_data = self.spatial_stats[stat_name]
+            for g_idx, (label, pos_list) in enumerate(groups.items()):
+                curves = []
+                for pos in pos_list:
+                    pos_data = stat_data.get(pos)
+                    if pos_data is None:
+                        continue
+                    entry = pos_data.get(key) if key is not None else pos_data
+                    if entry is not None:
+                        curves.append(entry)
+                if not curves:
+                    continue
+                r = curves[0]['r']
+                g_mat = np.array([c['g'] for c in curves], dtype=float)
+                mean_g = np.nanmean(g_mat, axis=0)
+                color = colors[g_idx]
+                ax.plot(r, mean_g, color=color, label=label, lw=1.5)
+                if len(curves) > 1 and use_sem:
+                    sem_g = np.nanstd(g_mat, axis=0) / np.sqrt(len(curves))
+                    ax.fill_between(r, mean_g - sem_g, mean_g + sem_g,
+                                    color=color, alpha=0.2)
+            if ref is not None:
+                ax.axhline(ref, color='k', lw=0.8, ls='--', zorder=0)
+
+        figs = []
+
+        # --- Radial correlation ---
+        if 'radial_corr' in stats and ch_pairs:
+            fig, axes, nrows, ncols = _subplot_grid(len(ch_pairs), panel_size)
+            fig.suptitle('Radial Correlation  g(r)', fontsize=12, fontweight='bold')
+            for idx, (ch_i, ch_j) in enumerate(ch_pairs):
+                ax = axes[idx // ncols][idx % ncols]
+                _plot_curves(ax, 'radial_corr', (ch_i, ch_j), groups, colors, ref=0)
+                ax.set_title(_pair_label(ch_i, ch_j), fontsize=9)
+                ax.set_xlabel('r (µm)')
+                ax.set_ylabel('g(r)')
+                if n_groups > 1:
+                    ax.legend(fontsize=7)
+            for idx in range(len(ch_pairs), nrows * ncols):
+                axes[idx // ncols][idx % ncols].set_visible(False)
+            fig.tight_layout()
+            figs.append(fig)
+
+        # --- Pair correlation (radial density) ---
+        if 'radial_density' in stats:
+            fig, ax = plt.subplots(1, 1, figsize=panel_size)
+            fig.suptitle('Pair Correlation Function  g(r)', fontsize=12, fontweight='bold')
+            _plot_curves(ax, 'radial_density', None, groups, colors, ref=1.0)
+            ax.set_xlabel('r (µm)')
+            ax.set_ylabel('g(r)')
+            if n_groups > 1:
+                ax.legend(fontsize=7)
+            fig.tight_layout()
+            figs.append(fig)
+
+        # --- Lengthscale bar chart ---
+        if 'lengthscale' in stats and 'lengthscale_summary' in self.spatial_stats:
+            df = self.spatial_stats['lengthscale_summary']
+            pairs_to_plot = ch_pairs if ch_pairs else list(
+                zip(df['ch_i'], df['ch_j'])
+            )
+            n_pairs = len(pairs_to_plot)
+            fig, ax = plt.subplots(
+                figsize=(max(4, n_pairs * n_groups * 0.7 + 1), panel_size[1])
+            )
+            fig.suptitle('Correlation Lengthscale  λ (µm)', fontsize=12, fontweight='bold')
+            width = 0.8 / max(n_groups, 1)
+            for g_idx, (label, pos_list) in enumerate(groups.items()):
+                sub = df[df['position'].isin(pos_list)]
+                lam_means, lam_errs = [], []
+                for ch_i, ch_j in pairs_to_plot:
+                    row = sub[(sub['ch_i'] == ch_i) & (sub['ch_j'] == ch_j)]['lam']
+                    lam_means.append(float(row.mean()) if not row.empty else np.nan)
+                    lam_errs.append(float(row.sem()) if len(row) > 1 else 0.0)
+                x = np.arange(n_pairs) + g_idx * width
+                ax.bar(x, lam_means,
+                       width=width, color=colors[g_idx], label=label,
+                       yerr=lam_errs if use_sem else None,
+                       capsize=3, error_kw={'elinewidth': 1})
+            ax.set_xticks(np.arange(n_pairs) + width * (n_groups - 1) / 2)
+            ax.set_xticklabels([_pair_label(a, b) for a, b in pairs_to_plot],
+                               rotation=30, ha='right', fontsize=8)
+            ax.set_ylabel('λ (µm)')
+            if n_groups > 1:
+                ax.legend(fontsize=7)
+            fig.tight_layout()
+            figs.append(fig)
+
+        # --- Mark variogram ---
+        if 'mark_variogram' in stats and ch_pairs:
+            fig, axes, nrows, ncols = _subplot_grid(len(ch_pairs), panel_size)
+            fig.suptitle('Mark Variogram  γ̃(r)', fontsize=12, fontweight='bold')
+            stat_data = self.spatial_stats['mark_variogram']
+            for idx, (ch_i, ch_j) in enumerate(ch_pairs):
+                ax = axes[idx // ncols][idx % ncols]
+                # compute grand-mean reference across all positions
+                all_refs = [
+                    stat_data[pos][(ch_i, ch_j)].get('variogram_ref', 1.0)
+                    for pos in stat_data
+                    if (ch_i, ch_j) in stat_data.get(pos, {})
+                ]
+                ref = float(np.nanmean(all_refs)) if all_refs else 1.0
+                _plot_curves(ax, 'mark_variogram', (ch_i, ch_j), groups, colors, ref=ref)
+                ax.set_title(_pair_label(ch_i, ch_j), fontsize=9)
+                ax.set_xlabel('r (µm)')
+                ax.set_ylabel('γ̃(r)')
+                if n_groups > 1:
+                    ax.legend(fontsize=7)
+            for idx in range(len(ch_pairs), nrows * ncols):
+                axes[idx // ncols][idx % ncols].set_visible(False)
+            fig.tight_layout()
+            figs.append(fig)
+
+        return figs
+
     def save(self, fname="results.pickle"):
         """
         save results

@@ -26,6 +26,74 @@ from oyLabImaging.Processing import FrameLbl
 warnings.filterwarnings("ignore", category=np.VisibleDeprecationWarning)
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Spatial results cache
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _hint_kw(**params_with_defaults) -> str:
+    """Return ', key=val, ...' for params whose value differs from their default."""
+    parts = [f"{k}={repr(v)}" for k, (v, d) in params_with_defaults.items() if v != d]
+    return (', ' + ', '.join(parts)) if parts else ''
+
+
+def _frame_key(frame) -> str:
+    """Normalise a frame argument into a cache-key fragment."""
+    if frame is None:
+        return "f=all"
+    if isinstance(frame, (int, np.integer)):
+        return f"f={int(frame)}"
+    return "f=" + ",".join(str(int(f)) for f in frame)
+
+
+class CachedResult:
+    """A cached spatial result with human-readable retrieval / plot hints.
+
+    Usage
+    -----
+    P.spatial['key']          # shows a one-line summary
+    P.spatial['key']()        # prints retrieve / plot call strings, returns data
+    P.spatial['key'].data     # raw result dict (or list of dicts)
+    """
+
+    def __init__(self, data, method_str: str, plot_str: str = None):
+        self.data = data
+        self._method_str = method_str
+        self._plot_str = plot_str
+
+    def __call__(self):
+        print(f"Retrieve : P{self._method_str}")
+        if self._plot_str:
+            print(f"Plot     : P{self._plot_str}")
+        return self.data
+
+    def __repr__(self):
+        return "CachedResult — call () for hints, .data for raw result"
+
+
+class SpatialResults(dict):
+    """Per-position cache of spatial analysis results.
+
+    Populated automatically whenever a spatial method is called on a PosLbl.
+    Persists across sessions because it is pickled with the PosLbl object.
+
+    Usage
+    -----
+    P.spatial                      # show what is cached
+    P.spatial['key']()             # print retrieve / plot hints, return data
+    P.spatial['key'].data          # raw result dict
+    P.spatial.clear()              # wipe the entire cache
+    """
+
+    def __repr__(self):
+        if not self:
+            return "SpatialResults (empty) — run any spatial method to populate."
+        header = f"  {'Key':<58}  Type"
+        sep    = "  " + "-" * 68
+        rows   = [f"  {k[:58]:<58}  [{k.split('|')[0]}]" for k in self]
+        footer = "\nCall P.spatial['key']() for retrieval / plot hints."
+        return "\n".join([header, sep] + rows + [footer])
+
+
 class PosLbl(object):
     """
     Class for data from a single position (multi timepoint, position, single experiment, multi channel). Handles image tracking.
@@ -107,6 +175,8 @@ class PosLbl(object):
         self._ffieldflag = ffield
         self._tracked = False
         self._splitflag = False
+        if not hasattr(self, 'spatial'):
+            self.spatial = SpatialResults()
 
         if pth is None:
             if MD is not None:
@@ -189,6 +259,17 @@ class PosLbl(object):
         print("\n " + str(len(self.frames)) + " frames processed.")
 
         print("\nAvailable channels are : " + ", ".join(list(self.channels)) + ".")
+
+    def __getattr__(self, name):
+        if name == 'spatial':
+            self.spatial = SpatialResults()
+            return self.spatial
+        raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
+
+    def _cache_spatial(self, key: str, data, method_str: str, plot_str: str = None):
+        """Store a spatial result in self.spatial and persist self to disk."""
+        self.spatial[key] = CachedResult(data, method_str, plot_str)
+        self.save()
 
     # np.warnings.filterwarnings("ignore", category=np.VisibleDeprecationWarning)
 
@@ -1085,7 +1166,8 @@ class PosLbl(object):
     def radial_corr(self, ch_i, ch_j=None, frame=None,
                     img=False, ffield=True,
                     max_r=None, dr=None,
-                    intensity='mean', periring=False, n_max=200_000, seed=42):
+                    intensity='mean', periring=False, n_max=200_000, seed=42,
+                    recompute=False):
         """Radial cross/auto-correlation g(r).
 
         img=False (default): cell-level Pearson correlation binned by distance.
@@ -1098,25 +1180,39 @@ class PosLbl(object):
         -------
         dict with keys r, g, sem, n, ch_i, ch_j, max_r, dr, img
         """
+        _chj = ch_j or ch_i
+        key = f"radial_corr|{ch_i}|{_chj}|{_frame_key(frame)}|img={img}|max_r={max_r}|dr={dr}|{intensity}|periring={periring}|ffield={ffield}"
+        if not recompute and key in self.spatial:
+            return self.spatial[key].data
         from oyLabImaging.Processing.spatial import radial_corr
-        return radial_corr(self, ch_i=ch_i, ch_j=ch_j, frame=frame,
-                           img=img, ffield=ffield, max_r=max_r, dr=dr,
-                           intensity=intensity, periring=periring,
-                           n_max=n_max, seed=seed)
+        result = radial_corr(self, ch_i=ch_i, ch_j=ch_j, frame=frame,
+                             img=img, ffield=ffield, max_r=max_r, dr=dr,
+                             intensity=intensity, periring=periring,
+                             n_max=n_max, seed=seed)
+        _kw = _hint_kw(ch_j=(ch_j, None), frame=(frame, None), img=(img, False),
+                       max_r=(max_r, None), dr=(dr, None), ffield=(ffield, True),
+                       intensity=(intensity, 'mean'), periring=(periring, False))
+        self._cache_spatial(
+            key, result,
+            f".radial_corr('{ch_i}'{_kw})",
+            f".plot_radial_corr('{ch_i}'{_kw})",
+        )
+        return result
 
     def plot_radial_corr(self, ch_i, ch_j=None, frame=None,
                          img=False, ffield=True,
                          max_r=None, dr=None,
                          intensity='mean', periring=False,
-                         ax=None, **plot_kwargs):
+                         recompute=False, ax=None, **plot_kwargs):
         """Compute and plot radial correlation in one call."""
-        from oyLabImaging.Processing.spatial import radial_corr, plot_radial
-        result = radial_corr(self, ch_i=ch_i, ch_j=ch_j, frame=frame,
-                             img=img, ffield=ffield, max_r=max_r, dr=dr,
-                             intensity=intensity, periring=periring)
+        from oyLabImaging.Processing.spatial import plot_radial
+        result = self.radial_corr(ch_i=ch_i, ch_j=ch_j, frame=frame,
+                                  img=img, ffield=ffield, max_r=max_r, dr=dr,
+                                  intensity=intensity, periring=periring,
+                                  recompute=recompute)
         return plot_radial(result, ax=ax, **plot_kwargs)
 
-    def radial_density(self, frame=None, max_r=200.0, dr=5.0):
+    def radial_density(self, frame=None, max_r=200.0, dr=5.0, recompute=False):
         """Pair correlation function g(r) for cell positions.
 
         g(r) = 1 for a random distribution; >1 clustering; <1 repulsion.
@@ -1125,18 +1221,30 @@ class PosLbl(object):
         -------
         dict with keys r, g, n, max_r, dr
         """
+        key = f"radial_density|{_frame_key(frame)}|max_r={max_r}|dr={dr}"
+        if not recompute and key in self.spatial:
+            return self.spatial[key].data
         from oyLabImaging.Processing.spatial import radial_density
-        return radial_density(self, frame=frame, max_r=max_r, dr=dr)
+        result = radial_density(self, frame=frame, max_r=max_r, dr=dr)
+        _kw = _hint_kw(frame=(frame, None), max_r=(max_r, 200.0), dr=(dr, 5.0))
+        self._cache_spatial(
+            key, result,
+            f".radial_density({_kw.lstrip(', ')})",
+            f".plot_radial_density({_kw.lstrip(', ')})",
+        )
+        return result
 
     def plot_radial_density(self, frame=None, max_r=200.0, dr=5.0,
-                            ax=None, **plot_kwargs):
+                            recompute=False, ax=None, **plot_kwargs):
         """Compute and plot pair correlation function in one call."""
-        from oyLabImaging.Processing.spatial import radial_density, plot_radial
-        result = radial_density(self, frame=frame, max_r=max_r, dr=dr)
+        from oyLabImaging.Processing.spatial import plot_radial
+        result = self.radial_density(frame=frame, max_r=max_r, dr=dr,
+                                     recompute=recompute)
         return plot_radial(result, ax=ax, **plot_kwargs)
 
     def local_moran_I(self, ch, frame=None, radius=50.0, n_permutations=999,
-                      intensity='mean', periring=False, seed=42, ffield=True):
+                      intensity='mean', periring=False, seed=42, ffield=True,
+                      recompute=False):
         """Local Moran's I (LISA) for detecting collective activity hotspots.
 
         ffield=True (default) warns if FrameLbls were segmented without
@@ -1145,10 +1253,22 @@ class PosLbl(object):
         Returns a dict (single frame) or list of dicts (multiple frames) with
         per-cell I scores, p-values, edge flags, and standardized intensities.
         """
+        key = f"local_moran_I|{ch}|{_frame_key(frame)}|r={radius}|np={n_permutations}|{intensity}|periring={periring}|ffield={ffield}"
+        if not recompute and key in self.spatial:
+            return self.spatial[key].data
         from oyLabImaging.Processing.spatial import local_moran_I
-        return local_moran_I(self, ch=ch, frame=frame, radius=radius,
-                             n_permutations=n_permutations, intensity=intensity,
-                             periring=periring, seed=seed, ffield=ffield)
+        result = local_moran_I(self, ch=ch, frame=frame, radius=radius,
+                               n_permutations=n_permutations, intensity=intensity,
+                               periring=periring, seed=seed, ffield=ffield)
+        _kw = _hint_kw(frame=(frame, None), radius=(radius, 50.0),
+                       n_permutations=(n_permutations, 999), ffield=(ffield, True),
+                       intensity=(intensity, 'mean'), periring=(periring, False))
+        self._cache_spatial(
+            key, result,
+            f".local_moran_I('{ch}'{_kw})",
+            f".plot_lisa('{ch}'{_kw})",
+        )
+        return result
 
     def find_activity_clusters(self, lisa_result, min_I=0.5, max_pvalue=0.05,
                                min_cells=10, eps=None):
@@ -1193,7 +1313,7 @@ class PosLbl(object):
                   intensity='mean', periring=False, seed=42, ffield=True,
                   min_I=0.5, max_pvalue=0.005, min_cells=10,
                   show_clusters=True, overlay=True, size=8,
-                  colormap='RdBu_r', vmax=None):
+                  colormap='coolwarm', p_threshold=0.05, vmax=None, recompute=False):
         """Compute LISA and visualise in napari.
 
         Parameters
@@ -1215,25 +1335,19 @@ class PosLbl(object):
         import matplotlib.cm as cm
         import matplotlib.colors as mcolors
         from scipy.spatial import ConvexHull
-        from oyLabImaging.Processing.spatial import local_moran_I, find_activity_clusters
+        from oyLabImaging.Processing.spatial import find_activity_clusters
         from oyLabImaging.Processing.imvisutils import get_or_create_viewer
 
-        # ── resolve frames ────────────────────────────────────────────────────
-        n_frames = len(self.framelabels)
-        if frame is None:
-            frames = list(range(n_frames))
-        elif isinstance(frame, (int, np.integer)):
-            frames = [int(frame)]
-        else:
-            frames = [int(f) for f in frame]
-
-        # ── LISA computation ──────────────────────────────────────────────────
-        lisa_list = local_moran_I(self, ch=ch, frame=frames,
-                                  radius=radius, n_permutations=n_permutations,
-                                  intensity=intensity, periring=periring,
-                                  seed=seed, ffield=ffield)
+        # ── LISA computation (cached) ─────────────────────────────────────────
+        lisa_list = self.local_moran_I(ch=ch, frame=frame, radius=radius,
+                                       n_permutations=n_permutations,
+                                       intensity=intensity, periring=periring,
+                                       seed=seed, ffield=ffield,
+                                       recompute=recompute)
         if isinstance(lisa_list, dict):
             lisa_list = [lisa_list]
+
+        frames = [r['frame_index'] for r in lisa_list]
 
         ps = float(self.PixelSize)
         viewer = get_or_create_viewer()
@@ -1286,6 +1400,7 @@ class PosLbl(object):
             np.nanpercentile(np.abs(moran_int), 99))
         norm     = mcolors.TwoSlopeNorm(vmin=-vmax_use, vcenter=0.0, vmax=vmax_use)
         rgba     = cm.get_cmap(colormap)(norm(moran_int))
+        rgba[pval_int > p_threshold, 3] = 0.2
 
         # ── LISA points layer ─────────────────────────────────────────────────
         layer = viewer.add_points(
@@ -1358,6 +1473,399 @@ class PosLbl(object):
         if show_clusters:
             return layer, cluster_results
         return layer
+
+    def gistar(self, ch, frame=None, radius=50.0, intensity='mean',
+               periring=False, seed=42, ffield=True, recompute=False):
+        """Getis-Ord Gi* hot-spot statistic. See spatial.gistar for details."""
+        key = f"gistar|{ch}|{_frame_key(frame)}|r={radius}|{intensity}|periring={periring}|ffield={ffield}"
+        if not recompute and key in self.spatial:
+            return self.spatial[key].data
+        from oyLabImaging.Processing.spatial import gistar
+        result = gistar(self, ch=ch, frame=frame, radius=radius,
+                        intensity=intensity, periring=periring,
+                        seed=seed, ffield=ffield)
+        _kw = _hint_kw(frame=(frame, None), radius=(radius, 50.0), ffield=(ffield, True),
+                       intensity=(intensity, 'mean'), periring=(periring, False))
+        self._cache_spatial(
+            key, result,
+            f".gistar('{ch}'{_kw})",
+            f".plot_gistar('{ch}'{_kw})",
+        )
+        return result
+
+    def plot_gistar(self, ch, frame=None, radius=50.0, intensity='mean',
+                    periring=False, seed=42, ffield=True,
+                    p_threshold=0.05, vmax=None, colormap='coolwarm',
+                    overlay=True, size=8, viewer=None, recompute=False):
+        """Compute Gi* and visualise hot/cold spots in napari.
+
+        Parameters
+        ----------
+        ch : str
+        frame : int, list of int, or None
+        radius : float   Neighbourhood radius in µm.
+        p_threshold : float
+            Cells above this p-value are rendered at 20 % opacity.
+        vmax : float
+            Colour-scale maximum (default: 99th percentile of |z|).
+        colormap : str
+            Diverging colormap (default 'berlin'). Blue = cold spots, red = hot spots.
+        overlay : bool   Add raw channel image behind the points.
+        size : int       Point size in pixels.
+
+        Returns
+        -------
+        napari Points layer
+        """
+        import matplotlib.cm as cm
+        import matplotlib.colors as mcolors
+        from oyLabImaging.Processing.imvisutils import get_or_create_viewer
+
+        results = self.gistar(ch=ch, frame=frame, radius=radius,
+                              intensity=intensity, periring=periring,
+                              seed=seed, ffield=ffield, recompute=recompute)
+        if isinstance(results, dict):
+            results = [results]
+
+        frames = [r['frame_index'] for r in results]
+
+        ps = float(self.PixelSize)
+        if viewer is None:
+            viewer = get_or_create_viewer()
+
+        if overlay:
+            for t in frames:
+                raw = self.img(Channel=ch, verbose=False, frames=[self.frames[t]])
+                raw = np.squeeze(raw)
+                if raw.ndim == 3:
+                    raw = raw.mean(axis=-1)
+                lo, hi = np.percentile(raw, [1, 99.9])
+                viewer.add_image(raw, blending='additive',
+                                 contrast_limits=[lo, hi], scale=[ps, ps],
+                                 colormap='gray', name=f'{ch} t={t}')
+
+        all_pts, all_z, all_pv = [], [], []
+        for res in results:
+            t = res['frame_index']
+            fl = self.framelabels[t]
+            cen = np.asarray(fl.centroid, dtype=np.float64)
+            if len(cen) == 0:
+                continue
+            interior = ~res['is_edge'] & np.isfinite(res['z_score'])
+            all_pts.append(cen[interior])
+            all_z.append(res['z_score'][interior])
+            all_pv.append(res['pvalue'][interior])
+
+        if not all_pts:
+            raise ValueError("No valid interior cells found.")
+
+        pts   = np.concatenate(all_pts)
+        z_all = np.concatenate(all_z).astype(np.float64)
+        pv_all = np.concatenate(all_pv).astype(np.float64)
+
+        vmax_use = vmax if vmax is not None else float(np.nanpercentile(np.abs(z_all), 99))
+        norm = mcolors.TwoSlopeNorm(vmin=-vmax_use, vcenter=0.0, vmax=vmax_use)
+        rgba = cm.get_cmap(colormap)(norm(z_all))
+        rgba[pv_all > p_threshold, 3] = 0.2
+
+        return viewer.add_points(
+            pts,
+            face_color=rgba,
+            edge_width=0,
+            size=size,
+            blending='translucent',
+            scale=[ps, ps],
+            name=f'Gi* {ch}',
+            properties={'Gi_star': z_all, 'pvalue': pv_all},
+        )
+
+    def mark_variogram(self, ch_i, ch_j=None, frame=None, max_r=200.0, dr=5.0,
+                       intensity='mean', periring=False, seed=42, ffield=True,
+                       recompute=False):
+        """Normalized mark variogram / cross-variogram γ̃(r). See spatial.mark_variogram."""
+        _chj = ch_j or ch_i
+        key = f"mark_variogram|{ch_i}|{_chj}|{_frame_key(frame)}|max_r={max_r}|dr={dr}|{intensity}|periring={periring}|ffield={ffield}"
+        if not recompute and key in self.spatial:
+            return self.spatial[key].data
+        from oyLabImaging.Processing.spatial import mark_variogram
+        result = mark_variogram(self, ch_i=ch_i, ch_j=ch_j, frame=frame,
+                                max_r=max_r, dr=dr, intensity=intensity,
+                                periring=periring, seed=seed, ffield=ffield)
+        _kw = _hint_kw(ch_j=(ch_j, None), frame=(frame, None), max_r=(max_r, 200.0),
+                       dr=(dr, 5.0), ffield=(ffield, True), intensity=(intensity, 'mean'),
+                       periring=(periring, False))
+        self._cache_spatial(
+            key, result,
+            f".mark_variogram('{ch_i}'{_kw})",
+            f".plot_mark_variogram('{ch_i}'{_kw})",
+        )
+        return result
+
+    def plot_mark_variogram(self, ch_i, ch_j=None, frame=None, max_r=200.0, dr=5.0,
+                            intensity='mean', periring=False, seed=42,
+                            ffield=True, recompute=False, ax=None, **kwargs):
+        """Compute and plot the mark variogram / cross-variogram γ̃(r)."""
+        from oyLabImaging.Processing.spatial import plot_radial
+        result = self.mark_variogram(ch_i=ch_i, ch_j=ch_j, frame=frame,
+                                     max_r=max_r, dr=dr, intensity=intensity,
+                                     periring=periring, seed=seed, ffield=ffield,
+                                     recompute=recompute)
+        return plot_radial(result, ax=ax, **kwargs)
+
+    def spatial_regions(self, channels, frame=None, radius=50.0, n_regions=None,
+                        method='kmeans', intensity='mean', periring=False,
+                        seed=42, ffield=True, max_k=10, recompute=False):
+        """Multivariate spatial regionalization. See spatial.spatial_regions for details."""
+        _chs = ",".join(sorted(channels))
+        key = f"spatial_regions|{_chs}|{_frame_key(frame)}|r={radius}|k={n_regions}|{method}|{intensity}|periring={periring}|ffield={ffield}"
+        if not recompute and key in self.spatial:
+            return self.spatial[key].data
+        from oyLabImaging.Processing.spatial import spatial_regions as _sr
+        result = _sr(self, channels=channels, frame=frame, radius=radius,
+                     n_regions=n_regions, method=method, intensity=intensity,
+                     periring=periring, seed=seed, ffield=ffield, max_k=max_k)
+        # Strip the large z-scored niche matrix before caching — easy to recompute
+        def _strip(r):
+            s = dict(r)
+            s.pop('niche', None)
+            return s
+        cached = [_strip(r) for r in result] if isinstance(result, list) else _strip(result)
+        _chs_repr = repr(list(channels))
+        _kw = _hint_kw(frame=(frame, None), radius=(radius, 50.0), n_regions=(n_regions, None),
+                       method=(method, 'kmeans'), ffield=(ffield, True),
+                       intensity=(intensity, 'mean'), periring=(periring, False))
+        self._cache_spatial(
+            key, cached,
+            f".spatial_regions({_chs_repr}{_kw})",
+            f".plot_spatial_regions({_chs_repr}{_kw})",
+        )
+        return result
+
+    def plot_spatial_regions(self, channels, frame=None, radius=50.0, n_regions=None,
+                             method='kmeans', intensity='mean', periring=False,
+                             seed=42, ffield=True, max_k=10,
+                             overlay=True, size=8, viewer=None, recompute=False):
+        """Compute spatial regions and visualise as a colour-coded Points layer in napari.
+
+        Each region gets a distinct colour (tab10/tab20).  The layer name reports
+        the number of regions and silhouette score.  The *marker_profiles* table
+        (mean niche expression per region) is printed to stdout for interpretation.
+
+        Parameters
+        ----------
+        channels : list of str   Marker channels used for regionalization.
+        frame : int or None
+        radius : float           Neighborhood radius in µm.
+        n_regions : int or None  Number of regions (None = auto via silhouette).
+        overlay : bool           Add raw images for each channel behind the points.
+        size : int               Point size in pixels.
+        viewer : napari.Viewer or None
+
+        Returns
+        -------
+        list of result dicts (same as spatial_regions)
+        """
+        import matplotlib.cm as cm
+        from oyLabImaging.Processing.imvisutils import get_or_create_viewer
+
+        results = self.spatial_regions(channels=channels, frame=frame, radius=radius,
+                                       n_regions=n_regions, method=method,
+                                       intensity=intensity, periring=periring,
+                                       seed=seed, ffield=ffield, max_k=max_k,
+                                       recompute=recompute)
+        if isinstance(results, dict):
+            results = [results]
+
+        frames = [r['frame_index'] for r in results]
+
+        ps = float(self.PixelSize)
+        if viewer is None:
+            viewer = get_or_create_viewer()
+
+        if overlay:
+            for ch in channels:
+                for t in frames:
+                    raw = self.img(Channel=ch, verbose=False, frames=[self.frames[t]])
+                    raw = np.squeeze(raw)
+                    if raw.ndim == 3:
+                        raw = raw.mean(axis=-1)
+                    lo, hi = np.percentile(raw, [1, 99.9])
+                    viewer.add_image(raw, blending='additive',
+                                     contrast_limits=[lo, hi], scale=[ps, ps],
+                                     name=f'{ch} t={t}')
+
+        for res in results:
+            t = res['frame_index']
+            fl = self.framelabels[t]
+            cen = np.asarray(fl.centroid, dtype=np.float64)
+            labels = res['labels']
+            k = res['n_regions']
+            sil = res['silhouette']
+
+            cmap = cm.get_cmap('tab10' if k <= 10 else 'tab20')
+            face_colors = np.array([cmap(int(lbl) % cmap.N) for lbl in labels])
+
+            viewer.add_points(
+                cen,
+                face_color=face_colors,
+                edge_width=0,
+                size=size,
+                blending='translucent',
+                scale=[ps, ps],
+                name=f'regions t={t} (k={k}, sil={sil:.2f})',
+                properties={'region': labels},
+            )
+
+            # Print region profiles for interpretation
+            import pandas as pd
+            df = pd.DataFrame(res['marker_profiles'],
+                               columns=res['channels'],
+                               index=[f'region {i}' for i in range(k)])
+            print(f"\nFrame {t} — {k} regions (silhouette={sil:.3f})")
+            print(df.round(3).to_string())
+
+        return results
+
+    def gwr(self, ch_y, ch_x, frame=None, bandwidth=50.0, kernel='gaussian',
+            intensity='mean', periring=False, seed=42, ffield=True, recompute=False):
+        """Geographically Weighted Regression. See spatial.gwr for details."""
+        _chx = [ch_x] if isinstance(ch_x, str) else list(ch_x)
+        key = f"gwr|{ch_y}|{','.join(_chx)}|{_frame_key(frame)}|bw={bandwidth}|{kernel}|{intensity}|periring={periring}|ffield={ffield}"
+        if not recompute and key in self.spatial:
+            return self.spatial[key].data
+        from oyLabImaging.Processing.spatial import gwr as _gwr
+        result = _gwr(self, ch_y=ch_y, ch_x=ch_x, frame=frame,
+                      bandwidth=bandwidth, kernel=kernel, intensity=intensity,
+                      periring=periring, seed=seed, ffield=ffield)
+        _chx_repr = repr(ch_x)
+        _kw = _hint_kw(frame=(frame, None), bandwidth=(bandwidth, 50.0),
+                       kernel=(kernel, 'gaussian'), ffield=(ffield, True),
+                       intensity=(intensity, 'mean'), periring=(periring, False))
+        self._cache_spatial(
+            key, result,
+            f".gwr('{ch_y}', {_chx_repr}{_kw})",
+            f".plot_gwr('{ch_y}', {_chx_repr}{_kw})",
+        )
+        return result
+
+    def plot_gwr(self, ch_y, ch_x, frame=None, bandwidth=50.0, kernel='gaussian',
+                 intensity='mean', periring=False, ffield=True,
+                 show='slope', predictor_idx=0, p_threshold=0.05,
+                 vmax=None, overlay=True, size=8, viewer=None, recompute=False):
+        """Compute GWR and visualise spatially-varying regression coefficients in napari.
+
+        Parameters
+        ----------
+        ch_y, ch_x  : response and predictor channel(s)
+        bandwidth   : kernel bandwidth in µm
+        kernel      : 'gaussian' or 'bisquare'
+        show        : what to colour points by —
+                      'slope'     local slope for predictor_idx (coolwarm, diverging at 0)
+                      'r_squared' local R² (viridis, 0–1)
+                      'intercept' local intercept (coolwarm)
+                      't_stat'    t-statistic for predictor_idx (coolwarm)
+        predictor_idx : which predictor's slope/t_stat to show (0 = first ch_x)
+        p_threshold : cells with pvalue > this are shown at 20% opacity
+                      (applied to the chosen predictor; ignored for r_squared)
+        vmax        : colour scale maximum (default: 99th percentile)
+        overlay     : add raw ch_y image behind the points
+        """
+        import matplotlib.cm as cm
+        import matplotlib.colors as mcolors
+        from oyLabImaging.Processing.imvisutils import get_or_create_viewer
+
+        results = self.gwr(ch_y=ch_y, ch_x=ch_x, frame=frame,
+                           bandwidth=bandwidth, kernel=kernel,
+                           intensity=intensity, periring=periring,
+                           ffield=ffield, recompute=recompute)
+        if isinstance(results, dict):
+            results = [results]
+
+        ps = float(self.PixelSize)
+        if viewer is None:
+            viewer = get_or_create_viewer()
+
+        if overlay:
+            for res in results:
+                t = res['frame_index']
+                raw = self.img(Channel=ch_y, verbose=False, frames=[self.frames[t]])
+                raw = np.squeeze(raw)
+                if raw.ndim == 3:
+                    raw = raw.mean(axis=-1)
+                lo, hi = np.percentile(raw, [1, 99.9])
+                viewer.add_image(raw, blending='additive',
+                                 contrast_limits=[lo, hi], scale=[ps, ps],
+                                 colormap='gray', name=f'{ch_y} t={t}')
+
+        layers = []
+        for res in results:
+            t   = res['frame_index']
+            fl  = self.framelabels[t]
+            cen = np.asarray(fl.centroid, dtype=np.float64)
+
+            beta   = res['beta']        # (N, p+1)
+            r_sq   = res['r_squared']   # (N,)
+            t_st   = res['t_stat']      # (N, p+1)
+            pval   = res['pvalue']      # (N, p+1)
+            col_i  = predictor_idx + 1  # +1 for intercept column
+
+            if show == 'r_squared':
+                vals   = r_sq
+                cmap   = 'viridis'
+                diverge = False
+                pv_dim  = None          # don't dim by p-value for R²
+                label  = f'GWR R² {ch_y}~{ch_x} t={t}'
+            elif show == 'intercept':
+                vals   = beta[:, 0]
+                cmap   = 'coolwarm'
+                diverge = True
+                pv_dim  = pval[:, 0]
+                label  = f'GWR intercept {ch_y} t={t}'
+            elif show == 't_stat':
+                vals   = t_st[:, col_i]
+                cmap   = 'coolwarm'
+                diverge = True
+                pv_dim  = pval[:, col_i]
+                _chx_l = res['ch_x'][predictor_idx]
+                label  = f'GWR t-stat {ch_y}~{_chx_l} t={t}'
+            else:  # 'slope' (default)
+                vals   = beta[:, col_i]
+                cmap   = 'coolwarm'
+                diverge = True
+                pv_dim  = pval[:, col_i]
+                _chx_l = res['ch_x'][predictor_idx]
+                label  = f'GWR slope {ch_y}~{_chx_l} t={t}'
+
+            finite = np.isfinite(vals)
+            vmax_use = vmax if vmax is not None else float(
+                np.nanpercentile(np.abs(vals[finite]), 99) if diverge
+                else np.nanpercentile(vals[finite], 99)
+            )
+
+            if diverge:
+                norm = mcolors.TwoSlopeNorm(vmin=-vmax_use, vcenter=0.0, vmax=vmax_use)
+            else:
+                norm = mcolors.Normalize(vmin=0.0, vmax=vmax_use)
+
+            rgba = cm.get_cmap(cmap)(norm(np.where(finite, vals, 0.0)))
+            rgba[~finite, 3] = 0.0          # hide cells with no fit
+
+            if pv_dim is not None:
+                rgba[np.isfinite(pv_dim) & (pv_dim > p_threshold), 3] = 0.2
+
+            layer = viewer.add_points(
+                cen,
+                face_color=rgba,
+                edge_width=0,
+                size=size,
+                blending='translucent',
+                scale=[ps, ps],
+                name=label,
+                properties={show: np.where(finite, vals, np.nan)},
+            )
+            layers.append(layer)
+
+        return layers[0] if len(layers) == 1 else layers
 
     def fit_corr_lengthscale(self, ch, ch_j=None, frame=None,
                               img=False, ffield=True,
