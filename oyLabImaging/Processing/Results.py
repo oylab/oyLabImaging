@@ -447,36 +447,30 @@ class results(object):
         ch_pairs += [(a, b) for a, b in itertools.combinations(channels, 2)]
 
         def _process_pos(pos):
-            import io
-            import sys
             P = self.PosLbls[pos]
             pos_result = {}
-            _stdout, sys.stdout = sys.stdout, io.StringIO()
-            try:
-                if 'radial_density' in stats:
-                    pos_result['radial_density'] = P.radial_density(frame=frame)
+            if 'radial_density' in stats:
+                pos_result['radial_density'] = P.radial_density(frame=frame)
 
-                if 'radial_corr' in stats:
-                    pos_result['radial_corr'] = {}
+            if 'radial_corr' in stats:
+                pos_result['radial_corr'] = {}
+                if 'lengthscale' in stats:
+                    pos_result['lengthscale'] = {}
+                for (ch_i, ch_j) in ch_pairs:
+                    chj = None if ch_j == ch_i else ch_j
+                    pos_result['radial_corr'][(ch_i, ch_j)] = P.radial_corr(
+                        ch_i, ch_j=chj, frame=frame, img=img, ffield=ffield)
                     if 'lengthscale' in stats:
-                        pos_result['lengthscale'] = {}
-                    for (ch_i, ch_j) in ch_pairs:
-                        chj = None if ch_j == ch_i else ch_j
-                        pos_result['radial_corr'][(ch_i, ch_j)] = P.radial_corr(
-                            ch_i, ch_j=chj, frame=frame, img=img, ffield=ffield)
-                        if 'lengthscale' in stats:
-                            pos_result['lengthscale'][(ch_i, ch_j)] = \
-                                P.fit_corr_lengthscale(ch_i, ch_j=chj, frame=frame,
-                                                       img=img, ffield=ffield)
+                        pos_result['lengthscale'][(ch_i, ch_j)] = \
+                            P.fit_corr_lengthscale(ch_i, ch_j=chj, frame=frame,
+                                                   img=img, ffield=ffield)
 
-                if 'mark_variogram' in stats:
-                    pos_result['mark_variogram'] = {}
-                    for (ch_i, ch_j) in ch_pairs:
-                        chj = None if ch_j == ch_i else ch_j
-                        pos_result['mark_variogram'][(ch_i, ch_j)] = P.mark_variogram(
-                            ch_i, ch_j=chj, frame=frame, img=img, ffield=ffield)
-            finally:
-                sys.stdout = _stdout
+            if 'mark_variogram' in stats:
+                pos_result['mark_variogram'] = {}
+                for (ch_i, ch_j) in ch_pairs:
+                    chj = None if ch_j == ch_i else ch_j
+                    pos_result['mark_variogram'][(ch_i, ch_j)] = P.mark_variogram(
+                        ch_i, ch_j=chj, frame=frame, img=img, ffield=ffield)
 
             return pos, pos_result
 
