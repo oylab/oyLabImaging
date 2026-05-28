@@ -474,7 +474,7 @@ class results(object):
                     for (ch_i, ch_j) in ch_pairs:
                         chj = None if ch_j == ch_i else ch_j
                         pos_result['mark_variogram'][(ch_i, ch_j)] = P.mark_variogram(
-                            ch_i, ch_j=chj, frame=frame, ffield=ffield)
+                            ch_i, ch_j=chj, frame=frame, img=img, ffield=ffield)
             finally:
                 sys.stdout = _stdout
 

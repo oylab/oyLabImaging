@@ -1313,7 +1313,7 @@ class PosLbl(object):
                   intensity='mean', periring=False, seed=42, ffield=True,
                   min_I=0.5, max_pvalue=0.005, min_cells=10,
                   show_clusters=True, overlay=True, size=8,
-                  colormap='coolwarm', p_threshold=0.05, vmax=None, recompute=False):
+                  colormap='coolwarm', vmax=None, recompute=False):
         """Compute LISA and visualise in napari.
 
         Parameters
@@ -1400,7 +1400,7 @@ class PosLbl(object):
             np.nanpercentile(np.abs(moran_int), 99))
         norm     = mcolors.TwoSlopeNorm(vmin=-vmax_use, vcenter=0.0, vmax=vmax_use)
         rgba     = cm.get_cmap(colormap)(norm(moran_int))
-        rgba[pval_int > p_threshold, 3] = 0.2
+        rgba[pval_int > max_pvalue, 3] = 0.2
 
         # ── LISA points layer ─────────────────────────────────────────────────
         layer = viewer.add_points(
@@ -1444,6 +1444,8 @@ class PosLbl(object):
                     else:
                         verts = pts_px
 
+                    if len(verts) < 2:
+                        continue
                     hulls.append(verts)
                     centroid_pts.append(pts_px.mean(axis=0))
                     centroid_ids.append(k + 1)
@@ -1495,7 +1497,8 @@ class PosLbl(object):
 
     def plot_gistar(self, ch, frame=None, radius=50.0, intensity='mean',
                     periring=False, seed=42, ffield=True,
-                    p_threshold=0.05, vmax=None, colormap='coolwarm',
+                    max_pvalue=0.05, min_z=1.96, min_cells=10,
+                    show_clusters=True, vmax=None, colormap='coolwarm',
                     overlay=True, size=8, viewer=None, recompute=False):
         """Compute Gi* and visualise hot/cold spots in napari.
 
@@ -1504,21 +1507,32 @@ class PosLbl(object):
         ch : str
         frame : int, list of int, or None
         radius : float   Neighbourhood radius in µm.
-        p_threshold : float
-            Cells above this p-value are rendered at 20 % opacity.
+        max_pvalue : float
+            p-value threshold: cells above this are rendered at 20% opacity
+            and excluded from cluster detection.
+        min_z : float
+            Minimum |z-score| for a cell to be included in cluster detection
+            (default 1.96, equivalent to p < 0.05 under normality).
+        min_cells : int
+            Minimum number of cells to form a cluster (default 10).
+        show_clusters : bool
+            Draw convex-hull outlines around hot and cold spot clusters.
         vmax : float
             Colour-scale maximum (default: 99th percentile of |z|).
         colormap : str
-            Diverging colormap (default 'berlin'). Blue = cold spots, red = hot spots.
+            Diverging colormap. Blue = cold spots, red = hot spots.
         overlay : bool   Add raw channel image behind the points.
         size : int       Point size in pixels.
 
         Returns
         -------
-        napari Points layer
+        layer : napari Points layer
+        cluster_results : list of dicts (only when show_clusters=True)
         """
         import matplotlib.cm as cm
         import matplotlib.colors as mcolors
+        from scipy.spatial import ConvexHull
+        from sklearn.cluster import DBSCAN
         from oyLabImaging.Processing.imvisutils import get_or_create_viewer
 
         results = self.gistar(ch=ch, frame=frame, radius=radius,
@@ -1566,9 +1580,9 @@ class PosLbl(object):
         vmax_use = vmax if vmax is not None else float(np.nanpercentile(np.abs(z_all), 99))
         norm = mcolors.TwoSlopeNorm(vmin=-vmax_use, vcenter=0.0, vmax=vmax_use)
         rgba = cm.get_cmap(colormap)(norm(z_all))
-        rgba[pv_all > p_threshold, 3] = 0.2
+        rgba[pv_all > max_pvalue, 3] = 0.2
 
-        return viewer.add_points(
+        layer = viewer.add_points(
             pts,
             face_color=rgba,
             edge_width=0,
@@ -1578,6 +1592,89 @@ class PosLbl(object):
             name=f'Gi* {ch}',
             properties={'Gi_star': z_all, 'pvalue': pv_all},
         )
+
+        # ── cluster outlines ──────────────────────────────────────────────────
+        cluster_results = []
+        if show_clusters:
+            hulls_hot, hulls_cold = [], []
+            centroid_pts, centroid_ids = [], []
+
+            for res in results:
+                t = res['frame_index']
+                fl  = self.framelabels[t]
+                xy  = np.asarray(fl.XY, dtype=np.float64)
+                coords_um = res['coords']
+                z     = res['z_score']
+                pv    = res['pvalue']
+                is_edge = res.get('is_edge', np.zeros(len(z), dtype=bool))
+
+                sig = ~is_edge & np.isfinite(z) & (np.abs(z) >= min_z) & (pv <= max_pvalue)
+                frame_clusters = {'frame_index': t, 'hot': {}, 'cold': {}}
+
+                for sign, label, hulls_list, edge_col in [
+                    (1,  'hot',  hulls_hot,  '#ff1493'),
+                    (-1, 'cold', hulls_cold, '#00bfff'),
+                ]:
+                    mask = sig & (np.sign(z) == sign)
+                    if mask.sum() < min_cells:
+                        frame_clusters[label] = {'n_clusters': 0, 'cluster_sizes': []}
+                        continue
+
+                    sig_coords = coords_um[mask]
+                    eps = radius
+                    db = DBSCAN(eps=eps, min_samples=min_cells).fit(sig_coords)
+                    db_labels = db.labels_
+                    n_cl = int((db_labels >= 0).any() and db_labels.max() + 1 or 0)
+                    sizes = [(db_labels == k).sum() for k in range(n_cl)]
+                    frame_clusters[label] = {'n_clusters': n_cl, 'cluster_sizes': sizes}
+
+                    for k in range(n_cl):
+                        pts_um = sig_coords[db_labels == k]
+                        pts_px = (pts_um - xy) / ps
+                        if len(pts_px) >= 3:
+                            try:
+                                verts = pts_px[ConvexHull(pts_px).vertices]
+                            except Exception:
+                                verts = pts_px
+                        else:
+                            verts = pts_px
+                        if len(verts) < 2:
+                            continue
+                        hulls_list.append(verts)
+                        centroid_pts.append(pts_px.mean(axis=0))
+                        centroid_ids.append(f'{"H" if sign == 1 else "C"}{k+1}')
+
+                cluster_results.append(frame_clusters)
+
+            for hulls_list, edge_col, name_suffix in [
+                (hulls_hot,  '#ff1493', 'hot clusters'),
+                (hulls_cold, '#00bfff', 'cold clusters'),
+            ]:
+                if hulls_list:
+                    viewer.add_shapes(
+                        hulls_list,
+                        shape_type='polygon',
+                        face_color=[1, 1, 1, 0.0],
+                        edge_color=edge_col,
+                        edge_width=10,
+                        scale=[ps, ps],
+                        name=f'Gi* {ch} {name_suffix}',
+                    )
+
+            if centroid_pts:
+                viewer.add_points(
+                    np.array(centroid_pts),
+                    properties={'label': np.array(centroid_ids)},
+                    text='label',
+                    face_color=[0, 0, 0, 0],
+                    edge_width=0,
+                    size=size * 1.5,
+                    blending='translucent',
+                    scale=[ps, ps],
+                    name=f'Gi* {ch} cluster labels',
+                )
+
+        return layer, cluster_results
 
     def mark_variogram(self, ch_i, ch_j=None, frame=None, max_r=200.0, dr=5.0,
                        intensity='mean', periring=False, seed=42, ffield=True,
@@ -1750,7 +1847,7 @@ class PosLbl(object):
 
     def plot_gwr(self, ch_y, ch_x, frame=None, bandwidth=50.0, kernel='gaussian',
                  intensity='mean', periring=False, ffield=True,
-                 show='slope', predictor_idx=0, p_threshold=0.05,
+                 show='slope', predictor_idx=0, max_pvalue=0.05,
                  vmax=None, overlay=True, size=8, viewer=None, recompute=False):
         """Compute GWR and visualise spatially-varying regression coefficients in napari.
 
@@ -1765,7 +1862,7 @@ class PosLbl(object):
                       'intercept' local intercept (coolwarm)
                       't_stat'    t-statistic for predictor_idx (coolwarm)
         predictor_idx : which predictor's slope/t_stat to show (0 = first ch_x)
-        p_threshold : cells with pvalue > this are shown at 20% opacity
+        max_pvalue  : cells with pvalue > this are shown at 20% opacity
                       (applied to the chosen predictor; ignored for r_squared)
         vmax        : colour scale maximum (default: 99th percentile)
         overlay     : add raw ch_y image behind the points
@@ -1851,7 +1948,7 @@ class PosLbl(object):
             rgba[~finite, 3] = 0.0          # hide cells with no fit
 
             if pv_dim is not None:
-                rgba[np.isfinite(pv_dim) & (pv_dim > p_threshold), 3] = 0.2
+                rgba[np.isfinite(pv_dim) & (pv_dim > max_pvalue), 3] = 0.2
 
             layer = viewer.add_points(
                 cen,

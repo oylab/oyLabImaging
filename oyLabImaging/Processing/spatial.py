@@ -1245,7 +1245,7 @@ def spatial_regions(
     frame=None,
     radius: float = 50.0,
     n_regions=None,
-    method: str = 'kmeans',
+    method: str = 'gmm',
     intensity: str = 'mean',
     periring: bool = False,
     seed: int = 42,
@@ -1273,7 +1273,7 @@ def spatial_regions(
     n_regions : int or None
         Number of regions.  None → auto-selected (k = 2 … max_k) via silhouette.
     method : str
-        'kmeans' (default) or 'gmm'.
+        'gmm' (default) or 'kmeans'.
     intensity : str
         Per-cell intensity metric: 'mean', 'median', 'max', 'min', 'ninety'.
     periring : bool
