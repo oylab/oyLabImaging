@@ -921,8 +921,9 @@ def mark_variogram(
     periring: bool = False,
     seed: int = 42,
     ffield: bool = True,
+    img: bool = False,
 ) -> dict:
-    """Normalized mark variogram / cross-variogram γ̃(r) for cell intensities.
+    """Normalized mark variogram / cross-variogram γ̃(r).
 
     Auto (ch_j omitted or equal to ch_i):
         γ̃(r) = E[(m_i − m_j)²] / (2σ²).  γ̃ → 1 at large r.
@@ -944,10 +945,14 @@ def mark_variogram(
     frame : int, list of int, or None
     max_r : float   Maximum radius in µm.
     dr : float      Bin width in µm.
-    n_max : int     Max pairs subsampled per bin (speed vs. accuracy).
-    intensity : str Per-cell metric: 'mean', 'median', 'max', 'min', 'ninety'.
-    periring : bool Use perinuclear-ring intensity.
+    n_max : int     Max pairs subsampled per bin (speed vs. accuracy; cell-level only).
+    intensity : str Per-cell metric: 'mean', 'median', 'max', 'min', 'ninety' (cell-level only).
+    periring : bool Use perinuclear-ring intensity (cell-level only).
     seed : int
+    img : bool
+        If True, derive the variogram from the pixel-level FFT autocorrelation
+        (γ̃(r) = 1 − ρ(r) for auto; γ̃_AB(r) = Corr(A,B) − ρ_AB(r) for cross).
+        Gives sub-cell resolution but is sensitive to background.
 
     Returns
     -------
@@ -957,9 +962,31 @@ def mark_variogram(
         sem           : (B,) standard error of the mean per bin
         n             : (B,) pair counts per bin
         variogram_ref : float — reference value at large r (1.0 for auto; Corr(A,B) for cross)
-        ch_i, ch_j, variogram=True, max_r, dr
+        ch_i, ch_j, variogram=True, img, max_r, dr
     """
     ch_j = ch_j or ch_i
+
+    if img:
+        # Pixel-level variogram derived from FFT autocorrelation:
+        #   auto:  γ̃(r) = 1 − ρ(r)
+        #   cross: γ̃_AB(r) = Corr(A,B) − ρ_AB(r)
+        chj_arg = None if ch_j == ch_i else ch_j
+        rc = radial_corr(pos, ch_i=ch_i, ch_j=chj_arg, frame=frame,
+                         img=True, ffield=ffield, max_r=max_r, dr=dr)
+        is_cross = ch_j != ch_i
+        if is_cross:
+            corr_ab = float(np.nanmean(rc['g'][-5:]))   # global Corr ≈ g at large r
+            g_vario = corr_ab - rc['g']
+            ref = 0.0
+        else:
+            g_vario = 1.0 - rc['g']
+            ref = 1.0
+        result = dict(rc)
+        result['g']             = g_vario
+        result['variogram_ref'] = ref
+        result.update({'ch_i': ch_i, 'ch_j': ch_j, 'variogram': True, 'img': True})
+        return result
+
     frames = _resolve_frames(pos, frame)
 
     if ffield:
@@ -997,11 +1024,10 @@ def mark_variogram(
         raise ValueError("No frames with enough cells to compute mark variogram.")
 
     result = _combine(per_frame, max_r, dr)
-    # Carry forward the variogram_ref (average across frames, weighted by pair count)
     refs = [f['variogram_ref'] for f in per_frame]
     ns   = [f['n'].sum() for f in per_frame]
     result['variogram_ref'] = float(np.average(refs, weights=ns)) if ns else per_frame[0]['variogram_ref']
-    result.update({'ch_i': ch_i, 'ch_j': ch_j, 'variogram': True, 'max_r': max_r, 'dr': dr})
+    result.update({'ch_i': ch_i, 'ch_j': ch_j, 'variogram': True, 'img': False, 'max_r': max_r, 'dr': dr})
     return result
 
 

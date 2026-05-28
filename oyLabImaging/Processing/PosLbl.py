@@ -1581,19 +1581,19 @@ class PosLbl(object):
 
     def mark_variogram(self, ch_i, ch_j=None, frame=None, max_r=200.0, dr=5.0,
                        intensity='mean', periring=False, seed=42, ffield=True,
-                       recompute=False):
+                       img=False, recompute=False):
         """Normalized mark variogram / cross-variogram γ̃(r). See spatial.mark_variogram."""
         _chj = ch_j or ch_i
-        key = f"mark_variogram|{ch_i}|{_chj}|{_frame_key(frame)}|max_r={max_r}|dr={dr}|{intensity}|periring={periring}|ffield={ffield}"
+        key = f"mark_variogram|{ch_i}|{_chj}|{_frame_key(frame)}|max_r={max_r}|dr={dr}|{intensity}|periring={periring}|ffield={ffield}|img={img}"
         if not recompute and key in self.spatial:
             return self.spatial[key].data
         from oyLabImaging.Processing.spatial import mark_variogram
         result = mark_variogram(self, ch_i=ch_i, ch_j=ch_j, frame=frame,
                                 max_r=max_r, dr=dr, intensity=intensity,
-                                periring=periring, seed=seed, ffield=ffield)
+                                periring=periring, seed=seed, ffield=ffield, img=img)
         _kw = _hint_kw(ch_j=(ch_j, None), frame=(frame, None), max_r=(max_r, 200.0),
                        dr=(dr, 5.0), ffield=(ffield, True), intensity=(intensity, 'mean'),
-                       periring=(periring, False))
+                       periring=(periring, False), img=(img, False))
         self._cache_spatial(
             key, result,
             f".mark_variogram('{ch_i}'{_kw})",
@@ -1603,13 +1603,13 @@ class PosLbl(object):
 
     def plot_mark_variogram(self, ch_i, ch_j=None, frame=None, max_r=200.0, dr=5.0,
                             intensity='mean', periring=False, seed=42,
-                            ffield=True, recompute=False, ax=None, **kwargs):
+                            ffield=True, img=False, recompute=False, ax=None, **kwargs):
         """Compute and plot the mark variogram / cross-variogram γ̃(r)."""
         from oyLabImaging.Processing.spatial import plot_radial
         result = self.mark_variogram(ch_i=ch_i, ch_j=ch_j, frame=frame,
                                      max_r=max_r, dr=dr, intensity=intensity,
                                      periring=periring, seed=seed, ffield=ffield,
-                                     recompute=recompute)
+                                     img=img, recompute=recompute)
         return plot_radial(result, ax=ax, **kwargs)
 
     def spatial_regions(self, channels, frame=None, radius=50.0, n_regions=None,

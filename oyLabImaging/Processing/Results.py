@@ -669,17 +669,73 @@ class results(object):
             fig.tight_layout()
             figs.append(fig)
 
-        # --- Lengthscale bar chart ---
+        # --- Lengthscale: curves + fits + bar chart ---
         if 'lengthscale' in stats and 'lengthscale_summary' in self.spatial_stats:
             df = self.spatial_stats['lengthscale_summary']
             pairs_to_plot = ch_pairs if ch_pairs else list(
                 zip(df['ch_i'], df['ch_j'])
             )
             n_pairs = len(pairs_to_plot)
-            fig, ax = plt.subplots(
-                figsize=(max(4, n_pairs * n_groups * 0.7 + 1), panel_size[1])
-            )
+            ncols = min(n_pairs, 3)
+            curve_rows = (n_pairs + ncols - 1) // ncols
+            # curve rows + one bar row
+            fig = plt.figure(figsize=(
+                panel_size[0] * ncols,
+                panel_size[1] * curve_rows + panel_size[1],
+            ))
             fig.suptitle('Correlation Lengthscale  λ (µm)', fontsize=12, fontweight='bold')
+            import matplotlib.gridspec as gridspec
+            gs = gridspec.GridSpec(
+                curve_rows + 1, ncols, figure=fig,
+                height_ratios=[1] * curve_rows + [1],
+            )
+
+            ls_data = self.spatial_stats.get('lengthscale', {})
+            rc_data = self.spatial_stats.get('radial_corr', {})
+
+            for idx, (ch_i, ch_j) in enumerate(pairs_to_plot):
+                ax = fig.add_subplot(gs[idx // ncols, idx % ncols])
+                for g_idx, (label, pos_list) in enumerate(groups.items()):
+                    color = colors[g_idx]
+                    # collect g(r) curves and fit params
+                    g_curves, fits = [], []
+                    for pos in pos_list:
+                        rc = rc_data.get(pos, {}).get((ch_i, ch_j))
+                        ft = ls_data.get(pos, {}).get((ch_i, ch_j))
+                        if rc is not None:
+                            g_curves.append(rc)
+                        if ft is not None:
+                            fits.append(ft)
+                    if g_curves:
+                        r = g_curves[0]['r']
+                        g_mat = np.array([c['g'] for c in g_curves], dtype=float)
+                        mean_g = np.nanmean(g_mat, axis=0)
+                        ax.plot(r, mean_g, color=color, lw=1.5)
+                        if len(g_curves) > 1 and use_sem:
+                            sem_g = np.nanstd(g_mat, axis=0) / np.sqrt(len(g_curves))
+                            ax.fill_between(r, mean_g - sem_g, mean_g + sem_g,
+                                            color=color, alpha=0.2)
+                    if fits:
+                        mean_A   = float(np.nanmean([f['A'] for f in fits]))
+                        mean_lam = float(np.nanmean([f['lambda'] for f in fits]))
+                        mean_C   = float(np.nanmean([f['C'] for f in fits]))
+                        r_min_fit = float(np.nanmean([f['r_min'] for f in fits]))
+                        r_fit = np.linspace(r_min_fit, fits[0]['fit_r'][-1], 200)
+                        curve = mean_A * np.exp(-r_fit / mean_lam) + mean_C
+                        ax.plot(r_fit, curve, color=color, lw=1.2, ls='--',
+                                label=f'{label}  λ={mean_lam:.0f} µm')
+                ax.axhline(0, color='k', lw=0.5, ls=':', zorder=0)
+                ax.set_title(_pair_label(ch_i, ch_j), fontsize=9)
+                ax.set_xlabel('r (µm)')
+                ax.set_ylabel('g(r)')
+                ax.legend(fontsize=7)
+
+            # hide unused curve panels
+            for idx in range(n_pairs, curve_rows * ncols):
+                fig.add_subplot(gs[idx // ncols, idx % ncols]).set_visible(False)
+
+            # bar chart spanning full bottom row
+            ax_bar = fig.add_subplot(gs[curve_rows, :])
             width = 0.8 / max(n_groups, 1)
             for g_idx, (label, pos_list) in enumerate(groups.items()):
                 sub = df[df['position'].isin(pos_list)]
@@ -689,16 +745,17 @@ class results(object):
                     lam_means.append(float(row.mean()) if not row.empty else np.nan)
                     lam_errs.append(float(row.sem()) if len(row) > 1 else 0.0)
                 x = np.arange(n_pairs) + g_idx * width
-                ax.bar(x, lam_means,
-                       width=width, color=colors[g_idx], label=label,
-                       yerr=lam_errs if use_sem else None,
-                       capsize=3, error_kw={'elinewidth': 1})
-            ax.set_xticks(np.arange(n_pairs) + width * (n_groups - 1) / 2)
-            ax.set_xticklabels([_pair_label(a, b) for a, b in pairs_to_plot],
-                               rotation=30, ha='right', fontsize=8)
-            ax.set_ylabel('λ (µm)')
+                ax_bar.bar(x, lam_means,
+                           width=width, color=colors[g_idx], label=label,
+                           yerr=lam_errs if use_sem else None,
+                           capsize=3, error_kw={'elinewidth': 1})
+            ax_bar.set_xticks(np.arange(n_pairs) + width * (n_groups - 1) / 2)
+            ax_bar.set_xticklabels([_pair_label(a, b) for a, b in pairs_to_plot],
+                                   rotation=30, ha='right', fontsize=8)
+            ax_bar.set_ylabel('λ (µm)')
             if n_groups > 1:
-                ax.legend(fontsize=7)
+                ax_bar.legend(fontsize=7)
+
             fig.tight_layout()
             figs.append(fig)
 
