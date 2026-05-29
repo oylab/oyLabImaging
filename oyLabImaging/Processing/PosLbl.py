@@ -2015,6 +2015,223 @@ class PosLbl(object):
             return fit, ax
         return fit
 
+    def spectral_basis(self, frame=None, n_modes=None, alpha=0.05,
+                       recompute=False):
+        """Build (or retrieve cached) cotangent Laplacian spectral basis.
+
+        Uses the alpha-shape triangulation + gpytoolbox cotangent Laplacian,
+        following Jerison et al. 2025 (PNAS) exactly.  The basis is
+        geometry-only and cached so multiple channels share it.
+
+        Parameters
+        ----------
+        frame   : int, list of int, or None
+        n_modes : int or None
+            None (default) → full dense eigendecomposition via scipy.linalg.eigh
+            (all N-1 oscillatory modes; practical for N ≲ 5 000).
+            Pass an integer for large datasets.
+        alpha   : float
+            Alpha-shape parameter (~1/max_circumradius, µm^{-1}).
+            Default 0.05 (max circumradius ≈ 20 µm).
+
+        Returns
+        -------
+        SpectralBasis (single frame) or list of SpectralBasis
+        """
+        key = f"spectral_basis|{_frame_key(frame)}|nm={n_modes}|a={alpha}"
+        if not recompute and key in self.spatial:
+            return self.spatial[key].data
+        from oyLabImaging.Processing.spatial import build_spectral_basis
+        result = build_spectral_basis(self, frame=frame, n_modes=n_modes,
+                                      alpha=alpha)
+        _kw = _hint_kw(frame=(frame, None), n_modes=(n_modes, None),
+                       alpha=(alpha, 0.05))
+        self._cache_spatial(
+            key, result,
+            f".spectral_basis({_kw.lstrip(', ')})",
+            f".plot_spatial_power_spectrum('<ch>'{_kw})",
+        )
+        return result
+
+    def spectral_power_spectrum(self, ch, frame=None, n_modes=None, alpha=0.05,
+                                intensity='mean', periring=False, ffield=True,
+                                n_permutations=100, seed=42, recompute=False):
+        """Spatial power spectrum via cotangent Laplacian spectral decomposition.
+
+        Implements Jerison et al. 2025 (PNAS).  Builds the spectral basis once
+        (cached), then projects z-scored expression onto the eigenmodes and
+        computes fractional variance per spatial length scale.  A permutation
+        null identifies which length scales carry biologically organised signal.
+
+        Parameters
+        ----------
+        ch            : str or list of str
+        frame         : int, list of int, or None
+        n_modes       : int or None  (see spectral_basis)
+        alpha         : float        (see spectral_basis)
+        intensity     : str  'mean', 'median', 'max', 'min', 'ninety'
+        periring      : bool
+        ffield        : bool
+        n_permutations: int
+        seed          : int
+
+        Returns
+        -------
+        dict or list of dicts with keys:
+            power            (k, n_ch)  fractional variance per mode
+            power_null_mean  (k, n_ch)
+            power_null_std   (k, n_ch)
+            signal_to_null   (k, n_ch)
+            char_lengthscale (n_ch,)    power-weighted mean (paper's estimator)
+            peak_lengthscale (n_ch,)    length scale of highest-SNR mode
+            lengthscales_um  (k,)       2/sqrt(λ) per mode
+            eigenvalues      (k,)
+            channels         list of str
+            frame_index      int
+        """
+        channels = [ch] if isinstance(ch, str) else list(ch)
+        ch_key   = '|'.join(channels)
+        key = (f"spectral_ps|{ch_key}|{_frame_key(frame)}|nm={n_modes}"
+               f"|a={alpha}|np={n_permutations}|{intensity}"
+               f"|periring={periring}|ffield={ffield}")
+        if not recompute and key in self.spatial:
+            return self.spatial[key].data
+
+        import warnings
+        from oyLabImaging.Processing.spatial import _frame_data_multi, _resolve_frames
+
+        frames = _resolve_frames(self, frame)
+        if ffield:
+            uncorrected = [t for t in frames
+                           if not getattr(self.framelabels[t], '_ffield', False)]
+            if uncorrected:
+                warnings.warn(
+                    f"ffield=True but {len(uncorrected)} frame(s) were segmented "
+                    "without flat-field correction.", stacklevel=2)
+
+        bases = self.spectral_basis(frame=frame, n_modes=n_modes, alpha=alpha,
+                                    recompute=recompute)
+        if not isinstance(bases, list):
+            bases = [bases]
+
+        per_frame = []
+        for basis in bases:
+            t  = basis.frame_index
+            fl = self.framelabels[t]
+            coords, vals = _frame_data_multi(fl, channels, intensity, periring)
+            if coords is None:
+                continue
+            mu    = vals.mean(axis=0)
+            sigma = vals.std(axis=0)
+            sigma[sigma < 1e-12] = 1.0
+            z = (vals - mu) / sigma
+            res = basis.power_spectrum(z, n_permutations=n_permutations, seed=seed)
+            res['channels'] = channels
+            per_frame.append(res)
+
+        if not per_frame:
+            raise ValueError("No valid frames.")
+
+        result = (per_frame[0] if isinstance(frame, (int, np.integer)) or
+                  (isinstance(frame, list) and len(frame) == 1)
+                  else per_frame)
+
+        _kw = _hint_kw(frame=(frame, None), n_modes=(n_modes, None),
+                       alpha=(alpha, 0.05),
+                       n_permutations=(n_permutations, 100), ffield=(ffield, True),
+                       intensity=(intensity, 'mean'), periring=(periring, False))
+        self._cache_spatial(
+            key, result,
+            f".spectral_power_spectrum('{ch}'{_kw})",
+            f".plot_spatial_power_spectrum('{ch}'{_kw})",
+        )
+        return result
+
+    def plot_spatial_power_spectrum(self, ch, frame=None, n_modes=None,
+                                    alpha=0.05, intensity='mean',
+                                    periring=False, ffield=True,
+                                    n_permutations=100, seed=42,
+                                    recompute=False, ax=None, **plot_kwargs):
+        """Compute and plot spatial power spectrum in one call.
+
+        See spectral_power_spectrum for parameter documentation.
+        Returns matplotlib.axes.Axes.
+        """
+        from oyLabImaging.Processing.spatial import plot_spatial_power_spectrum
+        result = self.spectral_power_spectrum(
+            ch=ch, frame=frame, n_modes=n_modes, alpha=alpha,
+            intensity=intensity, periring=periring, ffield=ffield,
+            n_permutations=n_permutations, seed=seed, recompute=recompute,
+        )
+        return plot_spatial_power_spectrum(result, ax=ax, **plot_kwargs)
+
+    def plot_wavenumber_power_spectrum(self, ch, frame=None, n_modes=None,
+                                       alpha=0.05, intensity='mean',
+                                       periring=False, ffield=True,
+                                       n_permutations=100, seed=42,
+                                       recompute=False, ax=None, **plot_kwargs):
+        """Compute and plot fraction of power vs wavenumber k (µm⁻¹) — Figure 6 style.
+
+        Same parameters as spectral_power_spectrum.
+        Returns matplotlib.axes.Axes.
+        """
+        from oyLabImaging.Processing.spatial import plot_wavenumber_power_spectrum
+        result = self.spectral_power_spectrum(
+            ch=ch, frame=frame, n_modes=n_modes, alpha=alpha,
+            intensity=intensity, periring=periring, ffield=ffield,
+            n_permutations=n_permutations, seed=seed, recompute=recompute,
+        )
+        return plot_wavenumber_power_spectrum(result, ax=ax, **plot_kwargs)
+
+    def plot_spatial_reconstruction(self, ch, frame=None, n_modes=None,
+                                    alpha=0.05, intensity='mean',
+                                    periring=False, ffield=True,
+                                    n_modes_reconstruct=50,
+                                    recompute=False, **plot_kwargs):
+        """Figure 4C–style: raw data vs N-mode spatial reconstruction.
+
+        For each channel, shows two scatter maps side by side: the centred
+        expression values and the reconstruction using only the first
+        *n_modes_reconstruct* low-frequency eigenmodes (spatial low-pass filter).
+
+        Parameters
+        ----------
+        ch                   : str or list of str
+        frame                : int or None
+        n_modes              : int or None  (spectral basis truncation)
+        alpha                : float        (alpha-shape parameter)
+        intensity            : str
+        periring             : bool
+        ffield               : bool
+        n_modes_reconstruct  : int  modes kept in reconstruction (default 50)
+        recompute            : bool
+
+        Returns matplotlib.figure.Figure.
+        """
+        from oyLabImaging.Processing.spatial import (
+            plot_spatial_reconstruction, _frame_data_multi, _resolve_frames
+        )
+        channels = [ch] if isinstance(ch, str) else list(ch)
+        frames   = _resolve_frames(self, frame)
+        t        = frames[0]
+        fl       = self.framelabels[t]
+
+        basis = self.spectral_basis(frame=t, n_modes=n_modes, alpha=alpha,
+                                    recompute=recompute)
+        if isinstance(basis, list):
+            basis = basis[0]
+
+        coords, vals = _frame_data_multi(fl, channels, intensity, periring)
+        if coords is None:
+            raise ValueError(f"No cells in frame {t}.")
+
+        return plot_spatial_reconstruction(
+            coords, vals, basis,
+            channels=channels,
+            n_modes_reconstruct=n_modes_reconstruct,
+            **plot_kwargs,
+        )
+
     def plot_images(
         self,
         Channel="DeepBlue",

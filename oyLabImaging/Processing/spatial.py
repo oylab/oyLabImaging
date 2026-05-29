@@ -1838,3 +1838,655 @@ def plot_lengthscale_comparison(
     ax.set_xlim(-0.5, n - 0.5)
     ax.figure.tight_layout()
     return ax
+
+
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Spectral power spectrum  (Jerison et al. 2025 PNAS)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _alpha_shape_faces(coords: np.ndarray, alpha: float):
+    """Alpha-shape triangulation of 2-D cell centroids.
+
+    Builds the full Delaunay triangulation then keeps only triangles whose
+    circumscribed circle radius < 1/alpha.  This removes long boundary
+    triangles that span empty regions, matching the paper's mesh construction.
+
+    Parameters
+    ----------
+    coords : (N, 2) float  cell centroids in µm
+    alpha  : float         ~1 / max_circumradius (µm^{-1}).
+                           Larger alpha = tighter (more concave) boundary.
+                           A typical starting point is alpha ≈ 1/(3*cell_spacing).
+
+    Returns
+    -------
+    faces : (M, 3) int32
+    """
+    import math
+    from scipy.spatial import Delaunay
+
+    tri   = Delaunay(coords)
+    faces = []
+    max_r = 1.0 / alpha
+
+    for ia, ib, ic in tri.simplices:
+        pa, pb, pc = coords[ia], coords[ib], coords[ic]
+        a = math.sqrt((pa[0]-pb[0])**2 + (pa[1]-pb[1])**2)
+        b = math.sqrt((pb[0]-pc[0])**2 + (pb[1]-pc[1])**2)
+        c = math.sqrt((pc[0]-pa[0])**2 + (pc[1]-pa[1])**2)
+        s = (a + b + c) / 2.0
+        area2 = s*(s-a)*(s-b)*(s-c)
+        if area2 <= 0:
+            continue
+        circum_r = a * b * c / (4.0 * math.sqrt(area2))
+        if circum_r < max_r:
+            faces.append([ia, ib, ic])
+
+    if not faces:
+        raise ValueError(
+            f"Alpha-shape produced no triangles (alpha={alpha}).  "
+            "Try a smaller alpha value (larger max circumradius)."
+        )
+    return np.array(faces, dtype=np.int32)
+
+
+def _build_normalized_laplacian(coords: np.ndarray, faces: np.ndarray):
+    """Compute M^{-1/2} L M^{-1/2} using gpytoolbox.
+
+    Parameters
+    ----------
+    coords : (N, 2) float  cell centroids in µm
+    faces  : (M, 3) int    triangle face list from _alpha_shape_faces
+
+    Returns
+    -------
+    Lm : (N, N) scipy sparse CSR  symmetric normalised Laplacian
+    """
+    import gpytoolbox as gpy
+    import scipy.sparse as sp
+
+    L = gpy.cotangent_laplacian(coords, faces)
+    M = gpy.massmatrix(coords, faces).tocsc()
+
+    m_diag = M.diagonal()
+
+    if np.any(m_diag == 0):
+        # Isolated vertex (e.g. at mesh boundary): fall back to mean mass
+        m_mean = m_diag[m_diag > 0].mean()
+        Lm = L / m_mean
+    else:
+        inv_sqrt_m = 1.0 / np.sqrt(m_diag)
+        D  = sp.diags(inv_sqrt_m)
+        Lm = D @ L @ D
+
+    # Numerical symmetrisation
+    Lm = (Lm + Lm.T) / 2.0
+    return Lm.tocsr()
+
+
+def _laplacian_eigenmodes(Lm, n_modes):
+    """Eigendecompose the normalised Laplacian, stripping the DC mode.
+
+    Parameters
+    ----------
+    n_modes : int or None
+        None → full dense decomposition via scipy.linalg.eigh (all N-1 modes;
+               practical for N ≲ 5 000).
+        int  → n_modes smallest oscillatory modes via sparse shift-invert
+               (efficient for large N).
+
+    Returns
+    -------
+    eigenvalues  : (k,) ascending, non-negative
+    eigenvectors : (N, k)  orthonormal columns (V^T V = I)
+    """
+    import scipy.linalg as la
+    from scipy.sparse.linalg import eigsh
+
+    N = Lm.shape[0]
+
+    if n_modes is None:
+        vals, vecs = la.eigh(Lm.toarray())
+        vals = np.maximum(vals, 0.0)
+        return vals[1:], vecs[:, 1:]          # strip DC mode (index 0)
+
+    k = min(n_modes + 1, N - 2)
+    try:
+        vals, vecs = eigsh(Lm, k=k, which='LM', sigma=0.0, tol=1e-6)
+    except Exception:
+        vals, vecs = eigsh(Lm, k=k, which='SM', tol=1e-6)
+
+    idx  = np.argsort(vals)
+    vals = np.maximum(vals[idx], 0.0)
+    vecs = vecs[:, idx]
+    # Strip DC mode then return exactly n_modes oscillatory modes
+    return vals[1:n_modes + 1], vecs[:, 1:n_modes + 1]
+
+
+class SpectralBasis:
+    """Cotangent Laplacian spectral basis for one frame.
+
+    Build via ``PosLbl.spectral_basis(frame=0)`` or
+    ``build_spectral_basis(pos, frame=0)``.
+
+    Attributes
+    ----------
+    eigenvectors : (N, k)   orthonormal columns from scipy.linalg.eigh
+    eigenvalues  : (k,)     ascending, non-negative; DC mode excluded
+    lengthscales_um : (k,)  2 / sqrt(λ) in µm — Jerison et al. convention
+    coords       : (N, 2)   cell centroids in µm
+    frame_index  : int
+    """
+
+    def __init__(self, eigenvectors, eigenvalues, coords, frame_index):
+        self.eigenvectors = eigenvectors
+        self.eigenvalues  = eigenvalues
+        self.coords       = coords
+        self.frame_index  = frame_index
+
+    @property
+    def n_modes(self):
+        return self.eigenvectors.shape[1]
+
+    @property
+    def n_cells(self):
+        return self.eigenvectors.shape[0]
+
+    @property
+    def lengthscales_um(self):
+        """Spatial length scale per mode: 2 / sqrt(λ_k) in µm.
+
+        Matches Jerison et al. 2025 convention.  Larger = coarser pattern.
+        """
+        return 2.0 / np.sqrt(np.maximum(self.eigenvalues, 1e-12))
+
+    def project(self, expression):
+        """Project expression onto eigenmodes.
+
+        For orthonormal eigenvectors V (from eigh), the projection is simply
+        V^T @ expression — a straightforward matrix multiply.
+
+        Parameters
+        ----------
+        expression : (N,) or (N, n_ch)
+
+        Returns
+        -------
+        coefficients : (k,) or (k, n_ch)
+        """
+        return self.eigenvectors.T @ expression
+
+    def power_spectrum(self, expression, n_permutations=100, seed=42):
+        """Spatial power spectrum with permutation null model.
+
+        Projects expression onto the eigenmodes, computes fractional variance
+        per mode, and runs a permutation null (shuffle cell labels, keep
+        geometry) to identify biologically organised length scales.
+
+        The characteristic length scale per channel follows Jerison et al.:
+        power-weighted mean spatial frequency over modes that exceed the null.
+
+        Parameters
+        ----------
+        expression : (N, n_ch)  z-scored expression (channels as columns)
+        n_permutations : int
+        seed : int
+
+        Returns
+        -------
+        dict
+            power            (k, n_ch)  fractional variance per mode
+            power_null_mean  (k, n_ch)
+            power_null_std   (k, n_ch)
+            signal_to_null   (k, n_ch)  power / (null_mean + null_std)
+            char_lengthscale (n_ch,)    power-weighted mean (paper's estimator)
+            peak_lengthscale (n_ch,)    length scale of highest-SNR mode
+            lengthscales_um  (k,)
+            eigenvalues      (k,)
+            frame_index      int
+        """
+        if expression.ndim == 1:
+            expression = expression[:, None]
+        n_ch = expression.shape[1]
+
+        B    = self.project(expression)                 # (k, n_ch)
+        B2   = B ** 2
+        psum = B2.sum(axis=0, keepdims=True) + 1e-12
+        power = B2 / psum
+
+        rng  = np.random.default_rng(seed)
+        null = np.empty((n_permutations, self.n_modes, n_ch))
+        for p in range(n_permutations):
+            idx  = rng.permutation(self.n_cells)
+            Bn   = self.project(expression[idx])
+            Bn2  = Bn ** 2
+            null[p] = Bn2 / (Bn2.sum(axis=0, keepdims=True) + 1e-12)
+
+        null_mean = null.mean(axis=0)
+        null_std  = null.std(axis=0)
+        snr       = power / (null_mean + null_std + 1e-12)
+
+        # Characteristic length scale: power-weighted mean spatial frequency
+        # over modes above the null baseline (Jerison et al. kscale estimator).
+        try:
+            from scipy.ndimage import gaussian_filter1d
+            def _smooth(p):
+                return gaussian_filter1d(p.astype(float), sigma=3)
+        except ImportError:
+            def _smooth(p):
+                return p
+
+        freq    = np.sqrt(self.eigenvalues)   # k  (µm^{-1}), ascending
+        char_ls = np.empty(n_ch)
+        for c in range(n_ch):
+            p_sm  = _smooth(power[:, c])
+            fnull = null_mean[:, c].mean()
+            above = p_sm > fnull
+            if above.any():
+                pw = power[above, c]
+                kw = freq[above]
+                char_ls[c] = 2.0 / (np.dot(pw, kw) / pw.sum())
+            else:
+                char_ls[c] = self.lengthscales_um[power[:, c].argmax()]
+
+        return {
+            'power':             power,
+            'power_null_mean':   null_mean,
+            'power_null_std':    null_std,
+            'signal_to_null':    snr,
+            'char_lengthscale':  char_ls,
+            'peak_lengthscale':  self.lengthscales_um[snr.argmax(axis=0)],
+            'lengthscales_um':   self.lengthscales_um.copy(),
+            'eigenvalues':       self.eigenvalues.copy(),
+            'frame_index':       self.frame_index,
+        }
+
+
+def build_spectral_basis(
+    pos,
+    frame=None,
+    n_modes=None,
+    alpha=0.05,
+):
+    """Build cotangent Laplacian spectral basis for one or more frames.
+
+    Computes the alpha-shape triangulation, the mass-normalised cotangent
+    Laplacian (via gpytoolbox), and its eigenmodes.  The result is
+    geometry-only: it can be reused to project any number of channels.
+
+    Parameters
+    ----------
+    pos     : PosLbl
+    frame   : int, list of int, or None
+    n_modes : int or None
+        None (default) uses scipy.linalg.eigh for all N-1 oscillatory modes —
+        matches the paper exactly; practical for N ≲ 5 000.
+        Pass an integer to use the sparse shift-invert solver for large N.
+    alpha   : float
+        Alpha-shape parameter (~1/max_circumradius in µm^{-1}).
+        Controls how tightly the mesh boundary hugs the point cloud.
+        Default 0.05 µm^{-1} (max circumradius ≈ 20 µm).  Increase for
+        denser fields; decrease for sparser or larger fields.
+
+    Returns
+    -------
+    SpectralBasis  (single frame) or list of SpectralBasis
+    """
+    frames    = _resolve_frames(pos, frame)
+    per_frame = []
+    for t in frames:
+        fl     = pos.framelabels[t]
+        coords = np.asarray(fl.centroid_um, dtype=np.float64)
+        min_n  = 4 if n_modes is None else n_modes + 4
+        if len(coords) < min_n:
+            raise ValueError(
+                f"Frame {t}: only {len(coords)} cells — need at least {min_n}."
+            )
+        faces = _alpha_shape_faces(coords, alpha)
+        Lm    = _build_normalized_laplacian(coords, faces)
+        vals, vecs = _laplacian_eigenmodes(Lm, n_modes)
+        per_frame.append(SpectralBasis(vecs, vals, coords, t))
+
+    if not per_frame:
+        raise ValueError("No valid frames found.")
+
+    if isinstance(frame, (int, np.integer)) or (
+        isinstance(frame, list) and len(frame) == 1
+    ):
+        return per_frame[0]
+    return per_frame
+
+
+def spectral_power_spectrum(
+    pos,
+    ch,
+    frame=None,
+    n_modes=None,
+    alpha=0.05,
+    intensity: str = 'mean',
+    periring: bool = False,
+    ffield: bool = True,
+    n_permutations: int = 100,
+    seed: int = 42,
+):
+    """Spatial power spectrum via cotangent Laplacian spectral decomposition.
+
+    Full pipeline in one call: builds the spectral basis, z-scores expression,
+    projects onto eigenmodes, and runs the permutation null model.
+
+    Prefer ``PosLbl.spectral_power_spectrum`` if you plan to analyze multiple
+    channels (it reuses the cached basis).
+
+    Parameters
+    ----------
+    pos           : PosLbl
+    ch            : str or list of str
+    frame         : int, list of int, or None
+    n_modes       : int or None  (see build_spectral_basis)
+    alpha         : float        (see build_spectral_basis)
+    intensity     : str
+    periring      : bool
+    ffield        : bool
+    n_permutations: int
+    seed          : int
+
+    Returns
+    -------
+    dict or list of dicts — see SpectralBasis.power_spectrum
+    """
+    import warnings
+    channels = [ch] if isinstance(ch, str) else list(ch)
+    frames   = _resolve_frames(pos, frame)
+
+    if ffield:
+        uncorrected = [t for t in frames
+                       if not getattr(pos.framelabels[t], '_ffield', False)]
+        if uncorrected:
+            warnings.warn(
+                f"ffield=True but {len(uncorrected)} frame(s) were segmented "
+                "without flat-field correction.", stacklevel=2)
+
+    per_frame = []
+    for t in frames:
+        fl = pos.framelabels[t]
+        coords, vals = _frame_data_multi(fl, channels, intensity, periring)
+        if coords is None:
+            continue
+
+        faces = _alpha_shape_faces(coords, alpha)
+        Lm    = _build_normalized_laplacian(coords, faces)
+        evals, evecs = _laplacian_eigenmodes(Lm, n_modes)
+        basis = SpectralBasis(evecs, evals, coords, t)
+
+        mu    = vals.mean(axis=0)
+        sigma = vals.std(axis=0)
+        sigma[sigma < 1e-12] = 1.0
+        z = (vals - mu) / sigma
+
+        res = basis.power_spectrum(z, n_permutations=n_permutations, seed=seed)
+        res['channels'] = channels
+        per_frame.append(res)
+
+    if not per_frame:
+        raise ValueError("No valid frames.")
+
+    if isinstance(frame, (int, np.integer)) or (
+        isinstance(frame, list) and len(frame) == 1
+    ):
+        return per_frame[0]
+    return per_frame
+
+
+def plot_spatial_power_spectrum(
+    results,
+    channels=None,
+    ax=None,
+    figsize=None,
+    show_null: bool = True,
+    log_x: bool = True,
+):
+    """Plot spatial power spectrum: fractional variance vs length scale (µm).
+
+    Parameters
+    ----------
+    results  : dict or list of dicts
+        Output of SpectralBasis.power_spectrum or PosLbl.spectral_power_spectrum.
+    channels : list of str, optional
+    ax       : matplotlib.axes.Axes, optional
+    figsize  : tuple, optional
+    show_null: bool  shade permutation null ± 1 std (default True)
+    log_x    : bool  log-scale x-axis (default True)
+
+    Returns
+    -------
+    matplotlib.axes.Axes
+    """
+    import matplotlib.pyplot as plt
+
+    res   = results[0] if isinstance(results, list) else results
+    ls    = res['lengthscales_um']          # (k,) descending (coarse→fine)
+    power = res['power']                    # (k, n_ch)
+    n_ch  = power.shape[1]
+
+    # Sort ascending (fine→coarse on log-x reads left→right)
+    order = np.argsort(ls)
+    ls    = ls[order]
+    power = power[order]
+
+    if channels is None:
+        channels = res.get('channels', [f'ch{i}' for i in range(n_ch)])
+
+    if ax is None:
+        fw = figsize[0] if figsize else max(6, n_ch * 2)
+        fh = figsize[1] if figsize else 4
+        _, ax = plt.subplots(figsize=(fw, fh))
+
+    colors = plt.cm.tab10(np.linspace(0, 0.9, n_ch))
+
+    for c, (ch_name, color) in enumerate(zip(channels, colors)):
+        p = power[:, c]
+        ax.plot(ls, p, color=color, label=ch_name, lw=1.5)
+
+        if show_null and 'power_null_mean' in res:
+            nm = res['power_null_mean'][order, c]
+            ns = res['power_null_std'][order, c]
+            ax.fill_between(ls, nm - ns, nm + ns, color=color, alpha=0.15)
+            ax.plot(ls, nm, color=color, lw=0.8, ls='--', alpha=0.5)
+
+        if 'char_lengthscale' in res:
+            ax.axvline(res['char_lengthscale'][c], color=color,
+                       lw=0.8, ls=':', alpha=0.8)
+
+    if log_x:
+        ax.set_xscale('log')
+
+    ax.set_xlabel('Length scale (µm)')
+    ax.set_ylabel('Fractional power')
+    ax.set_title(f'Spatial power spectrum  (frame {res.get("frame_index", 0)})')
+    ax.legend(fontsize=9)
+    ax.tick_params(which='both', direction='in', top=True, right=True)
+    ax.figure.tight_layout()
+    return ax
+
+
+def plot_wavenumber_power_spectrum(
+    results,
+    channels=None,
+    ax=None,
+    figsize=None,
+    show_null: bool = True,
+    show_null_fill: bool = False,
+    smooth_sigma: float = 3.0,
+    smooth_sigma_null: float = 2.0,
+    secondary_axis: bool = True,
+):
+    """Plot fraction of power vs wavenumber — Jerison et al. Figure 6 style.
+
+    X-axis (bottom): k = sqrt(eigenvalue) in µm⁻¹ (log scale).
+    X-axis (top):    corresponding length scale λ = 2/k in µm.
+    Y-axis:          fraction of power (Gaussian-smoothed, log scale).
+
+    Permutation null is shown in grey.
+
+    Parameters
+    ----------
+    results      : dict or list of dicts
+        Output of SpectralBasis.power_spectrum or PosLbl.spectral_power_spectrum.
+    channels     : list of str, optional
+    ax           : matplotlib.axes.Axes, optional
+    figsize      : tuple, optional
+    show_null    : bool   plot permutation null mean as grey line (default True)
+    show_null_fill: bool  shade ±1 std around null (default False, matches paper)
+    smooth_sigma : float  Gaussian smoothing sigma for data (default 3, matches paper)
+    smooth_sigma_null : float  smoothing sigma for null (default 2, matches paper)
+    secondary_axis : bool  add length-scale axis on top (default True)
+
+    Returns
+    -------
+    matplotlib.axes.Axes
+    """
+    import matplotlib.pyplot as plt
+    from scipy.ndimage import gaussian_filter1d
+
+    res   = results[0] if isinstance(results, list) else results
+    power = res['power']        # (k, n_ch) in ascending eigenvalue order
+    evals = res['eigenvalues']  # (k,) ascending
+    n_ch  = power.shape[1]
+
+    if channels is None:
+        channels = res.get('channels', [f'ch{i}' for i in range(n_ch)])
+
+    if ax is None:
+        fw = figsize[0] if figsize else 5
+        fh = figsize[1] if figsize else 5
+        _, ax = plt.subplots(figsize=(fw, fh))
+
+    k    = np.sqrt(np.maximum(evals, 0.0))         # (k,) µm⁻¹, ascending
+    k_sm = gaussian_filter1d(k.astype(float), sigma=smooth_sigma)
+
+    colors = plt.cm.tab10(np.linspace(0, 0.9, n_ch))
+
+    for c, (ch_name, color) in enumerate(zip(channels, colors)):
+        p_sm = gaussian_filter1d(power[:, c].astype(float), sigma=smooth_sigma)
+        ax.loglog(k_sm, p_sm, color=color, label=ch_name, lw=2.0, alpha=0.8)
+
+        if show_null and 'power_null_mean' in res:
+            nm = res['power_null_mean'][:, c]
+            nm_sm = gaussian_filter1d(nm.astype(float), sigma=smooth_sigma_null)
+            ax.loglog(k_sm, nm_sm, color='grey', lw=1.0, alpha=0.5)
+            if show_null_fill and 'power_null_std' in res:
+                ns_sm = gaussian_filter1d(res['power_null_std'][:, c].astype(float),
+                                          sigma=smooth_sigma_null)
+                ax.fill_between(k_sm, nm_sm - ns_sm, nm_sm + ns_sm,
+                                color='grey', alpha=0.15)
+
+        if 'char_lengthscale' in res and res['char_lengthscale'][c] > 0:
+            k_char = 2.0 / res['char_lengthscale'][c]
+            ax.axvline(k_char, color=color, lw=0.8, ls=':', alpha=0.8)
+
+    ax.set_xlabel('k (µm⁻¹)', fontsize=12)
+    ax.set_ylabel('Fraction of power', fontsize=12)
+    ax.set_title(f'Spatial power spectrum  (frame {res.get("frame_index", 0)})')
+    ax.legend(fontsize=9, frameon=False)
+    ax.set_box_aspect(1)
+    ax.tick_params(which='both', direction='in', top=not secondary_axis, right=True)
+
+    if secondary_axis:
+        def _k_to_ls(k_):
+            return 2.0 / np.where(np.asarray(k_) > 0, np.asarray(k_), np.inf)
+        def _ls_to_k(ls_):
+            return 2.0 / np.where(np.asarray(ls_) > 0, np.asarray(ls_), np.inf)
+        secax = ax.secondary_xaxis('top', functions=(_k_to_ls, _ls_to_k))
+        secax.set_xlabel('Length scale (µm)', fontsize=12)
+        secax.tick_params(which='both', direction='in')
+
+    ax.figure.tight_layout()
+    return ax
+
+
+def plot_spatial_reconstruction(
+    coords,
+    expression,
+    basis,
+    channels=None,
+    n_modes_reconstruct=50,
+    figsize=None,
+    cmap='coolwarm',
+    point_size=4,
+    vclip=99,
+):
+    """Figure 4C–style: raw data vs low-pass spatial reconstruction.
+
+    For each channel, plots two scatter maps side by side:
+      left  — centred expression values coloured onto cell positions
+      right — reconstruction using only the first *n_modes_reconstruct*
+              eigenmodes (i.e. a spatial low-pass filter)
+
+    Parameters
+    ----------
+    coords : (N, 2) array
+        Cell x/y coordinates in µm.
+    expression : (N, n_ch) array
+        Mean-centred (or z-scored) expression values, one column per channel.
+    basis : SpectralBasis
+        Cotangent Laplacian eigenbasis (from build_spectral_basis / P.spectral_basis).
+    channels : list of str, optional
+        Channel labels for the column titles.
+    n_modes_reconstruct : int
+        Number of low-frequency modes to include in the reconstruction (default 50).
+    figsize : tuple, optional
+    cmap : str  diverging colourmap (default 'coolwarm')
+    point_size : float  scatter marker size (default 4)
+    vclip : float  percentile for symmetric colour clipping (default 99)
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+    """
+    import matplotlib.pyplot as plt
+
+    if expression.ndim == 1:
+        expression = expression[:, None]
+    n_ch = expression.shape[1]
+    if channels is None:
+        channels = [f'ch{i}' for i in range(n_ch)]
+
+    # Mean-centre
+    expr_c = expression - expression.mean(axis=0)
+
+    # Project and reconstruct
+    B = basis.eigenvectors.T @ expr_c          # (k, n_ch)
+    N = min(n_modes_reconstruct, basis.n_modes)
+    recon = basis.eigenvectors[:, :N] @ B[:N]  # (n_cells, n_ch)
+
+    n_rows = n_ch
+    fw = figsize[0] if figsize else 8
+    fh = figsize[1] if figsize else max(3 * n_rows, 4)
+    fig, axes = plt.subplots(n_rows, 2, figsize=(fw, fh),
+                             squeeze=False)
+
+    x, y = coords[:, 0], coords[:, 1]
+
+    for row, (ch, ax_data, ax_rec) in enumerate(
+            zip(channels, axes[:, 0], axes[:, 1])):
+
+        for col_idx, (ax, vals, title) in enumerate([
+            (ax_data, expr_c[:, row], 'Data'),
+            (ax_rec,  recon[:, row],  f'{N} modes'),
+        ]):
+            vmax = np.percentile(np.abs(vals), vclip)
+            sc = ax.scatter(x, y, c=vals, cmap=cmap,
+                            vmin=-vmax, vmax=vmax,
+                            s=point_size, linewidths=0, rasterized=True)
+            ax.set_aspect('equal')
+            ax.axis('off')
+            if row == 0:
+                ax.set_title(title, fontsize=11)
+            if col_idx == 0:
+                ax.set_ylabel(ch, fontsize=10, rotation=90, labelpad=4)
+            plt.colorbar(sc, ax=ax, fraction=0.03, pad=0.02)
+
+    fig.tight_layout()
+    return fig

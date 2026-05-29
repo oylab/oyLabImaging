@@ -45,6 +45,7 @@ setup(
         "poppy>=1.0.1",
         "scikit-image",
         "scikit-learn==1.0.2",
+        "gpytoolbox>=0.2.0",
         "scipy>=1.6.2",
         "tqdm>=4.59.0",
         "zernike>=0.0.32",
