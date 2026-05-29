@@ -54,6 +54,10 @@ setup(
         "tensorflow-cpu==2.10.0 ; platform_machine!='arm64'",
         "stardist==0.8.3",
         "thin-plate-spline",
+        "squidpy",
+        "anndata",
+        "esda",
+        "libpysal",
     ],
     extras_require={
         "cuda": CU111_EXTRAS,

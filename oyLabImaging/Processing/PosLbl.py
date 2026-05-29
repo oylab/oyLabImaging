@@ -282,11 +282,11 @@ class PosLbl(object):
         foldername = os.path.join(self.pth, fname + os.path.sep)
         if not os.path.exists(foldername):
             os.makedirs(foldername)
-        fname = os.path.join(foldername, self.posname + ".pkl")
+        fname = os.path.join(foldername, str(self.posname) + ".pkl")
         with open(fname, "wb") as dbfile:
             cloudpickle.dump(self, dbfile)
             # print("saved Position " + self.posname)
-            sys.stdout.write("\r" + "saved Position " + self.posname)
+            sys.stdout.write("\r" + "saved Position " + str(self.posname))
             sys.stdout.flush()
 
     def load(self, Pos=None, pth=None, fname="PosLbls"):
