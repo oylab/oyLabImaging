@@ -1530,7 +1530,7 @@ class Metadata(object):
 
         return images_dict
 
-    def CalculateFlatField(self, Channel=None, n_samples=50, n_bands=9):
+    def CalculateFlatField(self, Channel=None, n_samples=50, n_bands=9, Position=None, save=True):
         """Estimate per-channel, per-acq blind flat fields using the à trous wavelet transform.
 
         Mirrors the approach in the wollmanlab/Metadata MATLAB pipeline:
@@ -1549,7 +1549,23 @@ class Metadata(object):
         n_samples : int
             Maximum number of images to average per channel per acq.
         n_bands : int
-            Number of AWT scales.  Default 9 matches the MATLAB usage.
+            Number of AWT scales.  Default 9 matches the MATLAB usage.  Fewer
+            bands keep more spatial detail of the illumination (e.g. a flat-topped
+            profile with steep edges) but also keep any signal left in the mean
+            image, so combine with ``Position`` set to signal-free fields.
+        Position : str, list of str, or None
+            Only average images from these positions, e.g. unstained or
+            unstimulated wells, so that cell signal (bright patches) does not
+            leak into the flat field.  None (default) samples from all positions.
+        save : bool
+            Write the TIFFs to ``{base_pth}/FlatFields`` (default True).  With
+            False the fields are only kept in memory (``self._flatfields``), e.g.
+            to compare settings or when ``base_pth`` is read-only.
+
+        Returns
+        -------
+        dict
+            {(channel, acq): flat field} for the fields computed in this call.
         """
         import tifffile
         from oyLabImaging.Processing.improcutils import awt
@@ -1560,16 +1576,27 @@ class Metadata(object):
         elif isinstance(channels, str):
             channels = [channels]
 
+        positions = None
+        if Position is not None:
+            positions = [Position] if isinstance(Position, str) else list(Position)
+            missing = set(positions) - set(self.image_table['Position'])
+            if missing:
+                raise ValueError(f"Positions not in metadata: {sorted(missing)}")
+
         fld = join(self.base_pth, 'FlatFields')
-        os.makedirs(fld, exist_ok=True)
+        if save:
+            os.makedirs(fld, exist_ok=True)
 
         if not hasattr(self, '_flatfields'):
             self._flatfields = {}
 
         rng = np.random.default_rng(42)
+        computed = {}
 
         for ch in channels:
             ch_rows = self.image_table[self.image_table['Channel'] == ch]
+            if positions is not None:
+                ch_rows = ch_rows[ch_rows['Position'].isin(positions)]
             if len(ch_rows) == 0:
                 warnings.warn(f"No images found for channel '{ch}', skipping.")
                 continue
@@ -1581,11 +1608,15 @@ class Metadata(object):
                     finds = rng.choice(finds, size=n_samples, replace=False).tolist()
                 mean_img = self._load_mean_image(finds)
                 flt = awt(mean_img, nBands=n_bands)[..., n_bands].astype(np.float32)
-                safe_acq = acq.replace('/', '_').replace('\\', '_')
-                fname = f'{ch}_{safe_acq}.tif'
-                tifffile.imwrite(join(fld, fname), flt)
+                if save:
+                    safe_acq = acq.replace('/', '_').replace('\\', '_')
+                    fname = f'{ch}_{safe_acq}.tif'
+                    tifffile.imwrite(join(fld, fname), flt)
                 self._flatfields[(ch, acq)] = flt.astype(np.float64)
+                computed[(ch, acq)] = self._flatfields[(ch, acq)]
                 print(f"Flat field estimated for channel '{ch}', acq '{acq}' ({len(finds)} images).")
+
+        return computed
 
     def _load_mean_image(self, finds):
         """Load raw images for the given row indices and return their mean."""
