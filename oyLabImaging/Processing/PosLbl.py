@@ -1271,25 +1271,31 @@ class PosLbl(object):
         return result
 
     def find_activity_clusters(self, lisa_result, min_I=0.5, max_pvalue=0.05,
-                               min_cells=10, eps=None):
+                               min_cells=10, eps=None, kind='all', min_value=None):
         """DBSCAN clustering on LISA-significant cells.
 
         Pass the output of local_moran_I (single frame) plus threshold params.
+        kind='high' keeps only high-high cells (hot spots), 'low' only low-low;
+        min_value restricts to cells above an intensity threshold.  See
+        spatial.find_activity_clusters.
         """
         from oyLabImaging.Processing.spatial import find_activity_clusters
         return find_activity_clusters(lisa_result, min_I=min_I,
                                       max_pvalue=max_pvalue,
-                                      min_cells=min_cells, eps=eps)
+                                      min_cells=min_cells, eps=eps,
+                                      kind=kind, min_value=min_value)
 
     def activity_clusters(self, ch, frame=None, radius=50.0, n_permutations=999,
                           intensity='mean', periring=False, seed=42, ffield=True,
-                          min_I=0.5, max_pvalue=0.05, min_cells=3, eps=None):
+                          min_I=0.5, max_pvalue=0.05, min_cells=3, eps=None,
+                          kind='all', min_value=None):
         """Compute LISA then find activity clusters — no plotting.
 
         Returns
         -------
         list of dicts (one per frame) with keys:
-            frame_index, n_clusters, cluster_sizes, coords, labels, I, pvalue
+            frame_index, n_clusters, cluster_sizes, cluster_radius_um,
+            coords, labels, cell_labels, I, pvalue
         """
         from oyLabImaging.Processing.spatial import local_moran_I, find_activity_clusters
 
@@ -1304,7 +1310,8 @@ class PosLbl(object):
         for lisa_res in lisa_list:
             cl = find_activity_clusters(lisa_res, min_I=min_I,
                                         max_pvalue=max_pvalue,
-                                        min_cells=min_cells, eps=eps)
+                                        min_cells=min_cells, eps=eps,
+                                        kind=kind, min_value=min_value)
             cl['frame_index'] = lisa_res['frame_index']
             results.append(cl)
         return results
@@ -1313,7 +1320,8 @@ class PosLbl(object):
                   intensity='mean', periring=False, seed=42, ffield=True,
                   min_I=0.5, max_pvalue=0.005, min_cells=10,
                   show_clusters=True, overlay=True, size=8,
-                  colormap='coolwarm', vmax=None, recompute=False):
+                  colormap='coolwarm', vmax=None, recompute=False,
+                  kind='all', min_value=None):
         """Compute LISA and visualise in napari.
 
         Parameters
@@ -1324,6 +1332,7 @@ class PosLbl(object):
         overlay : bool  add raw channel image behind LISA points (default True)
         show_clusters : bool  add convex-hull outlines for significant clusters
         min_I, max_pvalue, min_cells : cluster thresholds
+        kind, min_value : cluster cell selection (see spatial.find_activity_clusters)
         colormap : diverging colormap for Moran's I
         vmax : color scale maximum (default: 99th percentile of |I|)
 
@@ -1423,7 +1432,8 @@ class PosLbl(object):
                 t = lisa_res['frame_index']
                 cl = find_activity_clusters(lisa_res, min_I=min_I,
                                             max_pvalue=max_pvalue,
-                                            min_cells=min_cells)
+                                            min_cells=min_cells,
+                                            kind=kind, min_value=min_value)
                 cl['frame_index'] = t
                 cluster_results.append(cl)
                 if cl['n_clusters'] == 0:

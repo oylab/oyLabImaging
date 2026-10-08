@@ -500,6 +500,40 @@ class results(object):
         self.save()
         return self.spatial_stats
 
+    def flatfield_qc(self, Position, ch, frame=0, max_r=300.0, dr=5.0, nbins=24,
+                     plot=True, max_g50=0.2):
+        """Check the flat field on signal-free positions.
+
+        Use positions without signal that were not used to build the flat field
+        (e.g. unstimulated wells when MD.CalculateFlatField(Position=...) used
+        mock wells).  See spatial.flatfield_qc for what a good result looks like.
+
+        Parameters
+        ----------
+        Position : str or list of str
+        ch : str
+        frame : int
+        max_r, dr : float   radial range and bin width (µm) for g(r)
+        nbins : int         grid size of the residual map
+        plot : bool         draw the residual map and g(r)
+        max_g50 : float     QC limit for g at 50 µm, drawn on the plot
+
+        Returns
+        -------
+        dict (see spatial.flatfield_qc); with plot=True also the two axes under 'axes'.
+        """
+        from oyLabImaging.Processing.spatial import flatfield_qc, plot_flatfield_qc
+
+        positions = [Position] if isinstance(Position, str) else list(Position)
+        missing = [p for p in positions if p not in self.PosLbls]
+        if missing:
+            raise ValueError(f"Positions not segmented: {missing}")
+        qc = flatfield_qc([self.PosLbls[p] for p in positions], ch, frame=frame,
+                          max_r=max_r, dr=dr, nbins=nbins)
+        if plot:
+            qc['axes'] = plot_flatfield_qc(qc, max_g50=max_g50)
+        return qc
+
     def spatial_report(self, groups=None, stats=None, channels=None, panel_size=(4, 3)):
         """
         Plot a multi-figure report comparing spatial statistics across positions.

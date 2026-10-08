@@ -700,6 +700,7 @@ def local_moran_I(
         I           : (N,)    Local Moran's I per cell (edge-corrected)
         pvalue      : (N,)    two-sided permutation p-value
         z           : (N,)    standardized intensities
+        vals        : (N,)    raw intensities (the mark)
         n_neighbors : (N,)    observed neighbor count within radius
         edge_frac   : (N,)    fraction of search circle inside FOV (1=fully inside)
         is_edge     : (N,)    True for cells with < 90 % circle coverage
@@ -742,7 +743,7 @@ def local_moran_I(
         # coords[:, 0] = xy[0] + ps * row,  coords[:, 1] = xy[1] + ps * col
         fov_bbox = (xy[0], xy[0] + H * ps, xy[1], xy[1] + W * ps)
         res = _local_moran_core(coords, vals, radius, n_permutations, seed, fov_bbox)
-        res.update({'ch': ch, 'radius': radius, 'frame_index': t})
+        res.update({'vals': vals, 'ch': ch, 'radius': radius, 'frame_index': t})
         per_frame.append(res)
 
     if not per_frame:
@@ -761,6 +762,8 @@ def find_activity_clusters(
     max_pvalue: float = 0.05,
     min_cells: int = 3,
     eps: Optional[float] = None,
+    kind: str = 'all',
+    min_value: Optional[float] = None,
 ) -> dict:
     """Identify clusters of collectively active cells from a LISA result.
 
@@ -779,6 +782,14 @@ def find_activity_clusters(
         Minimum cluster size (default 3 as in the paper).
     eps : float, optional
         DBSCAN search radius in µm.  Defaults to the radius used for LISA.
+    kind : {'all', 'high', 'low'}
+        A high I means a cell resembles its neighbours, either both high
+        (high-high, z > 0) or both low (low-low, z < 0).  'all' (default)
+        clusters both; 'high' keeps only high-high cells (hot spots); 'low'
+        only low-low cells (cold spots).
+    min_value : float, optional
+        Only cells whose intensity (``lisa_result['vals']``) exceeds this value,
+        e.g. a positivity threshold, so hot spots consist of positive cells.
 
     Returns
     -------
@@ -789,11 +800,16 @@ def find_activity_clusters(
         labels      : (M,) DBSCAN cluster labels (−1 = noise)
         n_clusters  : number of clusters found (excluding noise)
         cluster_sizes : list of cell counts per cluster
+        cluster_radius_um : list of equivalent cluster radii, sqrt(n / (π ρ)),
+            with ρ the cell density over the bounding box of all cells
+        cell_labels : (N,) cluster label for every cell in lisa_result (−1 = none)
     """
     from sklearn.cluster import DBSCAN
 
     if isinstance(lisa_result, list):
         raise TypeError("Pass a single-frame result dict, not a list.")
+    if kind not in ('all', 'high', 'low'):
+        raise ValueError(f"kind must be 'all', 'high' or 'low', got {kind!r}")
 
     moran  = lisa_result['I']
     pvalue = lisa_result['pvalue']
@@ -805,11 +821,22 @@ def find_activity_clusters(
 
     valid = ~is_edge & ~np.isnan(moran) & ~np.isnan(pvalue)
     mask = valid & (moran >= min_I) & (pvalue <= max_pvalue)
+    if kind != 'all':
+        z = lisa_result['z']
+        mask &= (z > 0) if kind == 'high' else (z < 0)
+    if min_value is not None:
+        if 'vals' not in lisa_result:
+            raise ValueError("lisa_result has no 'vals' (computed with an older version); "
+                             "recompute local_moran_I (recompute=True) to use min_value.")
+        mask &= np.asarray(lisa_result['vals']) > min_value
+
+    cell_labels = np.full(len(moran), -1, dtype=int)
     if mask.sum() < min_cells:
         return {
             'coords': coords[mask], 'I': moran[mask], 'pvalue': pvalue[mask],
             'labels': np.full(mask.sum(), -1, dtype=int),
-            'n_clusters': 0, 'cluster_sizes': [],
+            'n_clusters': 0, 'cluster_sizes': [], 'cluster_radius_um': [],
+            'cell_labels': cell_labels,
         }
 
     sig_coords = coords[mask]
@@ -819,11 +846,16 @@ def find_activity_clusters(
     eps_use = eps if eps is not None else radius
     db = DBSCAN(eps=eps_use, min_samples=min_cells).fit(sig_coords)
     cluster_labels = db.labels_
+    cell_labels[mask] = cluster_labels
 
     unique = cluster_labels[cluster_labels >= 0]
     n_clusters = len(np.unique(unique)) if len(unique) else 0
     cluster_sizes = [int((cluster_labels == k).sum())
                      for k in range(n_clusters)]
+
+    area = float(np.prod(coords.max(axis=0) - coords.min(axis=0)))
+    density = len(coords) / area if area > 0 else np.nan
+    cluster_radius_um = [float(np.sqrt(n / (np.pi * density))) for n in cluster_sizes]
 
     return {
         'coords': sig_coords,
@@ -832,6 +864,8 @@ def find_activity_clusters(
         'labels': cluster_labels,
         'n_clusters': n_clusters,
         'cluster_sizes': cluster_sizes,
+        'cluster_radius_um': cluster_radius_um,
+        'cell_labels': cell_labels,
     }
 
 
@@ -1840,6 +1874,176 @@ def plot_lengthscale_comparison(
     return ax
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Flat-field quality control
+# ─────────────────────────────────────────────────────────────────────────────
+
+def flatfield_residual_map(pos, ch: str, frame: int = 0, nbins: int = 24,
+                           intensity: str = 'mean', periring: bool = False) -> np.ndarray:
+    """Mean per-cell intensity by region of the FOV, in % of the FOV median.
+
+    The FOV is divided into an nbins × nbins grid; each bin holds the mean of
+    (intensity / median − 1) × 100 over the cells whose centroid falls in it
+    (NaN for empty bins).  On signal-free FOVs a flat-field-corrected image
+    should give a featureless map; a reproducible pattern (dark centre, bright
+    corners, rings) is illumination left over by the flat field.
+    """
+    fl = pos.framelabels[frame]
+    coords, vals, _ = _frame_data(fl, ch, ch, intensity, periring)
+    if coords is None:
+        return np.full((nbins, nbins), np.nan)
+    ps = float(fl._pixelsize)
+    extent = np.asarray(fl.imagedims, dtype=np.float64) * ps
+    rel = (coords - np.asarray(fl.XY, dtype=np.float64)) / extent
+    b = np.clip((rel * nbins).astype(int), 0, nbins - 1)
+    idx = b[:, 0] * nbins + b[:, 1]
+    v = 100.0 * (vals / np.nanmedian(vals) - 1.0)
+    with np.errstate(invalid='ignore'):
+        sums = np.bincount(idx, weights=v, minlength=nbins * nbins)
+        counts = np.bincount(idx, minlength=nbins * nbins)
+        return (sums / counts).reshape(nbins, nbins)
+
+
+def flatfield_qc(positions, ch: str, frame: int = 0, max_r: float = 300.0,
+                 dr: float = 5.0, nbins: int = 24) -> dict:
+    """Check a flat field on signal-free FOVs.
+
+    Use FOVs without signal (e.g. unstimulated wells) that were *not* used to
+    build the flat field.  After a good correction their cells show no spatial
+    structure: the cell-level autocorrelation g(r) drops to ~0 within a few
+    cell diameters and the residual map is featureless.  Leftover illumination
+    appears as long-range correlation (g(50 µm) of ~0.7 for a poor flat field
+    vs. ~0.1 for a good one in 10x/20x HeLa monolayers).
+
+    Parameters
+    ----------
+    positions : list of PosLbl
+    ch : str
+    frame : int
+    max_r, dr : float
+        Radial range and bin width (µm) for g(r).
+    nbins : int
+        Grid size of the residual map.
+
+    Returns
+    -------
+    dict
+        r, g, sem : mean cell-level g(r) across FOVs and its SEM
+        g_50um, g_150um : mean g at 50 and 150 µm
+        residual_map : (nbins, nbins) mean residual map, % of FOV median
+        n_fovs, ch
+    """
+    curves = [radial_corr(p, ch, frame=frame, max_r=max_r, dr=dr) for p in positions]
+    G = np.vstack([c['g'] for c in curves])
+    r = curves[0]['r']
+    g = np.nanmean(G, axis=0)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', RuntimeWarning)
+        residual = np.nanmean([flatfield_residual_map(p, ch, frame=frame, nbins=nbins)
+                               for p in positions], axis=0)
+    return {
+        'r': r, 'g': g, 'sem': np.nanstd(G, axis=0) / np.sqrt(len(G)),
+        'g_50um': float(np.interp(50.0, r, g)), 'g_150um': float(np.interp(150.0, r, g)),
+        'residual_map': residual, 'n_fovs': len(positions), 'ch': ch,
+    }
+
+
+def plot_flatfield_qc(qc: dict, max_g50: float = 0.2, axes=None, title: str = ''):
+    """Two panels: the residual map and g(r) with the QC limit at 50 µm.
+
+    Returns the two axes.
+    """
+    import matplotlib.pyplot as plt
+
+    if axes is None:
+        _, axes = plt.subplots(1, 2, figsize=(9, 4), constrained_layout=True)
+    ax_m, ax_g = axes
+    im = ax_m.imshow(qc['residual_map'], cmap='RdBu_r', vmin=-5, vmax=5)
+    ax_m.set_xticks([]); ax_m.set_yticks([])
+    ax_m.set_title(f'{title} residual pattern (n={qc["n_fovs"]} FOVs)'.strip(), fontsize=9)
+    ax_m.figure.colorbar(im, ax=ax_m, shrink=0.8, label=f'{qc["ch"]}, % vs FOV median')
+    r, g, se = qc['r'][1:], qc['g'][1:], qc['sem'][1:]
+    ax_g.plot(r, g, color='k', lw=2)
+    ax_g.fill_between(r, g - se, g + se, color='k', alpha=0.2, lw=0)
+    ax_g.axhline(0, color='0.85', lw=0.8)
+    ax_g.axhline(max_g50, color='#D62728', ls='--', lw=1, label=f'QC limit at 50 µm ({max_g50})')
+    ax_g.set(xlabel='r (µm)', ylabel=f'{qc["ch"]} g(r)', ylim=(-0.1, 1),
+             title=f'{title} g(50 µm) = {qc["g_50um"]:.2f}'.strip())
+    ax_g.legend(frameon=False, fontsize=7)
+    return axes
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Comparing groups of positions
+# ─────────────────────────────────────────────────────────────────────────────
+
+def holm(pvalues) -> np.ndarray:
+    """Holm–Bonferroni adjusted p-values (NaNs are ignored and returned as NaN)."""
+    p = np.asarray(pvalues, dtype=np.float64)
+    out = np.full(len(p), np.nan)
+    ok = np.where(np.isfinite(p))[0]
+    running = 0.0
+    for k, i in enumerate(ok[np.argsort(p[ok])]):
+        running = max(running, (len(ok) - k) * p[i])
+        out[i] = min(running, 1.0)
+    return out
+
+
+def compare_groups(table, value: str, group: str, pairs, by=None,
+                   log: bool = True, min_n: int = 3):
+    """Welch's t-test between pairs of groups, Holm-adjusted within blocks.
+
+    Intended for per-FOV summaries (e.g. λ or cluster radius per position) in
+    a pandas DataFrame with one row per FOV.  Note that FOVs from the same well
+    are technical replicates, so FOV-level p-values are optimistic.
+
+    Parameters
+    ----------
+    table : pandas.DataFrame
+    value : str
+        Column to compare.  Rows with non-finite values are dropped.
+    group : str
+        Column holding the group label (e.g. condition).
+    pairs : list of (a, b)
+        Group pairs to compare.
+    by : str or list of str, optional
+        Columns defining blocks (e.g. acquisition, treatment); tests are run
+        and Holm-adjusted separately within each block.
+    log : bool
+        Test log10(value) (default True; suits positive, right-skewed values
+        such as lengthscales and sizes).
+    min_n : int
+        Minimum number of rows per group; smaller pairs get p = NaN.
+
+    Returns
+    -------
+    pandas.DataFrame with the block columns and a, b, n_a, n_b, median_a,
+    median_b, p, p_holm.
+    """
+    import pandas as pd
+    from scipy import stats
+
+    by = [] if by is None else ([by] if isinstance(by, str) else list(by))
+    t = table[np.isfinite(table[value])]
+    blocks = t.groupby(by) if by else [((), t)]
+    rows = []
+    for key, sub in blocks:
+        key = key if isinstance(key, tuple) else (key,)
+        block = []
+        for a, b in pairs:
+            xa = sub.loc[sub[group] == a, value].to_numpy(dtype=np.float64)
+            xb = sub.loc[sub[group] == b, value].to_numpy(dtype=np.float64)
+            p = np.nan
+            if min(len(xa), len(xb)) >= min_n:
+                fa, fb = (np.log10(xa), np.log10(xb)) if log else (xa, xb)
+                p = float(stats.ttest_ind(fa, fb, equal_var=False).pvalue)
+            block.append({**dict(zip(by, key)), 'a': a, 'b': b, 'n_a': len(xa), 'n_b': len(xb),
+                          'median_a': np.median(xa) if len(xa) else np.nan,
+                          'median_b': np.median(xb) if len(xb) else np.nan, 'p': p})
+        for row, q in zip(block, holm([r['p'] for r in block])):
+            row['p_holm'] = q
+        rows += block
+    return pd.DataFrame(rows)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
