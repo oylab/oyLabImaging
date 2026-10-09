@@ -94,6 +94,50 @@ class SpatialResults(dict):
         return "\n".join([header, sep] + rows + [footer])
 
 
+def _framelbl_task(task, **kwargs):
+    """
+    helper function, segment a single (Pos, acq, frame) task. Returns the position name with the FrameLbl
+    """
+    pos, acq, frame, register, ffield = task
+    return pos, FrameLbl(frame, Pos=pos, acq=acq, register=register, ffield=ffield, **kwargs)
+
+
+def segment_positions(poslbls, MD=None, pth=None, NucChannel=None, threads=10, **kwargs):
+    """
+    Segment single-frame positions in parallel over positions (instead of over frames).
+
+    Parameters
+    ----------
+    poslbls : list of PosLbl placeholders created with calculate=False, each with exactly one frame
+    MD : relevant metadata
+    pth : str path to relevant metadata
+    NucChannel : name of nuclear channel
+    threads : how many threads to use for parallel execution
+    **kwargs : specific args for segmentation function, anything that goes into FrameLbl
+
+    Each PosLbl gets its framelabels set, points calculated, and is saved as soon as its position finishes.
+    """
+    bypos = {P.posname: P for P in poslbls}
+    tasks = []
+    for P in poslbls:
+        if len(P.frames) != 1:
+            raise ValueError(f"Position {P.posname} has {len(P.frames)} frames, expected 1")
+        tasks.append((P.posname, P.acq, P.frames[0], P._registerflag, P._ffieldflag))
+    if not tasks:
+        return
+
+    threads = int(np.min((threads, len(tasks))))
+    with mp.Pool(threads) as ppool:
+        for pos, fl in tqdm(
+            ppool.imap_unordered(
+                partial(_framelbl_task, MD=MD, pth=pth, NucChannel=NucChannel, **kwargs),
+                tasks,
+            ),
+            total=len(tasks),
+        ):
+            bypos[pos]._set_framelabels([fl])
+
+
 class PosLbl(object):
     """
     Class for data from a single position (multi timepoint, position, single experiment, multi channel). Handles image tracking.
@@ -248,10 +292,16 @@ class PosLbl(object):
                     )
                 )
 
-            self.framelabels = np.array(frames)
-            self._calculate_pointmat()
-            self.save()
-            print("\nFinished loading and segmenting position " + str(Pos))
+            self._set_framelabels(frames)
+
+    def _set_framelabels(self, framelabels):
+        """
+        helper function, store segmented FrameLbls, calculate points and save
+        """
+        self.framelabels = np.array(framelabels)
+        self._calculate_pointmat()
+        self.save()
+        print("\nFinished loading and segmenting position " + str(self.posname))
 
     def __call__(self):
         print("PosLbl object for position " + str(self.posname) + ", acquisition " + str(self.acq) + ".")

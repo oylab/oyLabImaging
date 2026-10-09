@@ -11,6 +11,7 @@ import numpy as np
 # AOY
 from oyLabImaging import Metadata
 from oyLabImaging.Processing import PosLbl
+from oyLabImaging.Processing.PosLbl import segment_positions
 from oyLabImaging.Processing.generalutils import alias
 from natsort import natsorted
 
@@ -110,7 +111,7 @@ class results(object):
             "f": "frames",
         }
     )
-    def setPosLbls(self, MD=None, groups=None, Position=None, override=True, **kwargs):
+    def setPosLbls(self, MD=None, groups=None, Position=None, override=True, parallel="auto", **kwargs):
         """
         function to create PosLbl instances.
 
@@ -126,7 +127,11 @@ class results(object):
         segment_type : ['watershed'] function to use for segmentatiion
         **kwargs : specific args for segmentation function, anything that goes into FrameLbl
         Threads : how many threads to use for parallel execution. Limited to ~6 for GPU based segmentation and 128 for CPU (but don't use all 128)
+        parallel : {['auto'], 'frames', 'positions'} what to parallelize over. 'auto' parallelizes over positions
+            when every requested position has a single frame, and over frames otherwise.
         """
+        if parallel not in ("auto", "frames", "positions"):
+            raise ValueError("parallel must be one of 'auto', 'frames', 'positions'")
         if MD is None:
             MD = Metadata(self.pth)
         if groups is not None:
@@ -140,6 +145,27 @@ class results(object):
 
         elif type(Position) is not list:
             Position = [Position]
+
+        if parallel != "frames" and len(Position) > 1:
+            # Placeholders resolve acq/frames (and load existing pickles if override=False) without segmenting
+            placeholders = {
+                p: PosLbl(MD=MD, Pos=p, pth=MD.base_pth, override=override, calculate=False, **kwargs)
+                for p in Position
+            }
+            single_frame = all(len(P.frames) == 1 for P in placeholders.values())
+            if parallel == "positions" and not single_frame:
+                raise ValueError("parallel='positions' requires a single frame per position")
+            if single_frame:
+                todo = [P for P in placeholders.values() if not hasattr(P, "framelabels")]
+                print("\nProcessing " + str(len(todo)) + " single-frame positions in parallel")
+                frame_kwargs = {
+                    k: v for k, v in kwargs.items()
+                    if k not in ("frames", "register", "ffield", "calculate")
+                }
+                segment_positions(todo, MD=MD, pth=MD.base_pth, **frame_kwargs)
+                self.PosLbls.update(placeholders)
+                self.save()
+                return
 
         for p in Position:
             print("\nProcessing position " + str(p))
